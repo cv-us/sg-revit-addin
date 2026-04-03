@@ -1,0 +1,9 @@
+{
+  "CompanyName": "SSG",
+  "DefaultPipeSystem": "Fire Protection Wet",
+  "DefaultSprinklerSpacing": 15.0,
+  "MinPipeFabLength": 6.0,
+  "FabricationExportPath": "",
+  "DefaultHangerFamily": "",
+  "DefaultHangerSpacing": 10.0
+}

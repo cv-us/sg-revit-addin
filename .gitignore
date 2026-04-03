@@ -1,0 +1,52 @@
+# Build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Bb]uild/
+bld/
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.rsuser
+*.sln.iml
+
+# NuGet
+packages/
+*.nupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+
+# DLLs and executables
+*.dll
+*.exe
+*.pdb
+*.cache
+
+# Rider
+.idea/
+*.sln.iml
+
+# OS files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+
+# Revit temp/backup files
+*.slog
+*.0001.rvt
+*.0002.rvt
+*.0003.rvt
+*.rvt.bak
+*.rfa.bak
+
+# Sandbox experiments are tracked, but ignore any temp outputs
+sandbox/**/*.dll
+sandbox/**/*.pdb
