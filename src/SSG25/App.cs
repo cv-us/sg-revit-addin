@@ -107,6 +107,10 @@ namespace SSG_FP_Suite
                 "SSG_FP_Suite.Commands.Annotation.InsertElevationsCommand",
                 "annotation-32.png", "annotation-16.png",
                 "Insert pipe and fitting elevation annotations.");
+            AddButton(annotPanel, "InsertFlexDropLengths", "Flex Drop\nLengths", assemblyPath,
+                "SSG_FP_Suite.Commands.Annotation.InsertFlexDropLengthsCommand",
+                "annotation-32.png", "annotation-16.png",
+                "Insert flexible drop length tags on sprinkler heads with standard pipe lengths.");
 
             // ── Views & Sheets panel ──
             RibbonPanel viewsPanel = application.CreateRibbonPanel(tabName, "Views & Sheets");

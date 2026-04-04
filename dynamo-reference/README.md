@@ -22,6 +22,7 @@ Track existing Dynamo scripts and their migration status to SSG FP Suite command
 | Auto Trapeze Hang - Unistrut - Auto Spaced.dyn | Hangers | `AutoTrapezeUnistrutCommand` | [x] |
 | Auto Trapeze Hang - Unistrut 21A - Auto Spaced.dyn | Hangers | `AutoTrapezeUnistrut21ACommand` | [x] |
 | AutoFormat - Hanger Ticks.dyn | Hangers | `FormatHangerTicksCommand` | [x] |
+| AutoInsert - Flexible Drop Lengths.dyn | Annotation | `InsertFlexDropLengthsCommand` | [x] |
 
 ## Scripts to Migrate
 
