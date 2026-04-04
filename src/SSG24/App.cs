@@ -131,6 +131,10 @@ namespace SSG_FP_Suite
                 "SSG_FP_Suite.Commands.Annotation.InsertPipeSleevesAtDecksCommand",
                 "annotation-32.png", "annotation-16.png",
                 "Auto-place pipe sleeves at intersections with linked floors/roofs (NFPA sized).");
+            AddButton(annotPanel, "InsertSleevesAtWalls", "Sleeves at\nWalls", assemblyPath,
+                "SSG_FP_Suite.Commands.Annotation.InsertPipeSleevesAtWallsCommand",
+                "annotation-32.png", "annotation-16.png",
+                "Auto-place pipe sleeves at intersections with linked walls (NFPA seismic/non-seismic).");
 
             // ── Views & Sheets panel ──
             RibbonPanel viewsPanel = application.CreateRibbonPanel(tabName, "Views & Sheets");

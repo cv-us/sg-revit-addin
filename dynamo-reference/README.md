@@ -29,6 +29,7 @@ Track existing Dynamo scripts and their migration status to SSG FP Suite command
 | AutoInsert - Pipe Sleeve Elevations.dyn | Annotation | `InsertSleeveElevationsCommand` | [x] |
 | AutoInsert - Pipe Sleeves at Intersecting Beams.dyn | Annotation | `InsertPipeSleevesAtBeamsCommand` | [x] |
 | AutoInsert - Pipe Sleeves at Intersecting Decks.dyn | Annotation | `InsertPipeSleevesAtDecksCommand` | [x] |
+| AutoInsert - Pipe Sleeves at Intersecting Walls.dyn | Annotation | `InsertPipeSleevesAtWallsCommand` | [x] |
 
 ## Scripts to Migrate
 
