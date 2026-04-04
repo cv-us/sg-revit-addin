@@ -123,6 +123,10 @@ namespace SSG_FP_Suite
                 "SSG_FP_Suite.Commands.Annotation.InsertSleeveElevationsCommand",
                 "annotation-32.png", "annotation-16.png",
                 "Calculate AFF/BBD elevations on pipe sleeves from linked floor and deck geometry.");
+            AddButton(annotPanel, "InsertSleevesAtBeams", "Sleeves at\nBeams", assemblyPath,
+                "SSG_FP_Suite.Commands.Annotation.InsertPipeSleevesAtBeamsCommand",
+                "annotation-32.png", "annotation-16.png",
+                "Auto-place pipe sleeves at intersections with linked structural beams (NFPA sized).");
 
             // ── Views & Sheets panel ──
             RibbonPanel viewsPanel = application.CreateRibbonPanel(tabName, "Views & Sheets");
