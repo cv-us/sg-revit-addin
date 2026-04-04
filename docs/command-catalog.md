@@ -38,7 +38,7 @@ Master list of all SSG FP Suite commands. Update this as commands are implemente
 - [ ] `ColorCodePipesCommand` - Color-code pipes by size or system type
 
 ## Annotation
-- [ ] `InsertElevationsCommand` - Insert pipe/fitting elevation annotations
+- [x] `InsertPipeElevationsCommand` - Calculate and write TOS/AFF elevation parameters on pipes and fittings with 4 reference methods including raybounce, slope classification (migrated from Dynamo)
 - [x] `InsertFlexDropLengthsCommand` - Insert flexible drop length tags on sprinkler heads with standard pipe lengths (migrated from Dynamo)
 - [x] `InsertGraphicScaleBarsCommand` - Insert graphic scale bar annotations on sheets based on view scales (migrated from Dynamo)
 

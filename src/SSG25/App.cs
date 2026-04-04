@@ -107,10 +107,10 @@ namespace SSG_FP_Suite
 
             // ── Annotation panel ──
             RibbonPanel annotPanel = application.CreateRibbonPanel(tabName, "Annotation");
-            AddButton(annotPanel, "InsertElevations", "Insert\nElevations", assemblyPath,
-                "SSG_FP_Suite.Commands.Annotation.InsertElevationsCommand",
+            AddButton(annotPanel, "InsertElevations", "Pipe\nElevations", assemblyPath,
+                "SSG_FP_Suite.Commands.Annotation.InsertPipeElevationsCommand",
                 "annotation-32.png", "annotation-16.png",
-                "Insert pipe and fitting elevation annotations.");
+                "Calculate and write TOS/AFF elevation parameters on pipes and fittings.");
             AddButton(annotPanel, "InsertFlexDropLengths", "Flex Drop\nLengths", assemblyPath,
                 "SSG_FP_Suite.Commands.Annotation.InsertFlexDropLengthsCommand",
                 "annotation-32.png", "annotation-16.png",

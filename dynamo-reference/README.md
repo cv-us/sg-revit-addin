@@ -25,6 +25,7 @@ Track existing Dynamo scripts and their migration status to SSG FP Suite command
 | AutoInsert - Flexible Drop Lengths.dyn | Annotation | `InsertFlexDropLengthsCommand` | [x] |
 | AutoInsert - Graphic Scale Bars To Sheets.dyn | Annotation | `InsertGraphicScaleBarsCommand` | [x] |
 | AutoInsert - Hanger Section ID's.dyn | Hangers | `InsertHangerSectionIDsCommand` | [x] |
+| AutoInsert - Pipe and Fitting Elevations.dyn | Annotation | `InsertPipeElevationsCommand` | [x] |
 
 ## Scripts to Migrate
 
