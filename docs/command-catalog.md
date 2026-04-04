@@ -39,6 +39,7 @@ Master list of all SSG FP Suite commands. Update this as commands are implemente
 ## Annotation
 - [ ] `InsertElevationsCommand` - Insert pipe/fitting elevation annotations
 - [x] `InsertFlexDropLengthsCommand` - Insert flexible drop length tags on sprinkler heads with standard pipe lengths (migrated from Dynamo)
+- [x] `InsertGraphicScaleBarsCommand` - Insert graphic scale bar annotations on sheets based on view scales (migrated from Dynamo)
 
 ## ViewsAndSheets
 - [ ] `DuplicateViewsCommand` - Duplicate fire protection plan views
