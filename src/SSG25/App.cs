@@ -87,6 +87,10 @@ namespace SSG_FP_Suite
                 "SSG_FP_Suite.Commands.Hangers.InsertHangerSectionIDsCommand",
                 "hangers-32.png", "hangers-16.png",
                 "Populate Section_ID (Hydratec) with formatted hanger type and rod length for tags.");
+            AddButton(hangersPanel, "AutoSwapHydraCAD", "Swap\nHydraCAD", assemblyPath,
+                "SSG_FP_Suite.Commands.Hangers.AutoSwapHydraCADHangersCommand",
+                "hangers-32.png", "hangers-16.png",
+                "Replace HydraCAD hangers with Shambaugh -Pipe Hanger - Standard family instances.");
 
             // ── Seismic panel ──
             RibbonPanel seismicPanel = application.CreateRibbonPanel(tabName, "Seismic");
