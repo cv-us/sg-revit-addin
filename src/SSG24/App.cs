@@ -103,6 +103,10 @@ namespace SSG_FP_Suite
                 "SSG_FP_Suite.Commands.Hangers.AutoSyncHangersToStructuralCommand",
                 "hangers-32.png", "hangers-16.png",
                 "Calculate rod lengths via raybounce to structural elements above (floors, roofs, framing).");
+            AddButton(hangersPanel, "SyncTrapeze", "Sync\nTrapeze", assemblyPath,
+                "SSG_FP_Suite.Commands.Hangers.AutoSyncTrapezeHangersCommand",
+                "hangers-32.png", "hangers-16.png",
+                "Sync trapeze hanger rod lengths, offsets, and rotation to closest pipe and structure above.");
 
             // ── Seismic panel ──
             RibbonPanel seismicPanel = application.CreateRibbonPanel(tabName, "Seismic");
