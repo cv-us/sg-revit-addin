@@ -33,6 +33,7 @@ Master list of all SSG FP Suite commands. Update this as commands are implemente
 - [x] `AutoSyncHangersToRefPlaneCommand` - Calculate rod lengths from hangers to a named reference plane representing structural underside (migrated from Dynamo)
 - [x] `AutoSyncHangersToStructuralCommand` - Calculate rod lengths via raybounce to structural elements above including linked models, with per-category type codes (migrated from Dynamo)
 - [x] `AutoSyncTrapezeHangersCommand` - Sync trapeze hanger rod lengths, offsets, rotation, and pipe diameter to closest pipe and structural elements above (migrated from Dynamo)
+- [x] `AutoHangConcreteTeeCommand` - Place hangers on sides of concrete double tee stems at user-marked detail line locations with linked structural model (migrated from Dynamo)
 
 ## Seismic
 - [x] `InsertSeismicBracesCommand` - Auto-place lateral and/or longitudinal seismic braces on welded mains with NFPA spacing and rod length from linked structure (migrated from Dynamo)

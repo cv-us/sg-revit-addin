@@ -107,6 +107,10 @@ namespace SSG_FP_Suite
                 "SSG_FP_Suite.Commands.Hangers.AutoSyncTrapezeHangersCommand",
                 "hangers-32.png", "hangers-16.png",
                 "Sync trapeze hanger rod lengths, offsets, and rotation to closest pipe and structure above.");
+            AddButton(hangersPanel, "HangConcreteTee", "Hang\nTee Stems", assemblyPath,
+                "SSG_FP_Suite.Commands.Hangers.AutoHangConcreteTeeCommand",
+                "hangers-32.png", "hangers-16.png",
+                "Place hangers on sides of concrete double tee stems at user-marked detail line locations.");
 
             // ── Seismic panel ──
             RibbonPanel seismicPanel = application.CreateRibbonPanel(tabName, "Seismic");
