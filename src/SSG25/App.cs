@@ -84,6 +84,13 @@ namespace SSG_FP_Suite
                 "hangers-32.png", "hangers-16.png",
                 "Populate Section_ID (Hydratec) with formatted hanger type and rod length for tags.");
 
+            // ── Seismic panel ──
+            RibbonPanel seismicPanel = application.CreateRibbonPanel(tabName, "Seismic");
+            AddButton(seismicPanel, "InsertSeismicBraces", "Seismic\nBraces", assemblyPath,
+                "SSG_FP_Suite.Commands.Annotation.InsertSeismicBracesCommand",
+                "hangers-32.png", "hangers-16.png",
+                "Auto-place seismic braces on welded mains with NFPA spacing and rod length calculation.");
+
             // ── Hydraulics panel ──
             RibbonPanel hydraulicsPanel = application.CreateRibbonPanel(tabName, "Hydraulics");
             AddButton(hydraulicsPanel, "HydraulicCalc", "Hydraulic\nCalc", assemblyPath,
