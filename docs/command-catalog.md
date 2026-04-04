@@ -43,6 +43,7 @@ Master list of all SSG FP Suite commands. Update this as commands are implemente
 - [x] `InsertGraphicScaleBarsCommand` - Insert graphic scale bar annotations on sheets based on view scales (migrated from Dynamo)
 - [x] `InsertSleeveElevationsCommand` - Calculate AFF/BBD elevations on pipe sleeves from linked floor and deck geometry (migrated from Dynamo)
 - [x] `InsertPipeSleevesAtBeamsCommand` - Auto-place NFPA-sized pipe sleeves at pipe-beam intersections with linked structural model (migrated from Dynamo)
+- [x] `InsertPipeSleevesAtDecksCommand` - Auto-place NFPA-sized pipe sleeves at pipe-floor/roof intersections with wet area extension option (migrated from Dynamo)
 
 ## ViewsAndSheets
 - [ ] `DuplicateViewsCommand` - Duplicate fire protection plan views
