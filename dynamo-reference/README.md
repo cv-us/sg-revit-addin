@@ -32,6 +32,7 @@ Track existing Dynamo scripts and their migration status to SSG FP Suite command
 | AutoInsert - Pipe Sleeves at Intersecting Walls.dyn | Annotation | `InsertPipeSleevesAtWallsCommand` | [x] |
 | AutoInsert - Seismic Braces On Welded Mains.dyn | Seismic | `InsertSeismicBracesCommand` | [x] |
 | AutoInsert - Text Notes - Room Names and Numbers.dyn | Annotation | `InsertRoomTextNotesCommand` | [x] |
+| AutoShorten - Flex Pipes.dyn | PipeRouting | `AutoShortenFlexPipesCommand` | [x] |
 
 ## Scripts to Migrate
 

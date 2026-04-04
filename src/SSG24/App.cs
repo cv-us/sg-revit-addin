@@ -28,6 +28,10 @@ namespace SSG_FP_Suite
                 "SSG_FP_Suite.Commands.PipeRouting.AutoRouteBranchlinesCommand",
                 "pipe-routing-32.png", "pipe-routing-16.png",
                 "Auto-route branchlines from mains to sprinkler heads.");
+            AddButton(pipingPanel, "AutoShortenFlexPipes", "Shorten\nFlex Pipes", assemblyPath,
+                "SSG_FP_Suite.Commands.PipeRouting.AutoShortenFlexPipesCommand",
+                "pipe-routing-32.png", "pipe-routing-16.png",
+                "Replace selected flex pipes with shortest-length connections between the same endpoints.");
 
             // ── Hangers panel ──
             RibbonPanel hangersPanel = application.CreateRibbonPanel(tabName, "Hangers");

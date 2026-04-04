@@ -12,6 +12,7 @@ Master list of all SSG FP Suite commands. Update this as commands are implemente
 
 ## PipeRouting
 - [ ] `AutoRouteBranchlinesCommand` - Auto-route branchlines from mains to sprinkler heads
+- [x] `AutoShortenFlexPipesCommand` - Replace selected flex pipes with shortest-length connections between the same endpoints (migrated from Dynamo)
 
 ## Hangers
 - [ ] `AutoHangCommand` - Auto-place hangers at typical spacing along pipes
