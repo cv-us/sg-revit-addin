@@ -26,6 +26,7 @@ Master list of all SSG FP Suite commands. Update this as commands are implemente
 - [x] `AutoTrapezeUnistrutCommand` - Place unistrut pipe trapeze hangers at auto-spaced intervals with channel extensions (migrated from Dynamo)
 - [x] `AutoTrapezeUnistrut21ACommand` - Place Unistrut 21A trapeze hangers with auto-calculated extensions, simplified variant (migrated from Dynamo)
 - [x] `FormatHangerTicksCommand` - Format pipe hanger tick symbols to consistent direction (/ or \) accounting for pipe rotation (migrated from Dynamo)
+- [x] `InsertHangerSectionIDsCommand` - Populate Section_ID (Hydratec) with formatted rod length and type code for hanger tags (migrated from Dynamo)
 
 ## Hydraulics
 - [ ] `HydraulicCalcCommand` - Run/export hydraulic calculation data

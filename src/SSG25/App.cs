@@ -79,6 +79,10 @@ namespace SSG_FP_Suite
                 "SSG_FP_Suite.Commands.Hangers.FormatHangerTicksCommand",
                 "format-ticks-32.png", "format-ticks-16.png",
                 "Format all selected pipe hanger tick symbols to face the same direction (/ or \\).");
+            AddButton(hangersPanel, "InsertHangerSectionIDs", "Section\nIDs", assemblyPath,
+                "SSG_FP_Suite.Commands.Hangers.InsertHangerSectionIDsCommand",
+                "hangers-32.png", "hangers-16.png",
+                "Populate Section_ID (Hydratec) with formatted hanger type and rod length for tags.");
 
             // ── Hydraulics panel ──
             RibbonPanel hydraulicsPanel = application.CreateRibbonPanel(tabName, "Hydraulics");
