@@ -119,6 +119,10 @@ namespace SSG_FP_Suite
                 "SSG_FP_Suite.Commands.Annotation.InsertGraphicScaleBarsCommand",
                 "annotation-32.png", "annotation-16.png",
                 "Insert graphic scale bar annotations on sheets based on view scales.");
+            AddButton(annotPanel, "InsertSleeveElevations", "Sleeve\nElevations", assemblyPath,
+                "SSG_FP_Suite.Commands.Annotation.InsertSleeveElevationsCommand",
+                "annotation-32.png", "annotation-16.png",
+                "Calculate AFF/BBD elevations on pipe sleeves from linked floor and deck geometry.");
 
             // ── Views & Sheets panel ──
             RibbonPanel viewsPanel = application.CreateRibbonPanel(tabName, "Views & Sheets");
