@@ -95,6 +95,10 @@ namespace SSG_FP_Suite
                 "SSG_FP_Suite.Commands.Hangers.AutoSyncHangersToPipesCommand",
                 "hangers-32.png", "hangers-16.png",
                 "Move hangers to closest pipe, set rotation and ring size to match.");
+            AddButton(hangersPanel, "SyncHangersToRefPlane", "Sync to\nRef Plane", assemblyPath,
+                "SSG_FP_Suite.Commands.Hangers.AutoSyncHangersToRefPlaneCommand",
+                "hangers-32.png", "hangers-16.png",
+                "Calculate rod lengths from hangers to a named reference plane (slab underside).");
 
             // ── Seismic panel ──
             RibbonPanel seismicPanel = application.CreateRibbonPanel(tabName, "Seismic");

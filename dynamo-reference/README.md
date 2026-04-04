@@ -35,6 +35,7 @@ Track existing Dynamo scripts and their migration status to SSG FP Suite command
 | AutoShorten - Flex Pipes.dyn | PipeRouting | `AutoShortenFlexPipesCommand` | [x] |
 | AutoSwap - HydraCAD Hangers.dyn | Hangers | `AutoSwapHydraCADHangersCommand` | [x] |
 | AutoSync - Hangers To Pipes.dyn | Hangers | `AutoSyncHangersToPipesCommand` | [x] |
+| AutoSync - Hangers To Reference Plane.dyn | Hangers | `AutoSyncHangersToRefPlaneCommand` | [x] |
 
 ## Scripts to Migrate
 

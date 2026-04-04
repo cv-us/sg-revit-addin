@@ -30,6 +30,7 @@ Master list of all SSG FP Suite commands. Update this as commands are implemente
 - [x] `InsertHangerSectionIDsCommand` - Populate Section_ID (Hydratec) with formatted rod length and type code for hanger tags (migrated from Dynamo)
 - [x] `AutoSwapHydraCADHangersCommand` - Replace HydraCAD Adjustable Ring Hangers with Shambaugh -Pipe Hanger - Standard with parameter transfer (migrated from Dynamo)
 - [x] `AutoSyncHangersToPipesCommand` - Move hangers to closest pipe, rotate to match direction, set ring size and stocklist info (migrated from Dynamo)
+- [x] `AutoSyncHangersToRefPlaneCommand` - Calculate rod lengths from hangers to a named reference plane representing structural underside (migrated from Dynamo)
 
 ## Seismic
 - [x] `InsertSeismicBracesCommand` - Auto-place lateral and/or longitudinal seismic braces on welded mains with NFPA spacing and rod length from linked structure (migrated from Dynamo)
