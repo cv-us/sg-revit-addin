@@ -142,6 +142,10 @@ namespace SSG_FP_Suite
                 "SSG_FP_Suite.Commands.Annotation.InsertPipeSleevesAtWallsCommand",
                 "annotation-32.png", "annotation-16.png",
                 "Auto-place pipe sleeves at intersections with linked walls (NFPA seismic/non-seismic).");
+            AddButton(annotPanel, "InsertRoomTextNotes", "Room\nText Notes", assemblyPath,
+                "SSG_FP_Suite.Commands.Annotation.InsertRoomTextNotesCommand",
+                "annotation-32.png", "annotation-16.png",
+                "Place stacked room name/number text notes from linked model rooms in the active view.");
 
             // ── Views & Sheets panel ──
             RibbonPanel viewsPanel = application.CreateRibbonPanel(tabName, "Views & Sheets");

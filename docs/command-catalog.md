@@ -48,6 +48,7 @@ Master list of all SSG FP Suite commands. Update this as commands are implemente
 - [x] `InsertPipeSleevesAtBeamsCommand` - Auto-place NFPA-sized pipe sleeves at pipe-beam intersections with linked structural model (migrated from Dynamo)
 - [x] `InsertPipeSleevesAtDecksCommand` - Auto-place NFPA-sized pipe sleeves at pipe-floor/roof intersections with wet area extension option (migrated from Dynamo)
 - [x] `InsertPipeSleevesAtWallsCommand` - Auto-place pipe sleeves at pipe-wall intersections with seismic/non-seismic NFPA sizing and wall type filtering (migrated from Dynamo)
+- [x] `InsertRoomTextNotesCommand` - Place stacked room name/number text notes from linked model rooms with crop region filtering (migrated from Dynamo)
 
 ## ViewsAndSheets
 - [ ] `DuplicateViewsCommand` - Duplicate fire protection plan views
