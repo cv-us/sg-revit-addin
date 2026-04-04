@@ -91,6 +91,10 @@ namespace SSG_FP_Suite
                 "SSG_FP_Suite.Commands.Hangers.AutoSwapHydraCADHangersCommand",
                 "hangers-32.png", "hangers-16.png",
                 "Replace HydraCAD hangers with Shambaugh -Pipe Hanger - Standard family instances.");
+            AddButton(hangersPanel, "SyncHangersToPipes", "Sync to\nPipes", assemblyPath,
+                "SSG_FP_Suite.Commands.Hangers.AutoSyncHangersToPipesCommand",
+                "hangers-32.png", "hangers-16.png",
+                "Move hangers to closest pipe, set rotation and ring size to match.");
 
             // ── Seismic panel ──
             RibbonPanel seismicPanel = application.CreateRibbonPanel(tabName, "Seismic");

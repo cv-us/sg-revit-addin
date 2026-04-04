@@ -34,6 +34,7 @@ Track existing Dynamo scripts and their migration status to SSG FP Suite command
 | AutoInsert - Text Notes - Room Names and Numbers.dyn | Annotation | `InsertRoomTextNotesCommand` | [x] |
 | AutoShorten - Flex Pipes.dyn | PipeRouting | `AutoShortenFlexPipesCommand` | [x] |
 | AutoSwap - HydraCAD Hangers.dyn | Hangers | `AutoSwapHydraCADHangersCommand` | [x] |
+| AutoSync - Hangers To Pipes.dyn | Hangers | `AutoSyncHangersToPipesCommand` | [x] |
 
 ## Scripts to Migrate
 
