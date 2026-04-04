@@ -196,6 +196,10 @@ namespace SSG_FP_Suite
                 "SSG_FP_Suite.Commands.Setup.LoadFamiliesCommand",
                 "setup-32.png", "setup-16.png",
                 "Load standard FP families into the project.");
+            AddButton(setupPanel, "CopyLinkLevelsGrids", "Copy Link\nLevels/Grids", assemblyPath,
+                "SSG_FP_Suite.Commands.Setup.CopyLinkLevelsAndGridsCommand",
+                "setup-32.png", "setup-16.png",
+                "Copy levels and/or grids from a linked model into the host project.");
 
             // ── Export panel ──
             RibbonPanel exportPanel = application.CreateRibbonPanel(tabName, "Export");
