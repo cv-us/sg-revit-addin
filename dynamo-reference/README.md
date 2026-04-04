@@ -36,6 +36,7 @@ Track existing Dynamo scripts and their migration status to SSG FP Suite command
 | AutoSwap - HydraCAD Hangers.dyn | Hangers | `AutoSwapHydraCADHangersCommand` | [x] |
 | AutoSync - Hangers To Pipes.dyn | Hangers | `AutoSyncHangersToPipesCommand` | [x] |
 | AutoSync - Hangers To Reference Plane.dyn | Hangers | `AutoSyncHangersToRefPlaneCommand` | [x] |
+| AutoSync - Hangers To Structural Elements - 3DRayBounce.dyn | Hangers | `AutoSyncHangersToStructuralCommand` | [x] |
 
 ## Scripts to Migrate
 
