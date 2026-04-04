@@ -42,6 +42,7 @@ Track existing Dynamo scripts and their migration status to SSG FP Suite command
 | Custom AutoInsert - Flexible Drop Lengths-Dalmatian Fire Style.dyn | Annotation | `InsertFlexDropLengthsDalmatianCommand` | [x] |
 | RotateScopeBox.dyn | ViewsAndSheets | `RotateScopeBoxCommand` | [x] |
 | ! Setup - Copy Link Levels and Grids.dyn | Setup | `CopyLinkLevelsAndGridsCommand` | [x] |
+| ! Setup - Create Plan Views.dyn | ViewsAndSheets | `CreatePlanViewsCommand` | [x] |
 
 ## Scripts to Migrate
 

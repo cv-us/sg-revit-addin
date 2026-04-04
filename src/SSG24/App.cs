@@ -185,6 +185,10 @@ namespace SSG_FP_Suite
                 "SSG_FP_Suite.Commands.ViewsAndSheets.DuplicateViewsCommand",
                 "views-32.png", "views-16.png",
                 "Duplicate fire protection plan views.");
+            AddButton(viewsPanel, "CreatePlanViews", "Create\nPlan Views", assemblyPath,
+                "SSG_FP_Suite.Commands.ViewsAndSheets.CreatePlanViewsCommand",
+                "views-32.png", "views-16.png",
+                "Create floor and/or ceiling plan views for selected levels with templates and naming.");
             AddButton(viewsPanel, "RotateScopeBox", "Rotate\nScope Box", assemblyPath,
                 "SSG_FP_Suite.Commands.ViewsAndSheets.RotateScopeBoxCommand",
                 "views-32.png", "views-16.png",
