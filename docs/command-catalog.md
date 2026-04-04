@@ -41,6 +41,9 @@ Master list of all SSG FP Suite commands. Update this as commands are implemente
 ## Fabrication
 - [ ] `PipeCutListCommand` - Generate pipe cut list for fabrication shop
 
+## Export
+- [x] `ExportTrimblePointsCommand` - Export hanger locations as Trimble-compatible CSV point files for field layout of inserts before concrete pours (new command)
+
 ## Coordination
 - [ ] `ColorCodePipesCommand` - Color-code pipes by size or system type
 

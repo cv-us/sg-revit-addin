@@ -177,6 +177,13 @@ namespace SSG_FP_Suite
                 "setup-32.png", "setup-16.png",
                 "Load standard FP families into the project.");
 
+            // ── Export panel ──
+            RibbonPanel exportPanel = application.CreateRibbonPanel(tabName, "Export");
+            AddButton(exportPanel, "ExportTrimblePoints", "Trimble\nPoints", assemblyPath,
+                "SSG_FP_Suite.Commands.Export.ExportTrimblePointsCommand",
+                "setup-32.png", "setup-16.png",
+                "Export hanger locations as Trimble CSV point files for field layout of inserts.");
+
             // ── Model Check panel ──
             RibbonPanel checkPanel = application.CreateRibbonPanel(tabName, "Model Check");
             AddButton(checkPanel, "SprinklerClearanceCheck", "Sprinkler\nClearance", assemblyPath,
