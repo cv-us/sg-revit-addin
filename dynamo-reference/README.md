@@ -44,6 +44,7 @@ Track existing Dynamo scripts and their migration status to SSG FP Suite command
 | ! Setup - Copy Link Levels and Grids.dyn | Setup | `CopyLinkLevelsAndGridsCommand` | [x] |
 | ! Setup - Create Plan Views.dyn | ViewsAndSheets | `CreatePlanViewsCommand` | [x] |
 | ! Setup - Global Parameters.dyn | Setup | `SetupGlobalParametersCommand` | [x] |
+| ! Setup - Load Custom Families.dyn | Setup | `LoadFamiliesCommand` | [x] |
 
 ## Scripts to Migrate
 

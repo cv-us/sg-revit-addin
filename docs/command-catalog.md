@@ -67,7 +67,7 @@ Master list of all SSG FP Suite commands. Update this as commands are implemente
 - [x] `RotateScopeBoxCommand` - Rotate a scope box to match the angle of a local or linked grid line (migrated from Dynamo)
 
 ## Setup
-- [ ] `LoadFamiliesCommand` - Load standard FP families into project
+- [x] `LoadFamiliesCommand` - Load .rfa families from a folder into the project, skipping already-loaded families (migrated from Dynamo)
 - [x] `SetupGlobalParametersCommand` - Create all 86 "Dynamo Setting" global parameters with defaults, fix legacy seismic Int64 types (migrated from Dynamo)
 - [x] `CopyLinkLevelsAndGridsCommand` - Copy levels and/or grids from a linked model with duplicate detection, grid type assignment, and pinning (migrated from Dynamo)
 
