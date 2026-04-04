@@ -39,6 +39,7 @@ Track existing Dynamo scripts and their migration status to SSG FP Suite command
 | AutoSync - Hangers To Structural Elements - 3DRayBounce.dyn | Hangers | `AutoSyncHangersToStructuralCommand` | [x] |
 | AutoSync - Trapeze Hangers.dyn | Hangers | `AutoSyncTrapezeHangersCommand` | [x] |
 | Custom Auto Hang - Concrete Tees (Warped) - Side of Stems - User Locations.dyn | Hangers | `AutoHangConcreteTeeCommand` | [x] |
+| Custom AutoInsert - Flexible Drop Lengths-Dalmatian Fire Style.dyn | Annotation | `InsertFlexDropLengthsDalmatianCommand` | [x] |
 
 ## Scripts to Migrate
 

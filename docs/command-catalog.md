@@ -53,6 +53,7 @@ Master list of all SSG FP Suite commands. Update this as commands are implemente
 ## Annotation
 - [x] `InsertPipeElevationsCommand` - Calculate and write TOS/AFF elevation parameters on pipes and fittings with 4 reference methods including raybounce, slope classification (migrated from Dynamo)
 - [x] `InsertFlexDropLengthsCommand` - Insert flexible drop length tags on sprinkler heads with standard pipe lengths (migrated from Dynamo)
+- [x] `InsertFlexDropLengthsDalmatianCommand` - Auto-populate flex drop lengths from actual connected pipe lengths with Wet/Dry system thresholds and dynamic tag families (migrated from Dynamo)
 - [x] `InsertGraphicScaleBarsCommand` - Insert graphic scale bar annotations on sheets based on view scales (migrated from Dynamo)
 - [x] `InsertSleeveElevationsCommand` - Calculate AFF/BBD elevations on pipe sleeves from linked floor and deck geometry (migrated from Dynamo)
 - [x] `InsertPipeSleevesAtBeamsCommand` - Auto-place NFPA-sized pipe sleeves at pipe-beam intersections with linked structural model (migrated from Dynamo)

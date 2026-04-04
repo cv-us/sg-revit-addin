@@ -150,6 +150,10 @@ namespace SSG_FP_Suite
                 "SSG_FP_Suite.Commands.Annotation.InsertFlexDropLengthsCommand",
                 "annotation-32.png", "annotation-16.png",
                 "Insert flexible drop length tags on sprinkler heads with standard pipe lengths.");
+            AddButton(annotPanel, "InsertFlexDropDalmatian", "Flex Drop\nDalmatian", assemblyPath,
+                "SSG_FP_Suite.Commands.Annotation.InsertFlexDropLengthsDalmatianCommand",
+                "annotation-32.png", "annotation-16.png",
+                "Auto-populate flex drop lengths from actual pipe lengths with Wet/Dry thresholds (Dalmatian style).");
             AddButton(annotPanel, "InsertScaleBars", "Scale\nBars", assemblyPath,
                 "SSG_FP_Suite.Commands.Annotation.InsertGraphicScaleBarsCommand",
                 "annotation-32.png", "annotation-16.png",
