@@ -204,6 +204,10 @@ namespace SSG_FP_Suite
                 "SSG_FP_Suite.Commands.Setup.CopyLinkLevelsAndGridsCommand",
                 "setup-32.png", "setup-16.png",
                 "Copy levels and/or grids from a linked model into the host project.");
+            AddButton(setupPanel, "SetupGlobalParams", "Setup Global\nParameters", assemblyPath,
+                "SSG_FP_Suite.Commands.Setup.SetupGlobalParametersCommand",
+                "setup-32.png", "setup-16.png",
+                "Create all Dynamo Setting global parameters with defaults (idempotent).");
 
             // ── Export panel ──
             RibbonPanel exportPanel = application.CreateRibbonPanel(tabName, "Export");

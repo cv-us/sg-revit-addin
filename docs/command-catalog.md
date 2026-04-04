@@ -68,6 +68,7 @@ Master list of all SSG FP Suite commands. Update this as commands are implemente
 
 ## Setup
 - [ ] `LoadFamiliesCommand` - Load standard FP families into project
+- [x] `SetupGlobalParametersCommand` - Create all 86 "Dynamo Setting" global parameters with defaults, fix legacy seismic Int64 types (migrated from Dynamo)
 - [x] `CopyLinkLevelsAndGridsCommand` - Copy levels and/or grids from a linked model with duplicate detection, grid type assignment, and pinning (migrated from Dynamo)
 
 ## ModelCheck
