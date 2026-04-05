@@ -113,4 +113,53 @@ Track which Dynamo scripts from the older folders have been evaluated and their 
 
 ## C:\dev\Dynamo Revit\Revit 2023\ (46 scripts)
 
-Will be evaluated after 2.3 folder is complete. Many are likely duplicates of Revit 2024 scripts (already migrated).
+**All evaluated — no new commands.** Every script is a duplicate of an existing command or a skip.
+
+| # | Script | Status | Notes |
+|---|--------|--------|-------|
+| 1 | ! Clear Dynamo !.dyn | [-] | Cleanup utility, not a command |
+| 2 | ! Setup - Copy Link Levels and Grids.dyn | [=] | Duplicate of CopyLinkLevelsGridsCommand |
+| 3 | ! Setup - Create Dependent Views.dyn | [=] | Duplicate of CreateDependentViewsCommand |
+| 4 | ! Setup - Create Plan Views.dyn | [=] | Duplicate of CreatePlanViewsCommand |
+| 5 | ! Setup - Global Parameters.dyn | [=] | Duplicate of SetupGlobalParamsCommand |
+| 6 | ! Setup - Load Custom Families.dyn | [=] | Duplicate of LoadFamiliesCommand |
+| 7 | Auto Hang - Pipes Crossing Linked CAD File Lines.dyn | [=] | Duplicate of HangAtCADLinesCommand |
+| 8 | Auto Hang - Pipes Crossing Structural Framing.dyn | [=] | Duplicate of HangAtStructuralCommand |
+| 9 | Auto Hang - Threaded Branchlines - On Downstream Ends.dyn | [=] | Duplicate of HangDownstreamCommand |
+| 10 | Auto Hang - Typical Spaced Runs - Hangers to Floor or Roof Decks.dyn | [=] | Duplicate of HangTypicalSpacingCommand |
+| 11 | Auto Hang - Typical Spaced Runs - Parallel To Structural Framing.dyn | [=] | Duplicate of HangParallelStructuralCommand |
+| 12 | Auto Hang - Typical Spaced Runs - Underside of Structure.dyn | [=] | Duplicate of HangTypicalSpacingCommand |
+| 13 | Auto Hang - User Locations - Underside of Structural - RayBounce.dyn | [=] | Duplicate of HangUserLocationsCommand |
+| 14 | Auto Hang - User Locations - Underside of Structure - RayBounce.dyn | [=] | Duplicate of HangUserLocationsCommand |
+| 15 | Auto Trapeze Hang - Standard Pipe Trapeze - Auto Spaced.dyn | [=] | Duplicate of TrapezeHangCommand |
+| 16 | Auto Trapeze Hang - Standard Pipe Trapeze - User Locations.dyn | [=] | Duplicate of TrapezeUserLocationsCommand |
+| 17 | Auto Trapeze Hang - Unistrut - Auto Spaced.dyn | [=] | Duplicate of TrapezeUnistrutCommand |
+| 18 | Auto Trapeze Hang - Unistrut 21A - Auto Spaced.dyn | [=] | Duplicate of TrapezeUnistrut21ACommand |
+| 19 | AutoFormat - Hanger Ticks.dyn | [=] | Duplicate of FormatHangerTicksCommand |
+| 20 | AutoInsert - Flexible Drop Lengths.dyn | [=] | Duplicate of FlexDropLengthsCommand |
+| 21 | AutoInsert - Graphic Scale Bars To Sheets.dyn | [=] | Duplicate of GraphicScaleBarsCommand |
+| 22 | AutoInsert - Hanger Section ID's.dyn | [=] | Duplicate of HangerSectionIDsCommand |
+| 23 | AutoInsert - Pipe Sleeve Elevations.dyn | [=] | Duplicate of SleeveElevationsCommand |
+| 24 | AutoInsert - Pipe Sleeves at Intersecting Beams.dyn | [=] | Duplicate of PipeSleevesAtBeamsCommand |
+| 25 | AutoInsert - Pipe Sleeves at Intersecting Decks.dyn | [=] | Duplicate of PipeSleevesAtDecksCommand |
+| 26 | AutoInsert - Pipe Sleeves at Intersecting Walls.dyn | [=] | Duplicate of PipeSleevesAtWallsCommand |
+| 27 | AutoInsert - Pipe and Fitting Elevations.dyn | [=] | Duplicate of PipeElevationsCommand |
+| 28 | AutoInsert - Seismic Braces On Welded Mains.dyn | [=] | Duplicate of SeismicBracesCommand |
+| 29 | AutoInsert - Text Notes - Room Names and Numbers.dyn | [=] | Duplicate of RoomTextNotesCommand |
+| 30 | AutoShorten - Flex Pipes.dyn | [=] | Duplicate of ShortenFlexPipesCommand |
+| 31 | AutoSwap - HydraCAD Hangers.dyn | [=] | Duplicate of SwapHydraCADHangersCommand |
+| 32 | AutoSync - Hangers To Pipes.dyn | [=] | Duplicate of SyncHangersToPipesCommand |
+| 33 | AutoSync - Hangers To Reference Plane.dyn | [=] | Duplicate of SyncHangersToRefPlaneCommand |
+| 34 | AutoSync - Hangers To Structural Elements-3DRayBounce.dyn | [=] | Duplicate of SyncHangersRaybounceCommand |
+| 35 | AutoSync - Hangers To Structural Elements.dyn | [=] | Duplicate of SyncHangersSurfaceCommand |
+| 36 | Custom Auto Hang - Concrete Tees (Warped) - Side of Stems - User Locations.dyn | [=] | Duplicate of HangConcreteTeeCommand |
+| 37 | Custom Auto Hang - Concrete Tees (Warped) - Underside of Flange - Typical Spaced Runs.dyn | [=] | Duplicate of HangTypicalSpacingCommand — flange underside is vertical raybounce target, same algorithm |
+| 38 | Custom Auto Hang - Concrete Tees (Warped) - Underside of Flange - User Locations.dyn | [=] | Duplicate of HangUserLocationsCommand — flange underside is vertical raybounce target, same algorithm |
+| 39 | Custom Auto Hang - Z Purlins - Pipes Parallel.dyn | [=] | Duplicate of HangParallelStructuralCommand |
+| 40 | Custom AutoInsert - Beam Penetration Symbols at Grids.dyn | [=] | Duplicate of BeamPenetrationSymbolsCommand |
+| 41 | Custom AutoInsert - Flexible Drop Lengths-Dalmatian Fire Style.dyn | [=] | Duplicate of FlexDropLengthsDalmatianCommand |
+| 42 | Custom AutoInsert - Pipe and Fitting Elevations - Structural Framing.dyn | [=] | Duplicate of PipeElevationsCommand |
+| 43 | Custom AutoInsert - SSB Symbols Along Pipe Runs.dyn | [=] | Duplicate of SSBSymbolsCommand |
+| 44 | Custom Trapeze Hang - Dual Pipe - User Locations.dyn | [=] | Duplicate of TrapezeUserLocationsCommand |
+| 45 | Model Check - Upright Sprinkler Deflector Distances.dyn | [=] | Duplicate of SprinklerClearanceCheckCommand |
+| 46 | RotateScopeBox.dyn | [=] | Duplicate of RotateScopeBoxCommand |
