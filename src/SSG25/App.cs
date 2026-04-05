@@ -186,6 +186,22 @@ namespace SSG_FP_Suite
                 "SSG_FP_Suite.Commands.Annotation.RoomTextNotesCommand",
                 "annotation-32.png", "annotation-16.png",
                 "Place stacked room name/number text notes from linked model rooms in the active view.");
+            AddButton(annotPanel, "BeamPenetrationSymbols", "Beam\nPenetrations", assemblyPath,
+                "SSG_FP_Suite.Commands.Annotation.BeamPenetrationSymbolsCommand",
+                "annotation-32.png", "annotation-16.png",
+                "Place beam penetration annotation symbols at pipe-grid or pipe-detail line crossing points.");
+            AddButton(annotPanel, "SSBSymbols", "SSB\nSymbols", assemblyPath,
+                "SSG_FP_Suite.Commands.Annotation.SSBSymbolsCommand",
+                "annotation-32.png", "annotation-16.png",
+                "Place SSB hanger annotation symbols 1 ft from each end of selected pipe runs.");
+            AddButton(annotPanel, "DeleteDuplicateText", "Delete\nDuplicate Text", assemblyPath,
+                "SSG_FP_Suite.Commands.Annotation.DeleteDuplicateTextCommand",
+                "annotation-32.png", "annotation-16.png",
+                "Delete duplicate text notes at the same location in the active view.");
+            AddButton(annotPanel, "ClearAnnotations", "Clear\nAnnotations", assemblyPath,
+                "SSG_FP_Suite.Commands.Annotation.ClearAnnotationsCommand",
+                "annotation-32.png", "annotation-16.png",
+                "Delete all generic annotation family instances from the active view.");
 
             // ── Views & Sheets panel ──
             RibbonPanel viewsPanel = application.CreateRibbonPanel(tabName, "Views & Sheets");
@@ -205,6 +221,10 @@ namespace SSG_FP_Suite
                 "SSG_FP_Suite.Commands.ViewsAndSheets.RotateScopeBoxCommand",
                 "views-32.png", "views-16.png",
                 "Rotate a scope box to match the angle of a local or linked grid line.");
+            AddButton(viewsPanel, "RemoveScopeBoxes", "Remove\nScope Boxes", assemblyPath,
+                "SSG_FP_Suite.Commands.ViewsAndSheets.RemoveScopeBoxesCommand",
+                "views-32.png", "views-16.png",
+                "Delete selected scope boxes, or all scope boxes in the project if none are selected.");
 
             // ── Setup panel ──
             RibbonPanel setupPanel = application.CreateRibbonPanel(tabName, "Setup");
@@ -231,6 +251,14 @@ namespace SSG_FP_Suite
                 "SSG_FP_Suite.Commands.Export.ExportTrimblePointsCommand",
                 "setup-32.png", "setup-16.png",
                 "Export hanger locations as Trimble CSV point files for field layout of inserts.");
+            AddButton(exportPanel, "ImportASPipes", "Import AS\nPipes", assemblyPath,
+                "SSG_FP_Suite.Commands.Export.ImportASPipesCommand",
+                "setup-32.png", "setup-16.png",
+                "Import pipe geometry from an AutoSPRINK CSV export and create Revit pipes.");
+            AddButton(exportPanel, "ImportASSprinklers", "Import AS\nSprinklers", assemblyPath,
+                "SSG_FP_Suite.Commands.Export.ImportASSprinklersCommand",
+                "setup-32.png", "setup-16.png",
+                "Import sprinkler head locations from an AutoSPRINK CSV export and place family instances.");
 
             // ── Model Check panel ──
             RibbonPanel checkPanel = application.CreateRibbonPanel(tabName, "Model Check");
@@ -238,6 +266,10 @@ namespace SSG_FP_Suite
                 "SSG_FP_Suite.Commands.ModelCheck.SprinklerClearanceCheckCommand",
                 "modelcheck-32.png", "modelcheck-16.png",
                 "Verify upright sprinkler deflector clearances.");
+            AddButton(checkPanel, "PipesTooShort", "Pipes Too\nShort", assemblyPath,
+                "SSG_FP_Suite.Commands.ModelCheck.PipesTooShortCommand",
+                "modelcheck-32.png", "modelcheck-16.png",
+                "Flag pipes shorter than the minimum fabricable nipple length for their size.");
 
             return Result.Succeeded;
         }

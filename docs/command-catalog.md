@@ -48,6 +48,8 @@ Master list of all SSG FP Suite commands. Update this as commands are implemente
 
 ## Export
 - [x] `ExportTrimblePointsCommand` - Export hanger locations as Trimble-compatible CSV point files for field layout of inserts before concrete pours
+- [x] `ImportASPipesCommand` - Import pipe geometry from an AutoSPRINK CSV export and create Revit pipes (coordinates in inches)
+- [x] `ImportASSprinklersCommand` - Import sprinkler head locations from an AutoSPRINK CSV export and place Revit sprinkler family instances
 
 ## Coordination
 - [ ] `ColorCodePipesCommand` - Color-code pipes by size or system type
@@ -62,13 +64,17 @@ Master list of all SSG FP Suite commands. Update this as commands are implemente
 - [x] `PipeSleevesAtDecksCommand` - Auto-place NFPA-sized pipe sleeves at pipe-floor/roof intersections with wet area extension option
 - [x] `PipeSleevesAtWallsCommand` - Auto-place pipe sleeves at pipe-wall intersections with seismic/non-seismic NFPA sizing and wall type filtering
 - [x] `RoomTextNotesCommand` - Place stacked room name/number text notes from linked model rooms with crop region filtering
-- [ ] `InsertElevationsCommand` - Insert elevation annotations (stub)
+- [x] `BeamPenetrationSymbolsCommand` - Place beam penetration annotation symbols at pipe-grid or pipe-detail line intersection points in the active view
+- [x] `SSBSymbolsCommand` - Place SSB hanger annotation symbols 1 ft from each end of selected pipe runs aligned to pipe direction
+- [x] `DeleteDuplicateTextCommand` - Delete duplicate text notes at the same location in the active view
+- [x] `ClearAnnotationsCommand` - Delete all generic annotation family instances from the active view
 
 ## ViewsAndSheets
 - [ ] `DuplicateViewsCommand` - Duplicate fire protection plan views
 - [x] `CreateDependentViewsCommand` - Create dependent views from parent floor/ceiling plans with scope box assignment or blank copies
 - [x] `CreatePlanViewsCommand` - Create floor and/or ceiling plan views for selected levels with view templates and naming
 - [x] `RotateScopeBoxCommand` - Rotate a scope box to match the angle of a local or linked grid line
+- [x] `RemoveScopeBoxesCommand` - Delete selected scope boxes, or all scope boxes in the project if none are selected
 
 ## Setup
 - [x] `LoadFamiliesCommand` - Load .rfa families from a folder into the project, skipping already-loaded families
@@ -78,3 +84,4 @@ Master list of all SSG FP Suite commands. Update this as commands are implemente
 
 ## ModelCheck
 - [ ] `SprinklerClearanceCheckCommand` - Verify upright sprinkler deflector clearances
+- [x] `PipesTooShortCommand` - Flag pipes shorter than the minimum fabricable nipple length for their size and type (threaded vs welded)
