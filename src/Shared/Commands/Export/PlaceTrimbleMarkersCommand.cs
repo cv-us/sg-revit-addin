@@ -10,27 +10,33 @@ namespace SSG_FP_Suite.Commands.Export
 {
     /// <summary>
     /// Places Trimble field point marker families at hanger and seismic brace locations
-    /// for coordination with Trimble field layout tools. Different marker symbols are
-    /// used for different rod diameters and element types:
-    ///   - 3/8" hangers → "-Trimble-Hanger-3_8" (CircleX type)
-    ///   - 1/2" hangers → "-Trimble-Hanger-1_2" (SquarePlusCircle type)
-    ///   - Seismic brace anchors → "-Trimble-Seismic-Anchor" (SquarePlusCircle type)
+    /// for coordination with Trimble field layout tools. Supports three modes:
+    ///   - Place Only: place markers without clearing existing ones
+    ///   - Clear and Place: clear existing markers first, then place new ones
+    ///   - Clear Only: remove Trimble markers without placing new ones
     ///
-    /// WORKFLOW:
-    ///   1. User selects pipe accessories (hangers and/or seismic braces)
-    ///   2. Clear any existing Trimble markers in the active view
-    ///   3. Classify each element by type (hanger 3/8", hanger 1/2", seismic anchor)
-    ///   4. Place the appropriate Trimble marker family at each location
-    ///   5. Report summary
+    /// Clears families matching these prefixes by default:
+    ///   - "-Trimble-" (plugin-placed markers)
+    ///   - "Trmb_FieldPoints_FieldPointGraphic_" (Trimble Field Link software markers)
+    /// User can also specify additional custom prefixes to clear.
+    ///
+    /// Marker families by rod size:
+    ///   - Pipes ≤ 4" nominal → "-Trimble-Hanger-3_8"
+    ///   - Pipes > 4" nominal → "-Trimble-Hanger-1_2"
+    ///   - Seismic brace anchors ��� "-Trimble-Seismic-Anchor"
     /// </summary>
     [Transaction(TransactionMode.Manual)]
     [Regeneration(RegenerationOption.Manual)]
     public class PlaceTrimbleMarkersCommand : IExternalCommand
     {
-        /// <summary>Diameter threshold: pipes > 4" nominal get 1/2" rod, otherwise 3/8".</summary>
         private const double LargeRodThreshold = 4.0 / 12.0; // 4 inches in feet
 
-        private const string TrimbleFamilyPrefix = "-Trimble-";
+        private static readonly string[] DefaultClearPrefixes = new[]
+        {
+            "-Trimble-",
+            "Trmb_FieldPoints_FieldPointGraphic_"
+        };
+
         private const string Hanger38Family = "-Trimble-Hanger-3_8";
         private const string Hanger12Family = "-Trimble-Hanger-1_2";
         private const string SeismicAnchorFamily = "-Trimble-Seismic-Anchor";
@@ -43,114 +49,135 @@ namespace SSG_FP_Suite.Commands.Export
 
             try
             {
-                // ── Collect pipe accessories from selection or prompt ──
-                var selectedIds = uidoc.Selection.GetElementIds();
-                List<FamilyInstance> accessories;
+                // ── Show dialog ──
+                var dlg = new PlaceTrimbleMarkersDialog();
+                if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK)
+                    return Result.Cancelled;
 
-                if (selectedIds.Count > 0)
+                var mode = dlg.SelectedMode;
+                bool doClear = mode == PlaceTrimbleMarkersDialog.TrimbleMode.ClearAndPlace ||
+                               mode == PlaceTrimbleMarkersDialog.TrimbleMode.ClearOnly;
+                bool doPlace = mode == PlaceTrimbleMarkersDialog.TrimbleMode.ClearAndPlace ||
+                               mode == PlaceTrimbleMarkersDialog.TrimbleMode.PlaceOnly;
+
+                // ── Build clear prefixes ──
+                var clearPrefixes = new List<string>(DefaultClearPrefixes);
+                if (dlg.ClearCustomPrefix && !string.IsNullOrWhiteSpace(dlg.ClearFamilyPrefix))
                 {
-                    accessories = selectedIds
-                        .Select(id => doc.GetElement(id))
-                        .OfType<FamilyInstance>()
-                        .Where(fi => fi.Category?.Id.IntegerValue == (int)BuiltInCategory.OST_PipeAccessory)
-                        .ToList();
+                    var custom = dlg.ClearFamilyPrefix
+                        .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                        .Select(s => s.Trim())
+                        .Where(s => s.Length > 0);
+                    clearPrefixes.AddRange(custom);
                 }
-                else
+
+                // ── Collect accessories if placing ──
+                List<FamilyInstance> accessories = new List<FamilyInstance>();
+                FamilySymbol sym38 = null, sym12 = null, symSeismic = null;
+                var missing = new List<string>();
+
+                if (doPlace)
                 {
-                    // Prompt user to select
-                    try
+                    var selectedIds = uidoc.Selection.GetElementIds();
+
+                    if (selectedIds.Count > 0)
                     {
-                        var refs = uidoc.Selection.PickObjects(ObjectType.Element,
-                            new PipeAccessoryFilter(),
-                            "Select pipe hangers and/or seismic braces, then press Finish.");
-                        accessories = refs
-                            .Select(r => doc.GetElement(r.ElementId))
+                        accessories = selectedIds
+                            .Select(id => doc.GetElement(id))
                             .OfType<FamilyInstance>()
+                            .Where(fi => fi.Category?.Id.IntegerValue == (int)BuiltInCategory.OST_PipeAccessory)
                             .ToList();
                     }
-                    catch (Autodesk.Revit.Exceptions.OperationCanceledException)
+                    else
                     {
-                        return Result.Cancelled;
+                        try
+                        {
+                            var refs = uidoc.Selection.PickObjects(ObjectType.Element,
+                                new PipeAccessoryFilter(),
+                                "Select pipe hangers and/or seismic braces, then press Finish.");
+                            accessories = refs
+                                .Select(r => doc.GetElement(r.ElementId))
+                                .OfType<FamilyInstance>()
+                                .ToList();
+                        }
+                        catch (Autodesk.Revit.Exceptions.OperationCanceledException)
+                        {
+                            return Result.Cancelled;
+                        }
+                    }
+
+                    if (accessories.Count == 0)
+                    {
+                        TaskDialog.Show("Place Trimble Markers", "No pipe accessories selected.");
+                        return Result.Succeeded;
+                    }
+
+                    // Find marker family symbols
+                    var familySymbols = new FilteredElementCollector(doc)
+                        .OfClass(typeof(FamilySymbol))
+                        .Cast<FamilySymbol>()
+                        .ToList();
+
+                    sym38 = FindSymbol(familySymbols, Hanger38Family);
+                    sym12 = FindSymbol(familySymbols, Hanger12Family);
+                    symSeismic = FindSymbol(familySymbols, SeismicAnchorFamily);
+
+                    if (sym38 == null) missing.Add(Hanger38Family);
+                    if (sym12 == null) missing.Add(Hanger12Family);
+                    if (symSeismic == null) missing.Add(SeismicAnchorFamily);
+
+                    if (missing.Count == 3)
+                    {
+                        TaskDialog.Show("Place Trimble Markers",
+                            "No Trimble marker families found in the project.\n\n" +
+                            "Load these families first:\n" +
+                            string.Join("\n", missing.Select(m => "  • " + m)));
+                        return Result.Succeeded;
                     }
                 }
 
-                if (accessories.Count == 0)
-                {
-                    TaskDialog.Show("Place Trimble Markers", "No pipe accessories selected.");
-                    return Result.Succeeded;
-                }
-
-                // ── Find Trimble marker families ──
-                var familySymbols = new FilteredElementCollector(doc)
-                    .OfClass(typeof(FamilySymbol))
-                    .Cast<FamilySymbol>()
-                    .ToList();
-
-                FamilySymbol sym38 = FindSymbol(familySymbols, Hanger38Family);
-                FamilySymbol sym12 = FindSymbol(familySymbols, Hanger12Family);
-                FamilySymbol symSeismic = FindSymbol(familySymbols, SeismicAnchorFamily);
-
-                var missing = new List<string>();
-                if (sym38 == null) missing.Add(Hanger38Family);
-                if (sym12 == null) missing.Add(Hanger12Family);
-                if (symSeismic == null) missing.Add(SeismicAnchorFamily);
-
-                if (missing.Count == 3)
-                {
-                    TaskDialog.Show("Place Trimble Markers",
-                        "No Trimble marker families found in the project.\n\n" +
-                        "Load these families first:\n" +
-                        string.Join("\n", missing.Select(m => "  • " + m)));
-                    return Result.Succeeded;
-                }
-
-                // ── Classify elements and place markers ──
+                // ── Execute ──
+                int cleared = 0;
                 int placed38 = 0, placed12 = 0, placedSeismic = 0, skipped = 0;
                 var errors = new List<string>();
 
-                using (Transaction tx = new Transaction(doc, "Place Trimble Markers"))
+                using (Transaction tx = new Transaction(doc, "Trimble Markers"))
                 {
                     tx.Start();
 
-                    // Clear existing Trimble markers in view first
-                    ClearExistingMarkers(doc, activeView);
-
-                    foreach (var accessory in accessories)
+                    if (doClear)
                     {
-                        string familyName = accessory.Symbol?.Family?.Name ?? "";
+                        cleared = ClearMarkers(doc, activeView, clearPrefixes);
+                    }
 
-                        if (familyName.IndexOf("Seismic", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                            familyName.IndexOf("Brace", StringComparison.OrdinalIgnoreCase) >= 0)
+                    if (doPlace)
+                    {
+                        foreach (var accessory in accessories)
                         {
-                            // Seismic brace — place at anchor points
-                            if (symSeismic != null)
-                            {
-                                placedSeismic += PlaceMarkerAtElement(doc, activeView,
-                                    accessory, symSeismic, errors);
-                            }
-                            else skipped++;
-                        }
-                        else if (IsHanger(familyName))
-                        {
-                            // Hanger — check rod diameter
-                            double nomDia = GetNominalDiameter(accessory);
-                            bool isLargeRod = nomDia > LargeRodThreshold;
+                            string familyName = accessory.Symbol?.Family?.Name ?? "";
 
-                            if (isLargeRod && sym12 != null)
+                            if (familyName.IndexOf("Seismic", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                familyName.IndexOf("Brace", StringComparison.OrdinalIgnoreCase) >= 0)
                             {
-                                placed12 += PlaceMarkerAtElement(doc, activeView,
-                                    accessory, sym12, errors);
+                                if (symSeismic != null)
+                                    placedSeismic += PlaceMarkerAtElement(doc, activeView, accessory, symSeismic, errors);
+                                else skipped++;
                             }
-                            else if (!isLargeRod && sym38 != null)
+                            else if (IsHanger(familyName))
                             {
-                                placed38 += PlaceMarkerAtElement(doc, activeView,
-                                    accessory, sym38, errors);
+                                double nomDia = GetNominalDiameter(accessory);
+                                bool isLargeRod = nomDia > LargeRodThreshold;
+
+                                if (isLargeRod && sym12 != null)
+                                    placed12 += PlaceMarkerAtElement(doc, activeView, accessory, sym12, errors);
+                                else if (!isLargeRod && sym38 != null)
+                                    placed38 += PlaceMarkerAtElement(doc, activeView, accessory, sym38, errors);
+                                else skipped++;
                             }
-                            else skipped++;
-                        }
-                        else
-                        {
-                            skipped++;
+                            else
+                            {
+                                skipped++;
+                            }
                         }
                     }
 
@@ -158,18 +185,28 @@ namespace SSG_FP_Suite.Commands.Export
                 }
 
                 // ── Report ──
-                int totalPlaced = placed38 + placed12 + placedSeismic;
-                string report = $"Placed {totalPlaced} Trimble markers:\n\n";
-                if (placed38 > 0) report += $"  3/8\" hangers: {placed38}\n";
-                if (placed12 > 0) report += $"  1/2\" hangers: {placed12}\n";
-                if (placedSeismic > 0) report += $"  Seismic anchors: {placedSeismic}\n";
-                if (skipped > 0) report += $"\n  Skipped: {skipped} (missing family or unrecognized type)\n";
-                if (missing.Count > 0)
-                    report += $"\n  Missing families: {string.Join(", ", missing)}";
-                if (errors.Count > 0)
-                    report += $"\n\n{errors.Count} errors:\n" + string.Join("\n", errors.Take(5));
+                string report = "";
 
-                TaskDialog.Show("Place Trimble Markers", report);
+                if (doClear)
+                    report += $"Cleared {cleared} existing Trimble marker{(cleared == 1 ? "" : "s")}.\n";
+
+                if (doPlace)
+                {
+                    int totalPlaced = placed38 + placed12 + placedSeismic;
+                    report += $"\nPlaced {totalPlaced} Trimble marker{(totalPlaced == 1 ? "" : "s")}:\n";
+                    if (placed38 > 0) report += $"  3/8\" hangers: {placed38}\n";
+                    if (placed12 > 0) report += $"  1/2\" hangers: {placed12}\n";
+                    if (placedSeismic > 0) report += $"  Seismic anchors: {placedSeismic}\n";
+                    if (skipped > 0) report += $"\n  Skipped: {skipped} (missing family or unrecognized type)\n";
+                    if (missing.Count > 0)
+                        report += $"\n  Missing families: {string.Join(", ", missing)}";
+                }
+
+                if (errors.Count > 0)
+                    report += $"\n\n{errors.Count} error{(errors.Count == 1 ? "" : "s")}:\n" +
+                              string.Join("\n", errors.Take(5));
+
+                TaskDialog.Show("Trimble Markers", report.Trim());
                 return Result.Succeeded;
             }
             catch (Exception ex)
@@ -177,6 +214,45 @@ namespace SSG_FP_Suite.Commands.Export
                 message = ex.Message;
                 return Result.Failed;
             }
+        }
+
+        /// <summary>
+        /// Clears all family instances in the active view whose family name starts with
+        /// any of the given prefixes. Searches both OST_GenericAnnotation (plugin markers)
+        /// and OST_GenericModel (Trimble Field Link markers).
+        /// </summary>
+        private int ClearMarkers(Document doc, View view, List<string> prefixes)
+        {
+            var categories = new[]
+            {
+                BuiltInCategory.OST_GenericAnnotation,
+                BuiltInCategory.OST_GenericModel
+            };
+
+            var toDelete = new List<ElementId>();
+
+            foreach (var cat in categories)
+            {
+                var matches = new FilteredElementCollector(doc, view.Id)
+                    .OfCategory(cat)
+                    .WhereElementIsNotElementType()
+                    .Where(e =>
+                    {
+                        var fi = e as FamilyInstance;
+                        string fname = fi?.Symbol?.Family?.Name;
+                        if (string.IsNullOrEmpty(fname)) return false;
+                        return prefixes.Any(p =>
+                            fname.StartsWith(p, StringComparison.OrdinalIgnoreCase));
+                    })
+                    .Select(e => e.Id);
+
+                toDelete.AddRange(matches);
+            }
+
+            if (toDelete.Count > 0)
+                doc.Delete(toDelete);
+
+            return toDelete.Count;
         }
 
         private int PlaceMarkerAtElement(Document doc, View view,
@@ -196,24 +272,6 @@ namespace SSG_FP_Suite.Commands.Export
                 errors.Add($"Element {element.Id}: {ex.Message}");
                 return 0;
             }
-        }
-
-        private void ClearExistingMarkers(Document doc, View view)
-        {
-            var existing = new FilteredElementCollector(doc, view.Id)
-                .OfCategory(BuiltInCategory.OST_GenericAnnotation)
-                .WhereElementIsNotElementType()
-                .Where(e =>
-                {
-                    var fi = e as FamilyInstance;
-                    return fi?.Symbol?.Family?.Name?.StartsWith(TrimbleFamilyPrefix,
-                        StringComparison.OrdinalIgnoreCase) == true;
-                })
-                .Select(e => e.Id)
-                .ToList();
-
-            if (existing.Count > 0)
-                doc.Delete(existing);
         }
 
         private bool IsHanger(string familyName)
@@ -236,7 +294,6 @@ namespace SSG_FP_Suite.Commands.Export
             var loc = element.Location as LocationPoint;
             if (loc != null) return loc.Point;
 
-            // Line-based family: use midpoint
             var locCurve = element.Location as LocationCurve;
             if (locCurve?.Curve != null)
                 return locCurve.Curve.Evaluate(0.5, true);
@@ -250,7 +307,6 @@ namespace SSG_FP_Suite.Commands.Export
                 fs.Family.Name.Equals(familyName, StringComparison.OrdinalIgnoreCase));
         }
 
-        /// <summary>Selection filter for pipe accessories only.</summary>
         private class PipeAccessoryFilter : ISelectionFilter
         {
             public bool AllowElement(Element elem)

@@ -10,7 +10,7 @@ param(
     [string]$RevitVersion,
 
     [ValidateSet("Debug", "Release")]
-    [string]$Configuration = "Debug"
+    [string]$Configuration = "Release"
 )
 
 $ErrorActionPreference = "Stop"
