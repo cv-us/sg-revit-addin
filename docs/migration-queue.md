@@ -23,21 +23,21 @@ Track which Dynamo scripts from the older folders have been evaluated and their 
 | 9 | Auto Hang - Pipes Crossing Linked CAD File Lines.dyn | [=] | Duplicate of HangAtCADLinesCommand |
 | 10 | Auto Hang - Pipes Crossing Structural Framing.dyn | [=] | Duplicate of HangAtStructuralCommand |
 | 11 | Auto Hang - Threaded Branchlines - Downstream Ends.dyn | [=] | Duplicate of HangDownstreamCommand |
-| 12 | Auto Hang - Threaded Branchlines - Under Stairs.dyn | [=] | Duplicate of HangDownstreamCommand (same logic, stair context) |
-| 13 | Auto Hang - Typical Spaced Runs-Crossing Structural Framing.dyn | [=] | Duplicate of HangTypicalSpacingCommand |
+| 12 | Auto Hang - Threaded Branchlines - Under Stairs.dyn | [=] | Duplicate of HangDownstreamCommand — under-stairs context is pipe selection, not a different algorithm |
+| 13 | Auto Hang - Typical Spaced Runs-Crossing Structural Framing.dyn | [=] | Duplicate of HangAtStructuralCommand |
 | 14 | Auto Hang - Typical Spaced Runs-Hangers to Decks.dyn | [=] | Duplicate of HangTypicalSpacingCommand |
 | 15 | Auto Hang - Typical Spaced Runs-Parallel To Structural Framing.dyn | [=] | Duplicate of HangParallelStructuralCommand |
 | 16 | Auto Hang - Underside of Structural - Typical Spaced Runs.dyn | [=] | Duplicate of HangTypicalSpacingCommand |
 | 17 | Auto Hang - Underside of Structural - User Locations.dyn | [=] | Duplicate of HangUserLocationsCommand |
-| 18 | Auto Trapeze Hang - Single Pipe - Auto Spaced.dyn | [=] | Duplicate of TrapezeHangCommand |
+| 18 | Auto Trapeze Hang - Single Pipe - Auto Spaced.dyn | [=] | Duplicate of TrapezeHangCommand — single-pipe family selected via dialog |
 | 19 | Auto Trapeze Hang - Single Pipe - User Locations.dyn | [=] | Duplicate of TrapezeUserLocationsCommand |
 | 20 | Auto Trapeze Hang - Standard Pipe Trapeze - Auto Spaced.dyn | [=] | Duplicate of TrapezeHangCommand |
 | 21 | Auto Trapeze Hang - Standard Pipe Trapeze - User Locations.dyn | [=] | Duplicate of TrapezeUserLocationsCommand |
-| 22 | Auto Trapeze Hang - Two Pipes - User Locations.dyn | [=] | Duplicate of TrapezeUserLocationsCommand |
+| 22 | Auto Trapeze Hang - Two Pipes - User Locations.dyn | [=] | Duplicate of TrapezeUserLocationsCommand — two-pipe family selected via dialog |
 | 23 | Auto Trapeze Hang - Unistrut - Auto Spaced.dyn | [=] | Duplicate of TrapezeUnistrutCommand |
 | 24 | Auto Trapeze Hang - Unistrut 21A - Auto Spaced.dyn | [=] | Duplicate of TrapezeUnistrut21ACommand |
 | 25 | Auto Trapeze Hang - Unistrut 21A Single Pipe - Auto Spaced.dyn | [=] | Duplicate of TrapezeUnistrut21ACommand |
-| 26 | AutoFlip Trapeze Hangers.dyn | [ ] | |
+| 26 | AutoFlip Trapeze Hangers.dyn | [x] | New command: FlipTrapezeHangersCommand |
 | 27 | AutoFormat - Hanger Ticks.dyn | [=] | Duplicate of FormatHangerTicksCommand |
 | 28 | AutoInsert - Flexible Drop Lengths.dyn | [=] | Duplicate of FlexDropLengthsCommand |
 | 29 | AutoInsert - Graphic Scale Bars To Sheets.dyn | [=] | Duplicate of GraphicScaleBarsCommand |
@@ -78,20 +78,20 @@ Track which Dynamo scripts from the older folders have been evaluated and their 
 | 64 | Custom AutoHang - Threaded Armovers.dyn | [ ] | |
 | 65 | Custom AutoHang - Threaded Branchlines-Nurbs Curve Roof.dyn | [ ] | |
 | 66 | Custom AutoHang - Typical Spaced Straight Runs-Nurbs Curve Roof.dyn | [ ] | |
-| 67 | Custom AutoHang - Underside of Concrete Tees (Warped) - Typical Spaced Runs.dyn | [=] | Duplicate of HangConcreteTeeCommand |
-| 68 | Custom AutoHang - Underside of Concrete Tees (Warped) - User Locations.dyn | [=] | Duplicate of HangConcreteTeeCommand |
+| 67 | Custom AutoHang - Underside of Concrete Tees (Warped) - Typical Spaced Runs.dyn | [ ] | |
+| 68 | Custom AutoHang - Underside of Concrete Tees (Warped) - User Locations.dyn | [ ] | |
 | 69 | Custom AutoHang - Z Purlins - Pipes Crossing.dyn | [ ] | |
 | 70 | Custom AutoHang - Z Purlins - Pipes Parallel.dyn | [ ] | |
 | 71 | Custom AutoInsert - Beam Penetration Symbols at Grids.dyn | [ ] | |
-| 72 | Custom AutoInsert - Flexible Drop Lengths-Dalmatian Fire Style.dyn | [=] | Duplicate of FlexDropLengthsDalmatianCommand |
+| 72 | Custom AutoInsert - Flexible Drop Lengths-Dalmatian Fire Style.dyn | [ ] | |
 | 73 | Custom AutoInsert - Flexible Drop Lengths-Northstar Fire Style.dyn | [ ] | |
-| 74 | Custom AutoInsert - Pipe Sleeves at Intersecting Walls - META LCO.dyn | [=] | Duplicate of PipeSleevesAtWallsCommand (custom wall type variant) |
-| 75 | Custom AutoInsert - Pipe and Fitting Elevations - Structural Framing.dyn | [=] | Duplicate of PipeElevationsCommand |
+| 74 | Custom AutoInsert - Pipe Sleeves at Intersecting Walls - META LCO.dyn | [ ] | |
+| 75 | Custom AutoInsert - Pipe and Fitting Elevations - Structural Framing.dyn | [ ] | |
 | 76 | Custom AutoInsert - SSB Symbols Along Pipe Runs.dyn | [ ] | |
 | 77 | Custom AutoSync - Hangers To Structural IFC Joists.dyn | [ ] | |
 | 78 | Custom Trapeze Hang - 17P Hanger - Auto Spaced.dyn | [ ] | |
 | 79 | Custom Trapeze Hang - Single Pipe - Auto Spaced - Z Purlins.dyn | [ ] | |
-| 80 | Custom TrapezeHang - Two Pipes - User Locations.dyn | [=] | Duplicate of TrapezeUserLocationsCommand |
+| 80 | Custom TrapezeHang - Two Pipes - User Locations.dyn | [ ] | |
 | 81 | Delete Duplicate Text Notes.dyn | [ ] | |
 | 82 | Delete Duplicate Text.dyn | [ ] | |
 | 83 | Design Manage - Color Code Pipes By Size.dyn | [ ] | |
@@ -105,7 +105,7 @@ Track which Dynamo scripts from the older folders have been evaluated and their 
 | 91 | Model Check - Pipes Too Short To Fab.dyn | [ ] | |
 | 92 | Model Check - Upright Sprinkler Clearances.dyn | [ ] | |
 | 93 | Model Check - Upright Sprinkler Deflector Distances.dyn | [ ] | |
-| 94 | RotateScopeBox.dyn | [=] | Duplicate of RotateScopeBoxCommand |
+| 94 | RotateScopeBox.dyn | [ ] | |
 | 95 | Scope Box Remover.dyn | [ ] | |
 | 96 | Trimble - Add Trimble Families.dyn | [ ] | |
 | 97 | Trimble - Clear Trimble Families In Active View.dyn | [ ] | |

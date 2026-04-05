@@ -35,6 +35,7 @@ Master list of all SSG FP Suite commands. Update this as commands are implemente
 - [x] `SyncHangersSurfaceCommand` - Calculate rod lengths via bounding box search and surface intersection to structural elements above, with framing top/bottom option
 - [x] `SyncTrapezeHangersCommand` - Sync trapeze hanger rod lengths, offsets, rotation, and pipe diameter to closest pipe and structural elements above
 - [x] `HangConcreteTeeCommand` - Place hangers on sides of concrete double tee stems at user-marked detail line locations with linked structural model
+- [x] `FlipTrapezeHangersCommand` - Rotate selected trapeze hangers 180° around Z-axis and swap Rod 1/Rod 2 Top Elevation and Offset parameter values
 
 ## Seismic
 - [x] `SeismicBracesCommand` - Auto-place lateral and/or longitudinal seismic braces on welded mains with NFPA spacing and rod length from linked structure
