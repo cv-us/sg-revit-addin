@@ -64,6 +64,7 @@ Master list of all SSG FP Suite commands. Update this as commands are implemente
 
 ## ViewsAndSheets
 - [ ] `DuplicateViewsCommand` - Duplicate fire protection plan views
+- [x] `CreateDependentViewsCommand` - Create dependent views from parent floor/ceiling plans with scope box assignment or blank copies
 - [x] `CreatePlanViewsCommand` - Create floor and/or ceiling plan views for selected levels with view templates and naming
 - [x] `RotateScopeBoxCommand` - Rotate a scope box to match the angle of a local or linked grid line
 

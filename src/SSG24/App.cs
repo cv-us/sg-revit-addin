@@ -193,6 +193,10 @@ namespace SSG_FP_Suite
                 "SSG_FP_Suite.Commands.ViewsAndSheets.CreatePlanViewsCommand",
                 "views-32.png", "views-16.png",
                 "Create floor and/or ceiling plan views for selected levels with templates and naming.");
+            AddButton(viewsPanel, "CreateDependentViews", "Dependent\nViews", assemblyPath,
+                "SSG_FP_Suite.Commands.ViewsAndSheets.CreateDependentViewsCommand",
+                "views-32.png", "views-16.png",
+                "Create dependent views from parent plans with optional scope box assignment.");
             AddButton(viewsPanel, "RotateScopeBox", "Rotate\nScope Box", assemblyPath,
                 "SSG_FP_Suite.Commands.ViewsAndSheets.RotateScopeBoxCommand",
                 "views-32.png", "views-16.png",

@@ -17,7 +17,7 @@ Track which Dynamo scripts from the older folders have been evaluated and their 
 | 3 | ! Create Floor and Ceiling Plan Views.dyn | [=] | Duplicate of CreatePlanViewsCommand |
 | 4 | ! Setup - Clear Pipe Elevation Shared Parameters.dyn | [x] | New command: ClearPipeElevationParamsCommand |
 | 5 | ! Setup - Copy Link Levels and Grids.dyn | [=] | Duplicate of CopyLinkLevelsGridsCommand |
-| 6 | ! Setup - Create Dependent Views.dyn | [ ] | |
+| 6 | ! Setup - Create Dependent Views.dyn | [x] | New command: CreateDependentViewsCommand |
 | 7 | ! Setup - Global Parameters.dyn | [=] | Duplicate of SetupGlobalParamsCommand |
 | 8 | ! Setup - Load Custom Families.dyn | [=] | Duplicate of LoadFamiliesCommand |
 | 9 | Auto Hang - Pipes Crossing Linked CAD File Lines.dyn | [ ] | |
