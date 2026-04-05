@@ -1,13 +1,12 @@
 # Setup: Global Parameters
 
-**Command:** `SetupGlobalParametersCommand`
+**Command:** `SetupGlobalParamsCommand`
 **Domain:** Setup
 **Ribbon:** SSG FP Suite > Setup > Setup Global Parameters
-**Migrated from:** `! Setup - Global Parameters.dyn` (V10)
 
 ## Purpose
 
-Creates and initializes the full set of 86 "Dynamo Setting - " global parameters used as a configuration store by all SSG FP Suite commands (and legacy Dynamo scripts). Parameters that already exist are left untouched; only missing ones are created with their default values. This is a one-time (or run-anytime-safe) project setup step.
+Creates and initializes the full set of 86 "Dynamo Setting - " global parameters used as a configuration store by all SSG FP Suite commands (and other SSG FP Suite commands). Parameters that already exist are left untouched; only missing ones are created with their default values. This is a one-time (or run-anytime-safe) project setup step.
 
 ## Workflow
 
@@ -39,7 +38,7 @@ All parameters use the prefix `Dynamo Setting - ` followed by the base name.
 
 ## Seismic Int64 Fix
 
-Three seismic parameters may have been created as Int64 (integer) type by older Dynamo scripts:
+Three seismic parameters may have been created as Int64 (integer) type by older scripts:
 - Seismic Lateral Brace Max Distance From End Of Main
 - Seismic Lateral Brace Maximum Spacing
 - Seismic Longitudinal Brace Maximum Spacing
@@ -66,7 +65,5 @@ Reports:
 
 ## Notes
 
-- The Dynamo version used `GlobalParameter.ByName` (Dynamo wrapper) and created parameters via Python Script nodes
 - The C# version uses `GlobalParametersManager.FindByName()` and `GlobalParameter.Create()` directly
 - Parameter type is `SpecTypeId.String.Text` for both Revit 2024 and 2025+
-- All parameters are String type regardless of whether their values look numeric — this matches the Dynamo script behavior

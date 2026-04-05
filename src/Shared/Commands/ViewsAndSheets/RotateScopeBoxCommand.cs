@@ -16,8 +16,6 @@ namespace SSG_FP_Suite.Commands.ViewsAndSheets
     /// angle). The command computes the angle between the grid direction and the
     /// X-axis, then rotates the scope box to match.
     ///
-    /// Migrated from: "RotateScopeBox.dyn" (V02)
-    ///
     /// WORKFLOW:
     ///   1. User selects a scope box (pre-select or pick)
     ///   2. Dialog: choose angle source (local grid, linked grid, or manual)
@@ -196,10 +194,6 @@ namespace SSG_FP_Suite.Commands.ViewsAndSheets
         /// of direction ≈ 0), takes the bottom edges, makes a best-fit line from
         /// their start points, and measures the angle of that line vs. X-axis.
         ///
-        /// This replicates the Dynamo logic:
-        ///   s.Geometry() → filter horizontal → sort by Z → PolyCurve.ByJoinedCurves
-        ///   → Curves → StartPoints → Line.ByBestFitThroughPoints → Direction
-        ///   → Vector.AngleAboutAxis(XAxis, ZAxis)
         /// </summary>
         private double GetScopeBoxAngleDegrees(Element scopeBox)
         {
@@ -235,7 +229,7 @@ namespace SSG_FP_Suite.Commands.ViewsAndSheets
                 .OrderBy(l => l.GetEndPoint(0).Z)
                 .ToList();
 
-            // Take the first 4 lines (bottom face edges, matching Dynamo's c3[0..3])
+            // Take the first 4 lines (bottom face edges)
             var bottomLines = horizontalLines.Take(Math.Min(4, horizontalLines.Count)).ToList();
 
             // Get start points and compute best-fit direction

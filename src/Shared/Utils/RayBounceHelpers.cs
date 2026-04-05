@@ -10,7 +10,7 @@ namespace SSG_FP_Suite.Utils
     /// Used to find the nearest structural element above a point — typically
     /// to determine rod length for pipe hangers.
     ///
-    /// Replaces BimorphNodes' LinkElement.ByRayBounce from Dynamo scripts.
+    /// Wraps the native ReferenceIntersector API with linked model support.
     /// </summary>
     public static class RayBounceHelpers
     {
@@ -181,7 +181,7 @@ namespace SSG_FP_Suite.Utils
 
         /// <summary>
         /// Map a structural category name to a hanger type code.
-        /// Uses the same logic as the Dynamo script's conditional chain.
+        /// Maps category to the corresponding user-configured type code.
         /// </summary>
         /// <param name="categoryName">The category name from the raybounce hit</param>
         /// <param name="roofCode">Type code for roof structures</param>

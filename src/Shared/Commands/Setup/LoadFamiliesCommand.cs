@@ -13,8 +13,6 @@ namespace SSG_FP_Suite.Commands.Setup
     /// Loads custom Revit family (.rfa) files from a specified folder into the
     /// current project. Families that are already loaded (by name) are skipped.
     ///
-    /// Migrated from: "! Setup - Load Custom Families.dyn" (V02)
-    ///
     /// WORKFLOW:
     ///   1. Dialog: pick folder (defaults to C:\BIM Support\Revit\Families\{version})
     ///   2. Enumerate all .rfa files (optionally recursive)
@@ -27,7 +25,7 @@ namespace SSG_FP_Suite.Commands.Setup
     public class LoadFamiliesCommand : IExternalCommand
     {
         /// <summary>
-        /// Base path used by legacy Dynamo script for family storage.
+        /// Base path for family storage.
         /// </summary>
         private const string DefaultBasePath = @"C:\BIM Support\Revit\Families\";
 
@@ -95,7 +93,7 @@ namespace SSG_FP_Suite.Commands.Setup
                         {
                             string familyName = Path.GetFileNameWithoutExtension(rfaPath);
 
-                            // Skip if already loaded (matches Dynamo Clockwork behavior)
+                            // Skip if already loaded
                             if (loadedFamilyNames.Contains(familyName))
                             {
                                 skipped++;

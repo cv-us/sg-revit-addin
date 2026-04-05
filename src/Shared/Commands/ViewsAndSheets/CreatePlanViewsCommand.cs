@@ -12,8 +12,6 @@ namespace SSG_FP_Suite.Commands.ViewsAndSheets
     /// Creates floor and/or ceiling plan views for selected levels.
     /// Applies a view template and names each view as "LEVEL NAME - SUFFIX".
     ///
-    /// Migrated from: "! Setup - Create Plan Views.dyn" (V--)
-    ///
     /// WORKFLOW:
     ///   1. Dialog: view type, level selection, templates, name suffix
     ///   2. Find default ViewFamilyType for FloorPlan and CeilingPlan

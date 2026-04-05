@@ -13,8 +13,6 @@ namespace SSG_FP_Suite.Commands.Hangers
     /// Formats all selected pipe hanger symbols so their tick marks face a consistent
     /// direction (forward slash "/" or backslash "\") based on user preference.
     ///
-    /// Migrated from: "AutoFormat - Hanger Ticks.dyn"
-    ///
     /// WORKFLOW:
     ///   1. User selects pipe accessories (hangers)
     ///   2. Dialog: pick direction (Forward / Backslash / Default)
@@ -23,7 +21,7 @@ namespace SSG_FP_Suite.Commands.Hangers
     ///      b. Calculate the expected "Flip Symbol" value based on angle + direction
     ///      c. Set "Flip Symbol" parameter only if it differs from current value
     ///
-    /// ANGLE-TO-FLIP MAPPING (from Dynamo script):
+    /// ANGLE-TO-FLIP MAPPING:
     ///   Angle 0-45°   → base flip = 0
     ///   Angle 45-135°  → base flip = 1
     ///   Angle 135-225° → base flip = 0
@@ -192,7 +190,7 @@ namespace SSG_FP_Suite.Commands.Hangers
         /// Calculates the desired "Flip Symbol" value (0 or 1) based on the element's
         /// rotation angle and the user's direction preference.
         ///
-        /// Angle-to-base-flip mapping (from Dynamo script):
+        /// Angle-to-base-flip mapping:
         ///   0-45°   → 0
         ///   45-135°  → 1
         ///   135-225° → 0

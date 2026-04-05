@@ -15,8 +15,6 @@ namespace SSG_FP_Suite.Commands.ViewsAndSheets
     ///   - Floor plan view template
     ///   - Ceiling plan view template
     ///   - View name suffix: OVERALL, FOR REFERENCE ONLY, or custom text
-    ///
-    /// Migrated from: "! Setup - Create Plan Views.dyn"
     /// </summary>
     public class CreatePlanViewsDialog : Form
     {

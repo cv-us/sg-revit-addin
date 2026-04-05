@@ -21,7 +21,7 @@ namespace SSG_FP_Suite.Commands.Setup
         public LoadFamiliesDialog(string defaultFolder)
         {
             FolderPath = defaultFolder;
-            IncludeSubfolders = true; // Dynamo script used recursive = true
+            IncludeSubfolders = true;
             InitializeComponents();
         }
 

@@ -3,7 +3,6 @@
 **Command:** `RotateScopeBoxCommand`
 **Domain:** ViewsAndSheets
 **Ribbon:** SSG FP Suite > Views & Sheets > Rotate Scope Box
-**Migrated from:** `RotateScopeBox.dyn` (V02)
 
 ## Purpose
 
@@ -34,12 +33,11 @@ The current scope box orientation is determined by:
 4. Using the longest bottom edge's direction as the orientation
 5. Computing `atan2(dir.Y, dir.X)` to get the angle from X-axis
 
-This replicates the Dynamo logic:
-```
-s.Geometry() → filter by Vector.ZAxis.Dot(direction)==0
-→ sort by Z → take bottom 4 → PolyCurve → Curves → StartPoints
-→ Line.ByBestFitThroughPoints → Direction → AngleAboutAxis(XAxis, ZAxis)
-```
+The algorithm:
+1. Extract geometry lines, filter to horizontal (direction Z = 0)
+2. Sort by Z, take bottom face edges
+3. Use longest bottom edge direction
+4. Compute `atan2(dir.Y, dir.X)` for the angle from X-axis
 
 ## Grid Angle Detection
 
@@ -67,8 +65,7 @@ Reports:
 
 ## Notes
 
-- The Dynamo version used a custom "Set Rotation" node; the C# version uses `ElementTransformUtils.RotateElement` which is the standard Revit API approach
 - Scope box category is `OST_VolumeOfInterest`
 - Grid angles are computed in the XY plane only (Z component ignored)
 - Linked grid coordinates are properly transformed using the link instance transform
-- The Dynamo version had additional `360-x` adjustments for angle normalization; the C# version normalizes delta to ±180° which achieves the same result more cleanly
+- Delta angle is normalized to +/-180 degrees to ensure the shortest rotation path

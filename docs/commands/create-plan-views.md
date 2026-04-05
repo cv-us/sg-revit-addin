@@ -3,7 +3,6 @@
 **Command:** `CreatePlanViewsCommand`
 **Domain:** ViewsAndSheets
 **Ribbon:** SSG FP Suite > Views & Sheets > Create Plan Views
-**Migrated from:** `! Setup - Create Plan Views.dyn`
 
 ## Purpose
 
@@ -39,12 +38,10 @@ Examples:
 - `BASEMENT - FOR REFERENCE ONLY`
 - `LEVEL 2 - FIRE PROTECTION`
 
-The level name is converted to uppercase via `ToUpper()` to match the Dynamo script's `String.ToUpper` behavior.
 
 ## View Template Application
 
 Templates are applied using the `ViewTemplateId` property rather than `SetParameterByName("View Template")`:
-- This is more reliable than the Dynamo approach
 - Templates are filtered by ViewType (FloorPlan templates only shown for floor plans, CeilingPlan templates only for ceiling plans)
 - If "(none)" is selected, no template is applied
 
@@ -66,7 +63,3 @@ Reports:
 
 ## Notes
 
-- The Dynamo version used `FloorPlanView.ByLevel` and `CeilingPlanView.ByLevel` which are Dynamo wrapper nodes; the C# version uses the native `ViewPlan.Create()` API
-- The Dynamo version used a Python `SetElementName` script for renaming; the C# version uses the `View.Name` property directly
-- View template is applied via `ViewTemplateId` (native API) rather than `SetParameterByName("View Template")` (Dynamo approach)
-- The elevation formatter strips trailing zeros from non-integer elevations, matching the Dynamo Python helper

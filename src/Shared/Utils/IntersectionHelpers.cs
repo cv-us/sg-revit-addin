@@ -11,8 +11,8 @@ namespace SSG_FP_Suite.Utils
     /// for intersection testing. The actual 3D placement point is calculated
     /// by projecting the 2D intersection back onto the pipe's 3D centerline.
     ///
-    /// This is MUCH faster than Dynamo's approach of projecting geometry
-    /// onto planes and using DoesIntersect — pure math with no Revit geometry calls.
+    /// Pure math approach — much faster than projecting geometry onto planes
+    /// and using DoesIntersect, since there are no Revit geometry calls.
     /// </summary>
     public static class IntersectionHelpers
     {

@@ -13,8 +13,6 @@ namespace SSG_FP_Suite.Commands.ViewsAndSheets
     ///   - Angle source: local grid, linked grid, or manual angle
     ///   - Grid selection (for grid-based rotation)
     ///   - Manual angle (for manual entry)
-    ///
-    /// Migrated from: "RotateScopeBox.dyn"
     /// </summary>
     public class RotateScopeBoxDialog : Form
     {

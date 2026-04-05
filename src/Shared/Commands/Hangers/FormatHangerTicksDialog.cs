@@ -9,8 +9,6 @@ namespace SSG_FP_Suite.Commands.Hangers
     ///
     /// Collects:
     ///   - Symbol direction preference (Forward slash, Backslash, or Default)
-    ///
-    /// Migrated from: "AutoFormat - Hanger Ticks.dyn"
     /// </summary>
     public class FormatHangerTicksDialog : Form
     {

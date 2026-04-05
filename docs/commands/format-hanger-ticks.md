@@ -2,7 +2,6 @@
 
 **Ribbon location:** SSG FP Suite tab > Hangers panel > "Format Ticks"
 **Command class:** `SSG_FP_Suite.Commands.Hangers.FormatHangerTicksCommand`
-**Migrated from:** `AutoFormat - Hanger Ticks.dyn`
 
 ## What It Does
 
@@ -43,17 +42,6 @@ Only processes elements whose family name contains `"-Pipe Hanger"`. Other pipe 
 | Parameter | Type | Values |
 |-----------|------|--------|
 | Flip Symbol | Integer | 0 (unflipped) or 1 (flipped) |
-
-## Differences from the Dynamo Version
-
-| Feature | Dynamo Script | Plugin Command |
-|---------|--------------|----------------|
-| Speed | Slow — Data-Shapes + Clockwork | Fast — native C# |
-| Dependencies | Data-Shapes + Clockwork | Zero |
-| UI | Data-Shapes radio buttons | WinForms dialog |
-| Element selection | Data-Shapes SelectModelElements | Revit PickObjects |
-| Rotation extraction | Clockwork Element.Location+ | Direct LocationPoint/LocationCurve API |
-| Global param storage | Reads/writes Dynamo Setting param | Not needed (per-session) |
 
 ## Changing the Icon
 

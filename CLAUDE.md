@@ -27,3 +27,7 @@
 ## Sandbox
 - `sandbox/` is for macro prototyping — files here are NOT compiled into the plugin
 - Use `_macro_template.cs` as a starting point for new macros
+
+## Build & Deploy
+- `dotnet build src/SSG24/SSG24.csproj -c Release` and `dotnet build src/SSG25/SSG25.csproj -c Release`
+- Deploy: `powershell -File tools/deploy-addin.ps1 -RevitVersion {2023|2024|2025|2026}`
