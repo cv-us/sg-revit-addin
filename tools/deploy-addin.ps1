@@ -50,15 +50,31 @@ if (-not (Test-Path $dllSource)) {
 Copy-Item $dllSource $revitAddinsFolder -Force
 Write-Host "  Copied $projectName.dll" -ForegroundColor Gray
 
+# Copy dependency DLLs (SSG24 needs System.Text.Json and transitive deps)
+$depDlls = Get-ChildItem "$buildOutput\*.dll" -Exclude "$projectName.dll"
+foreach ($dep in $depDlls) {
+    Copy-Item $dep.FullName $revitAddinsFolder -Force
+    Write-Host "  Copied $($dep.Name)" -ForegroundColor Gray
+}
+
+# Copy .deps.json if present (SSG25 needs this)
+$depsJson = "$buildOutput\$projectName.deps.json"
+if (Test-Path $depsJson) {
+    Copy-Item $depsJson $revitAddinsFolder -Force
+    Write-Host "  Copied $projectName.deps.json" -ForegroundColor Gray
+}
+
 # Copy .addin manifest (rename to match Revit version for clarity)
 Copy-Item $addinSource $revitAddinsFolder -Force
 Write-Host "  Copied $projectName.addin" -ForegroundColor Gray
 
 # Copy defaults.json if present
-$defaultsSource = "$buildOutput\defaults.json"
+$defaultsSource = "$buildOutput\Config\defaults.json"
 if (Test-Path $defaultsSource) {
-    Copy-Item $defaultsSource $revitAddinsFolder -Force
-    Write-Host "  Copied defaults.json" -ForegroundColor Gray
+    $configDir = "$revitAddinsFolder\Config"
+    if (-not (Test-Path $configDir)) { New-Item -ItemType Directory -Path $configDir -Force | Out-Null }
+    Copy-Item $defaultsSource $configDir -Force
+    Write-Host "  Copied Config\defaults.json" -ForegroundColor Gray
 }
 
 Write-Host "`nDeploy complete. Restart Revit to load the add-in." -ForegroundColor Green

@@ -50,3 +50,4 @@ Desktop.ini
 # Sandbox experiments are tracked, but ignore any temp outputs
 sandbox/**/*.dll
 sandbox/**/*.pdb
+dist/
