@@ -60,3 +60,12 @@ The button icon is a 32x32 PNG at `src/Shared/UI/Resources/icons/hang-struct-32.
 1. Create a new 32x32 PNG (and optionally 16x16) in any image editor
 2. Save it with the same filename in the icons folder
 3. Rebuild and redeploy
+
+## See Also
+
+- **[Choosing a Command](choosing-a-command.md)** — full comparison of all similar commands
+- **Hang at CAD Lines** — same concept but uses linked CAD linework instead of Revit structural elements
+- **Hang Typical Spacing** — for evenly-spaced hangers along runs (not just at beam crossings)
+- **Hang Parallel Structural** — for pipes running parallel to beams where there are no crossings
+- **Hang User Locations** — for manual placement at detail-line locations
+- **Hang Downstream** — for branchline end hangers only

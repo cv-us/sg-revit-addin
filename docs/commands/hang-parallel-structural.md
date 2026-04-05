@@ -67,3 +67,9 @@ For each pipe, N hangers at typical spacing, each with:
 ## Changing the Icon
 
 The button icon is at `src/Shared/UI/Resources/icons/hang-parallel-32.png` (and 16x16). Replace with same filename, rebuild, redeploy.
+
+## See Also
+
+- **[Choosing a Command](choosing-a-command.md)** — full comparison of all similar commands
+- **Hang Typical Spacing** — similar even spacing but without perpendicular beam search
+- **Hang at Structural** — for hangers at beam crossing points (perpendicular pipes)

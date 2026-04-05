@@ -36,3 +36,8 @@ The "-Flex Drop Length Tag" annotation family must be loaded in the project. If 
 ## Changing the Icon
 
 The button icon is at `src/Shared/UI/Resources/icons/annotation-32.png` (shared with other annotation commands). Replace with a unique icon if desired.
+
+## See Also
+
+- **[Choosing a Command](choosing-a-command.md)** — comparison of Standard vs. Dalmatian flex drop commands
+- **Flex Drop Dalmatian** — auto-reads actual connected flex pipe lengths with Wet/Dry system support. Use when flex pipes are already modeled

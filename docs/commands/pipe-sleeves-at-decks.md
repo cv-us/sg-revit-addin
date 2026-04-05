@@ -110,3 +110,10 @@ Deck thickness is determined geometrically from the vertical distance between th
 - Linked model must be loaded (not unloaded) to access geometry
 - Deck thickness is measured geometrically — it accounts for sloped decks and varying slab thickness
 - For nearly-horizontal pipe-deck intersections, the command uses the full distance through the slab rather than just Z difference
+
+## See Also
+
+- **[Choosing a Command](choosing-a-command.md)** — comparison of all three sleeve commands
+- **Sleeves at Beams** — for pipe penetrations through structural beams
+- **Sleeves at Walls** — for pipe penetrations through walls (uses NFPA lookup table with seismic sizing)
+- **Sleeve Elevations** — after placing sleeves, use this to calculate AFF/BBD elevation parameters

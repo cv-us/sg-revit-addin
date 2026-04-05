@@ -79,3 +79,9 @@ After processing, a summary dialog shows:
 - Rod lengths are written in Revit internal units (feet) — no conversion needed
 - The projection math handles both horizontal and sloped reference planes correctly
 - Vertical reference planes (parallel to Z-axis) cannot be projected onto and are skipped
+
+## See Also
+
+- **[Choosing a Command](choosing-a-command.md)** — full comparison of all sync commands
+- **Sync Raybounce** or **Sync Surface** — better choice when structure varies (beams, sloped roofs, multiple levels)
+- **Sync to Pipes** — run first to position hangers on pipes before calculating rod lengths

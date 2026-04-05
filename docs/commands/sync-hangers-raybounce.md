@@ -104,3 +104,10 @@ Reports:
 - The "3D-Raybounce" view is a permanent artifact in the project — it can be deleted manually if desired
 - Type code defaults are per-session dialog values (enhancement opportunity: persist to project parameters)
 - Linked model structural elements are found via `ReferenceIntersector.FindReferencesInRevitLinks = true`
+
+## See Also
+
+- **[Choosing a Command](choosing-a-command.md)** — full comparison of all sync commands
+- **Sync Surface** — alternative method with top/bottom framing choice and global parameter persistence
+- **Sync to Ref Plane** — simpler option when structure is a flat slab at known elevation
+- **Sync to Pipes** — run first to position hangers on pipes before calculating rod lengths

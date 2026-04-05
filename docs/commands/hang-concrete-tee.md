@@ -119,3 +119,9 @@ Default selection: `"-Basic Adjustable Ring Hanger"` if available.
 - All internal calculations use Revit internal units (feet)
 - The "warped" handling uses face UV sampling rather than assuming planar geometry
 - If no stems are found, the command fails gracefully with a descriptive message including the search keyword used
+
+## See Also
+
+- **[Choosing a Command](choosing-a-command.md)** — full comparison of all similar commands
+- **Hang User Locations** — similar detail-line approach, but for standard overhead hangers (not stem-mounted)
+- **Hang Typical Spacing** — for hangers under the tee flange (not on stems), use this with raybounce to the tee underside

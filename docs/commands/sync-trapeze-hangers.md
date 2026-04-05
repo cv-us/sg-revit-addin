@@ -123,3 +123,9 @@ Reports:
 - All lengths are written in Revit internal units (feet)
 - The "3D-Raybounce" view is shared with `SyncHangersRaybounceCommand`
 - All logic is consolidated into a single `ProcessHanger()` method
+
+## See Also
+
+- **[Choosing a Command](choosing-a-command.md)** — full comparison of all sync commands
+- **Sync Raybounce** / **Sync Surface** / **Sync to Ref Plane** — these are for standard (single-rod) hangers, not trapeze
+- **Flip Trapeze** — rotates trapeze hangers 180° and swaps Rod 1/Rod 2 values

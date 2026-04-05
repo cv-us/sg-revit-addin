@@ -87,3 +87,9 @@ The pipe's `"Diameter"` parameter value (in feet) is rounded to 3 decimal places
 - The command modifies existing hangers — no elements are created or deleted
 - Rod lengths are NOT adjusted by this command (use the structural sync command for that)
 - Pre-selection is supported and preferred for large selections
+
+## See Also
+
+- **[Choosing a Command](choosing-a-command.md)** — full comparison of all sync commands
+- **Sync Raybounce** or **Sync Surface** — run after this command to calculate rod lengths from structure above
+- **Sync to Ref Plane** — simpler rod length calculation when structure is a flat slab at known elevation

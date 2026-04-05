@@ -53,3 +53,10 @@ For each detail line × pipe intersection:
 ## Changing the Icon
 
 The button icon is at `src/Shared/UI/Resources/icons/hang-userloc-32.png` (and 16x16). Replace with same filename, rebuild, redeploy.
+
+## See Also
+
+- **[Choosing a Command](choosing-a-command.md)** — full comparison of all similar commands
+- **Hang Typical Spacing** — for automated even spacing when manual control isn't needed
+- **Hang at Structural** — for automated placement at beam crossings
+- **Hang Concrete Tee** — also uses detail lines for placement, but specialized for tee stems

@@ -74,3 +74,10 @@ The button icon is a 32x32 PNG at `src/Shared/UI/Resources/icons/hang-spacing-32
 1. Create a new 32x32 PNG (and optionally 16x16) in any image editor
 2. Save it with the same filename in the icons folder
 3. Rebuild and redeploy
+
+## See Also
+
+- **[Choosing a Command](choosing-a-command.md)** — full comparison of all similar commands
+- **Hang at Structural** — for hangers specifically at beam crossing points
+- **Hang Parallel Structural** — similar even spacing but searches perpendicular to pipe for nearest beam
+- **Hang Downstream** — for branchline end hangers only

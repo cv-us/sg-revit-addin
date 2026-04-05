@@ -20,3 +20,8 @@ Deletes all generic annotation family instances from the active view. Used to cl
 - Only elements visible in the active view are affected; other views are not changed
 - All generic annotation families are deleted regardless of family name
 - Operates on the active view only — does not affect other views or sheets
+
+## See Also
+
+- **[Choosing a Command](choosing-a-command.md)** — comparison of annotation cleanup commands
+- **Delete Duplicate Text** — surgical removal of only duplicate text notes (keeps one copy at each location)

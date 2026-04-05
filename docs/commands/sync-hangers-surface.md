@@ -108,3 +108,10 @@ Reports:
 
 - A unified family name exclusion filter handles both standard Revit and IFC/Tekla framing member types
 - Rod length change detection uses a tolerance of ~0.004" (1/256 foot) to avoid unnecessary parameter writes
+
+## See Also
+
+- **[Choosing a Command](choosing-a-command.md)** — full comparison of all sync commands
+- **Sync Raybounce** — simpler alternative that doesn't need top/bottom choice; requires a 3D view
+- **Sync to Ref Plane** — fastest option when structure is a flat slab at known elevation
+- **Sync to Pipes** — run first to position hangers on pipes before calculating rod lengths

@@ -109,3 +109,8 @@ Reports:
 
 - Flex pipe length is read from the Revit "Length" parameter in feet, then compared against the threshold table which is also in feet
 - If no flex pipe is found connected to a sprinkler, the smallest bucket length is assigned as a fallback
+
+## See Also
+
+- **[Choosing a Command](choosing-a-command.md)** — comparison of Standard vs. Dalmatian flex drop commands
+- **Flex Drop Lengths (Standard)** — applies one uniform length to all selected sprinklers. Use for initial layout before flex pipes are modeled

@@ -85,3 +85,8 @@ The command uses direct solid geometry intersection with linked model elements r
 - Linked models must be loaded (not unloaded) to access their geometry
 - The 50-foot search distance covers typical multi-story floor-to-floor heights
 - All four parameters are written as strings — they must exist on the sleeve family as shared/project parameters
+
+## See Also
+
+- **[Choosing a Command](choosing-a-command.md)** — comparison of elevation commands
+- **Pipe Elevations** — for pipe and fitting TOS/AFF elevations (different element type, different reference methods)

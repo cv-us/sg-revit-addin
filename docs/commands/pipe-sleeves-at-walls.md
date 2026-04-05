@@ -137,3 +137,10 @@ Sleeve is rotated about Z-axis to align with the penetration direction vector (f
 - Wall type filtering is case-insensitive
 - Fire Rating parameter is read from the linked wall element (BuiltInParameter.FIRE_RATING)
 - The command creates a single transaction for all sleeve placements
+
+## See Also
+
+- **[Choosing a Command](choosing-a-command.md)** — comparison of all three sleeve commands
+- **Sleeves at Beams** — for pipe penetrations through structural beams
+- **Sleeves at Decks** — for pipe penetrations through floors and roofs
+- **Sleeve Elevations** — after placing sleeves, use this to calculate AFF/BBD elevation parameters

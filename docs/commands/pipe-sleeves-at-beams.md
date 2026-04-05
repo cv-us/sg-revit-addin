@@ -102,3 +102,10 @@ Standard size snapping:
 - For large models with many beams, the bounding box pre-filter ensures performance stays reasonable
 - Each pipe can generate multiple sleeves if it crosses multiple beams
 - The command creates a single transaction for all sleeve placements (all-or-nothing)
+
+## See Also
+
+- **[Choosing a Command](choosing-a-command.md)** — comparison of all three sleeve commands
+- **Sleeves at Decks** — for pipe penetrations through floors and roofs
+- **Sleeves at Walls** — for pipe penetrations through walls (uses NFPA lookup table with seismic sizing)
+- **Sleeve Elevations** — after placing sleeves, use this to calculate AFF/BBD elevation parameters

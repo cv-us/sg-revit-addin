@@ -73,3 +73,9 @@ The button icon is a 32x32 PNG at `src/Shared/UI/Resources/icons/hang-downstream
 1. Create a new 32x32 PNG (and optionally 16x16) in any image editor
 2. Save it with the same filename in the icons folder
 3. Rebuild and redeploy
+
+## See Also
+
+- **[Choosing a Command](choosing-a-command.md)** — full comparison of all similar commands
+- **Hang Typical Spacing** — for full-run hanger spacing (not just branchline ends)
+- **Hang at Structural** — for hangers at beam crossings on any pipe type
