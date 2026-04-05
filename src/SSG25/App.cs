@@ -146,7 +146,7 @@ namespace SSG_FP_Suite
             AddButton(coordPanel, "ColorCodePipes", "Color Code\nPipes", assemblyPath,
                 "SSG_FP_Suite.Commands.Coordination.ColorCodePipesCommand",
                 "coordination-32.png", "coordination-16.png",
-                "Color-code pipes by size or system type.");
+                "Color-code pipes in the active view by diameter, type name, or reset overrides.");
 
             // ── Annotation panel ──
             RibbonPanel annotPanel = application.CreateRibbonPanel(tabName, "Annotation");
@@ -251,6 +251,10 @@ namespace SSG_FP_Suite
                 "SSG_FP_Suite.Commands.Export.ExportTrimblePointsCommand",
                 "setup-32.png", "setup-16.png",
                 "Export hanger locations as Trimble CSV point files for field layout of inserts.");
+            AddButton(exportPanel, "PlaceTrimbleMarkers", "Trimble\nMarkers", assemblyPath,
+                "SSG_FP_Suite.Commands.Export.PlaceTrimbleMarkersCommand",
+                "setup-32.png", "setup-16.png",
+                "Place Trimble symbol families at hanger and seismic brace locations for field layout.");
             AddButton(exportPanel, "ImportASPipes", "Import AS\nPipes", assemblyPath,
                 "SSG_FP_Suite.Commands.Export.ImportASPipesCommand",
                 "setup-32.png", "setup-16.png",
@@ -265,7 +269,11 @@ namespace SSG_FP_Suite
             AddButton(checkPanel, "SprinklerClearanceCheck", "Sprinkler\nClearance", assemblyPath,
                 "SSG_FP_Suite.Commands.ModelCheck.SprinklerClearanceCheckCommand",
                 "modelcheck-32.png", "modelcheck-16.png",
-                "Verify upright sprinkler deflector clearances.");
+                "Check upright sprinklers for NFPA 3\" clearance violations from pipes and hangers.");
+            AddButton(checkPanel, "DeflectorDistanceCheck", "Deflector\nDistance", assemblyPath,
+                "SSG_FP_Suite.Commands.ModelCheck.DeflectorDistanceCheckCommand",
+                "modelcheck-32.png", "modelcheck-16.png",
+                "Measure upright deflector-to-structure distance and check against NFPA limits.");
             AddButton(checkPanel, "PipesTooShort", "Pipes Too\nShort", assemblyPath,
                 "SSG_FP_Suite.Commands.ModelCheck.PipesTooShortCommand",
                 "modelcheck-32.png", "modelcheck-16.png",

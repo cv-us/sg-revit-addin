@@ -104,12 +104,12 @@ Track which Dynamo scripts from the older folders have been evaluated and their 
 | 90 | Model Check - Clear Upright Clearance Annotations From Current View.dyn | [=] | Duplicate of ClearAnnotationsCommand — clearance annotations are a subset of generic annotations |
 | 91 | Model Check - Pipes Too Short To Fab.dyn | [x] | New command: PipesTooShortCommand |
 | 92 | Model Check - Upright Sprinkler Clearances.dyn | [=] | Duplicate of SprinklerClearanceCheckCommand |
-| 93 | Model Check - Upright Sprinkler Deflector Distances.dyn | [=] | Duplicate of SprinklerClearanceCheckCommand |
+| 93 | Model Check - Upright Sprinkler Deflector Distances.dyn | [=] | Duplicate of DeflectorDistanceCheckCommand |
 | 94 | RotateScopeBox.dyn | [=] | Duplicate of RotateScopeBoxCommand |
 | 95 | Scope Box Remover.dyn | [x] | New command: RemoveScopeBoxesCommand |
 | 96 | Trimble - Add Trimble Families.dyn | [=] | Duplicate of LoadFamiliesCommand — Trimble families loaded from standard folder |
-| 97 | Trimble - Clear Trimble Families In Active View.dyn | [-] | View-specific family visibility toggle; not a standalone command — use Revit visibility settings |
-| 98 | Trimble - Clear TrimbleFieldPoints In Active View.dyn | [-] | View-specific cleanup utility; not a standalone command |
+| 97 | Trimble - Clear Trimble Families In Active View.dyn | [=] | Covered by PlaceTrimbleMarkersCommand — clears existing markers before placing new ones |
+| 98 | Trimble - Clear TrimbleFieldPoints In Active View.dyn | [=] | Covered by PlaceTrimbleMarkersCommand — clears existing markers before placing new ones |
 
 ## C:\dev\Dynamo Revit\Revit 2023\ (46 scripts)
 
@@ -161,5 +161,5 @@ Track which Dynamo scripts from the older folders have been evaluated and their 
 | 42 | Custom AutoInsert - Pipe and Fitting Elevations - Structural Framing.dyn | [=] | Duplicate of PipeElevationsCommand |
 | 43 | Custom AutoInsert - SSB Symbols Along Pipe Runs.dyn | [=] | Duplicate of SSBSymbolsCommand |
 | 44 | Custom Trapeze Hang - Dual Pipe - User Locations.dyn | [=] | Duplicate of TrapezeUserLocationsCommand |
-| 45 | Model Check - Upright Sprinkler Deflector Distances.dyn | [=] | Duplicate of SprinklerClearanceCheckCommand |
+| 45 | Model Check - Upright Sprinkler Deflector Distances.dyn | [=] | Duplicate of DeflectorDistanceCheckCommand |
 | 46 | RotateScopeBox.dyn | [=] | Duplicate of RotateScopeBoxCommand |

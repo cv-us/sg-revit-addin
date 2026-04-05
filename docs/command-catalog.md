@@ -49,10 +49,11 @@ Master list of all SSG FP Suite commands. Update this as commands are implemente
 ## Export
 - [x] `ExportTrimblePointsCommand` - Export hanger locations as Trimble-compatible CSV point files for field layout of inserts before concrete pours
 - [x] `ImportASPipesCommand` - Import pipe geometry from an AutoSPRINK CSV export and create Revit pipes (coordinates in inches)
+- [x] `PlaceTrimbleMarkersCommand` - Place Trimble symbol families at hanger (3/8" and 1/2") and seismic brace locations for field layout
 - [x] `ImportASSprinklersCommand` - Import sprinkler head locations from an AutoSPRINK CSV export and place Revit sprinkler family instances
 
 ## Coordination
-- [ ] `ColorCodePipesCommand` - Color-code pipes by size or system type
+- [x] `ColorCodePipesCommand` - Color-code pipes in the active view by diameter (8 size buckets), type name (substring match), or reset all overrides
 
 ## Annotation
 - [x] `PipeElevationsCommand` - Calculate and write TOS/AFF elevation parameters on pipes and fittings with 4 reference methods including raybounce, slope classification
@@ -83,5 +84,6 @@ Master list of all SSG FP Suite commands. Update this as commands are implemente
 - [x] `CopyLinkLevelsGridsCommand` - Copy levels and/or grids from a linked model with duplicate detection, grid type assignment, and pinning
 
 ## ModelCheck
-- [ ] `SprinklerClearanceCheckCommand` - Verify upright sprinkler deflector clearances
+- [x] `SprinklerClearanceCheckCommand` - Check upright sprinklers for NFPA 3" clearance violations from pipes and hangers with annotation placement
+- [x] `DeflectorDistanceCheckCommand` - Measure upright deflector-to-structure distance via raybounce and check against NFPA 13 limits (unobstructed/obstructed/custom)
 - [x] `PipesTooShortCommand` - Flag pipes shorter than the minimum fabricable nipple length for their size and type (threaded vs welded)
