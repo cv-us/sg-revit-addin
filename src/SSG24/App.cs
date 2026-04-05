@@ -212,6 +212,10 @@ namespace SSG_FP_Suite
                 "SSG_FP_Suite.Commands.Setup.SetupGlobalParamsCommand",
                 "setup-32.png", "setup-16.png",
                 "Create all configuration global parameters with defaults (idempotent).");
+            AddButton(setupPanel, "ClearPipeElevationParams", "Clear Pipe\nElev Params", assemblyPath,
+                "SSG_FP_Suite.Commands.Setup.ClearPipeElevationParamsCommand",
+                "setup-32.png", "setup-16.png",
+                "Remove pipe elevation shared parameters (TOS/AFF) from the project.");
 
             // ── Export panel ──
             RibbonPanel exportPanel = application.CreateRibbonPanel(tabName, "Export");

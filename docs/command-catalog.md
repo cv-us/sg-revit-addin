@@ -70,6 +70,7 @@ Master list of all SSG FP Suite commands. Update this as commands are implemente
 ## Setup
 - [x] `LoadFamiliesCommand` - Load .rfa families from a folder into the project, skipping already-loaded families
 - [x] `SetupGlobalParamsCommand` - Create all 86 configuration global parameters with defaults, fix legacy seismic Int64 types
+- [x] `ClearPipeElevationParamsCommand` - Remove pipe elevation shared parameters (TOS/AFF) from the project with confirmation
 - [x] `CopyLinkLevelsGridsCommand` - Copy levels and/or grids from a linked model with duplicate detection, grid type assignment, and pinning
 
 ## ModelCheck

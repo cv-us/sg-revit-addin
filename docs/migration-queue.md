@@ -13,13 +13,13 @@ Track which Dynamo scripts from the older folders have been evaluated and their 
 | # | Script | Status | Notes |
 |---|--------|--------|-------|
 | 1 | ! Clear Dynamo !.dyn | [-] | File cleanup utility, not a command |
-| 2 | ! Copy Link Levels and Grids.dyn | [ ] | |
-| 3 | ! Create Floor and Ceiling Plan Views.dyn | [ ] | |
-| 4 | ! Setup - Clear Pipe Elevation Shared Parameters.dyn | [ ] | |
-| 5 | ! Setup - Copy Link Levels and Grids.dyn | [ ] | |
+| 2 | ! Copy Link Levels and Grids.dyn | [=] | Duplicate of CopyLinkLevelsGridsCommand |
+| 3 | ! Create Floor and Ceiling Plan Views.dyn | [=] | Duplicate of CreatePlanViewsCommand |
+| 4 | ! Setup - Clear Pipe Elevation Shared Parameters.dyn | [x] | New command: ClearPipeElevationParamsCommand |
+| 5 | ! Setup - Copy Link Levels and Grids.dyn | [=] | Duplicate of CopyLinkLevelsGridsCommand |
 | 6 | ! Setup - Create Dependent Views.dyn | [ ] | |
-| 7 | ! Setup - Global Parameters.dyn | [ ] | |
-| 8 | ! Setup - Load Custom Families.dyn | [ ] | |
+| 7 | ! Setup - Global Parameters.dyn | [=] | Duplicate of SetupGlobalParamsCommand |
+| 8 | ! Setup - Load Custom Families.dyn | [=] | Duplicate of LoadFamiliesCommand |
 | 9 | Auto Hang - Pipes Crossing Linked CAD File Lines.dyn | [ ] | |
 | 10 | Auto Hang - Pipes Crossing Structural Framing.dyn | [ ] | |
 | 11 | Auto Hang - Threaded Branchlines - Downstream Ends.dyn | [ ] | |
