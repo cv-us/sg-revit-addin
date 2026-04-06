@@ -263,6 +263,12 @@ namespace SSG_FP_Suite.Commands.Export
                 XYZ pt = GetLocation(element);
                 if (pt == null) return 0;
 
+                // Offset Z by Rod Length so the marker is placed at the
+                // insert location in the structure above, not at the hanger.
+                double rodLength = GetRodLength(element);
+                if (rodLength > 0)
+                    pt = new XYZ(pt.X, pt.Y, pt.Z + rodLength);
+
                 if (!symbol.IsActive) symbol.Activate();
                 doc.Create.NewFamilyInstance(pt, symbol, view);
                 return 1;
@@ -286,6 +292,14 @@ namespace SSG_FP_Suite.Commands.Export
             var param = hanger.LookupParameter("Nominal Diameter");
             if (param != null && param.HasValue)
                 return param.AsDouble();
+            return 0;
+        }
+
+        private double GetRodLength(FamilyInstance element)
+        {
+            var param = element.LookupParameter("Rod Length");
+            if (param != null && param.HasValue)
+                return param.AsDouble(); // already in feet
             return 0;
         }
 

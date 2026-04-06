@@ -28,7 +28,7 @@ Master list of all SSG FP Suite commands. Update this as commands are implemente
 - [x] `TrapezeUnistrut21ACommand` - Place Unistrut 21A trapeze hangers with auto-calculated extensions, simplified variant
 - [x] `FormatHangerTicksCommand` - Format pipe hanger tick symbols to consistent direction (/ or \) accounting for pipe rotation
 - [x] `HangerSectionIDsCommand` - Populate Section_ID (Hydratec) with formatted rod length and type code for hanger tags
-- [x] `SwapHydraCADHangersCommand` - Replace HydraCAD Adjustable Ring Hangers with Shambaugh -Pipe Hanger - Standard with parameter transfer
+- [x] `SwapHydraCADHangersCommand` - Replace HydraCAD Adjustable Ring Hangers with SSG -Pipe Hanger - Standard with parameter transfer
 - [x] `SyncHangersToPipesCommand` - Move hangers to closest pipe, rotate to match direction, set ring size and stocklist info
 - [x] `SyncHangersToRefPlaneCommand` - Calculate rod lengths from hangers to a named reference plane representing structural underside
 - [x] `SyncHangersRaybounceCommand` - Calculate rod lengths via raybounce to structural elements above including linked models, with per-category type codes

@@ -12,9 +12,6 @@ namespace SSG_FP_Suite.Commands.Export
         public string ClearFamilyPrefix { get; private set; } = "";
         public bool ClearCustomPrefix { get; private set; } = false;
 
-        private RadioButton rbPlaceOnly;
-        private RadioButton rbClearAndPlace;
-        private RadioButton rbClearOnly;
         private CheckBox chkCustomPrefix;
         private TextBox txtPrefix;
         private Label lblPrefixHint;
@@ -26,50 +23,90 @@ namespace SSG_FP_Suite.Commands.Export
 
         private void InitializeComponent()
         {
-            Text = "Place Trimble Markers";
+            Text = "Trimble Markers";
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
-            Size = new Size(420, 340);
+            Size = new Size(420, 310);
 
             int y = 15;
 
-            // ── Mode group ──
-            var grpMode = new GroupBox
+            // ── Action buttons group ──
+            var grpActions = new GroupBox
             {
-                Text = "Action",
+                Text = "Actions",
                 Location = new Point(12, y),
-                Size = new Size(380, 115)
+                Size = new Size(380, 125)
             };
-            Controls.Add(grpMode);
+            Controls.Add(grpActions);
 
-            rbClearAndPlace = new RadioButton
+            var btnPlace = new Button
             {
-                Text = "Clear existing markers, then place new ones",
-                Location = new Point(15, 22),
-                Size = new Size(350, 22),
-                Checked = true
+                Text = "Place Markers",
+                Location = new Point(15, 25),
+                Size = new Size(350, 28),
+                TextAlign = ContentAlignment.MiddleCenter
             };
-            grpMode.Controls.Add(rbClearAndPlace);
-
-            rbPlaceOnly = new RadioButton
+            btnPlace.Click += (s, e) =>
             {
-                Text = "Place new markers only (keep existing)",
-                Location = new Point(15, 48),
-                Size = new Size(350, 22)
+                SelectedMode = TrimbleMode.PlaceOnly;
+                CollectPrefixSettings();
+                DialogResult = DialogResult.OK;
             };
-            grpMode.Controls.Add(rbPlaceOnly);
+            grpActions.Controls.Add(btnPlace);
 
-            rbClearOnly = new RadioButton
+            var lblPlaceHint = new Label
             {
-                Text = "Clear markers only (don't place new ones)",
-                Location = new Point(15, 74),
-                Size = new Size(350, 22)
+                Text = "Place new markers at selected hangers/braces (keeps existing markers)",
+                Location = new Point(15, 55),
+                Size = new Size(350, 15),
+                ForeColor = Color.FromArgb(110, 110, 110),
+                Font = new Font(Font.FontFamily, 7.5f, FontStyle.Italic)
             };
-            grpMode.Controls.Add(rbClearOnly);
+            grpActions.Controls.Add(lblPlaceHint);
 
-            y += 125;
+            var btnClearAndPlace = new Button
+            {
+                Text = "Clear && Place Markers",
+                Location = new Point(15, 73),
+                Size = new Size(170, 28),
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+            btnClearAndPlace.Click += (s, e) =>
+            {
+                SelectedMode = TrimbleMode.ClearAndPlace;
+                CollectPrefixSettings();
+                DialogResult = DialogResult.OK;
+            };
+            grpActions.Controls.Add(btnClearAndPlace);
+
+            var btnClearOnly = new Button
+            {
+                Text = "Clear Markers Only",
+                Location = new Point(195, 73),
+                Size = new Size(170, 28),
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+            btnClearOnly.Click += (s, e) =>
+            {
+                SelectedMode = TrimbleMode.ClearOnly;
+                CollectPrefixSettings();
+                DialogResult = DialogResult.OK;
+            };
+            grpActions.Controls.Add(btnClearOnly);
+
+            var lblClearHint = new Label
+            {
+                Text = "Clear removes Trimble families from the active view before or instead of placing",
+                Location = new Point(15, 103),
+                Size = new Size(350, 15),
+                ForeColor = Color.FromArgb(110, 110, 110),
+                Font = new Font(Font.FontFamily, 7.5f, FontStyle.Italic)
+            };
+            grpActions.Controls.Add(lblClearHint);
+
+            y += 135;
 
             // ── Custom prefix filter ──
             var grpFilter = new GroupBox
@@ -142,25 +179,7 @@ namespace SSG_FP_Suite.Commands.Export
 
             y += 115;
 
-            // ── Buttons ──
-            var btnOK = new Button
-            {
-                Text = "OK",
-                DialogResult = DialogResult.OK,
-                Location = new Point(210, y),
-                Size = new Size(85, 28)
-            };
-            btnOK.Click += (s, e) =>
-            {
-                if (rbPlaceOnly.Checked) SelectedMode = TrimbleMode.PlaceOnly;
-                else if (rbClearAndPlace.Checked) SelectedMode = TrimbleMode.ClearAndPlace;
-                else SelectedMode = TrimbleMode.ClearOnly;
-
-                ClearCustomPrefix = chkCustomPrefix.Checked;
-                ClearFamilyPrefix = (txtPrefix.ForeColor == Color.Gray) ? "" : txtPrefix.Text.Trim();
-            };
-            Controls.Add(btnOK);
-
+            // ── Cancel button ──
             var btnCancel = new Button
             {
                 Text = "Cancel",
@@ -170,8 +189,13 @@ namespace SSG_FP_Suite.Commands.Export
             };
             Controls.Add(btnCancel);
 
-            AcceptButton = btnOK;
             CancelButton = btnCancel;
+        }
+
+        private void CollectPrefixSettings()
+        {
+            ClearCustomPrefix = chkCustomPrefix.Checked;
+            ClearFamilyPrefix = (txtPrefix.ForeColor == Color.Gray) ? "" : txtPrefix.Text.Trim();
         }
     }
 }

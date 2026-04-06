@@ -48,7 +48,7 @@ namespace SSG_FP_Suite.Commands.Hangers
             grpInfo.Controls.Add(new Label
             {
                 Text = "Replaces HydraCAD Pipe Hangers (Adjustable Ring Hanger) with\n" +
-                       "Shambaugh \"-Pipe Hanger - Standard\" family instances.\n\n" +
+                       "SSG \"-Pipe Hanger - Standard\" family instances.\n\n" +
                        "Parameters transferred: Nominal Diameter, Rod Length, Type Code (Hydratec),\n" +
                        "HCAD-System, Elevation from Level, Additional Stocklist Information.",
                 Location = new Point(10, 18),
