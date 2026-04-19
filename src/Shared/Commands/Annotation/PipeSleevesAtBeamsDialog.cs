@@ -72,13 +72,13 @@ namespace SSG_FP_Suite.Commands.Annotation
             {
                 Text = "Structural Link (Beams):",
                 Location = new Point(10, 25),
-                Size = new Size(145, 20)
+                Size = new Size(165, 20)
             };
             cboLink = new ComboBox
             {
                 DropDownStyle = ComboBoxStyle.DropDownList,
-                Location = new Point(160, 22),
-                Size = new Size(275, 24)
+                Location = new Point(180, 22),
+                Size = new Size(260, 24)
             };
             foreach (var name in _linkNames)
                 cboLink.Items.Add(name);
@@ -88,11 +88,11 @@ namespace SSG_FP_Suite.Commands.Annotation
             {
                 Text = "Sleeve Length (inches):",
                 Location = new Point(10, 62),
-                Size = new Size(145, 20)
+                Size = new Size(165, 20)
             };
             txtSleeveLength = new TextBox
             {
-                Location = new Point(160, 59),
+                Location = new Point(180, 59),
                 Size = new Size(80, 24),
                 Text = "6"
             };

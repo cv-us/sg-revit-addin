@@ -174,7 +174,7 @@ namespace SSG_FP_Suite.Commands.Export
             {
                 Text = "Elevation Datum Offset (optional)",
                 Location = new Point(margin, y),
-                Size = new Size(450, 50)
+                Size = new Size(450, 70)
             };
             grpElev.Controls.Add(new Label
             {
@@ -186,13 +186,19 @@ namespace SSG_FP_Suite.Commands.Export
             grpElev.Controls.Add(txtElevOffset);
             grpElev.Controls.Add(new Label
             {
-                Text = "(feet — e.g. if project 0'-0\" = real-world 1272.35', enter 1272.35)",
+                Text = "feet",
                 Location = new Point(230, 22),
-                Size = new Size(210, 18),
+                Size = new Size(40, 18)
+            });
+            grpElev.Controls.Add(new Label
+            {
+                Text = "e.g. if project 0'-0\" = real-world 1272.35', enter 1272.35",
+                Location = new Point(10, 45),
+                Size = new Size(430, 18),
                 ForeColor = SystemColors.GrayText
             });
             Controls.Add(grpElev);
-            y += 58;
+            y += 78;
 
             // ── Buttons ──
             var btnOK = new Button

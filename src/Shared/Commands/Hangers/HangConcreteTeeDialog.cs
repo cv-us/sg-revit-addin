@@ -114,7 +114,7 @@ namespace SSG_FP_Suite.Commands.Hangers
             cboPipeFilter = new ComboBox
             {
                 Location = new Point(95, 19),
-                Size = new Size(360, 22),
+                Size = new Size(350, 22),
                 DropDownStyle = ComboBoxStyle.DropDownList
             };
             cboPipeFilter.Items.Add("ALL Pipes");
@@ -141,7 +141,7 @@ namespace SSG_FP_Suite.Commands.Hangers
             cboHangerFamily = new ComboBox
             {
                 Location = new Point(95, 19),
-                Size = new Size(360, 22),
+                Size = new Size(350, 22),
                 DropDownStyle = ComboBoxStyle.DropDownList
             };
             foreach (var name in _hangerFamilies)

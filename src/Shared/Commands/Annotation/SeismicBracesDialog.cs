@@ -106,10 +106,10 @@ namespace SSG_FP_Suite.Commands.Annotation
             };
             grpLateral.Controls.Add(nudLatSpacing);
 
-            grpLateral.Controls.Add(new Label { Text = "Max Dist from End (ft):", Location = new Point(220, 52), Size = new Size(140, 18) });
+            grpLateral.Controls.Add(new Label { Text = "Max Dist from End (ft):", Location = new Point(220, 52), Size = new Size(155, 18) });
             nudLatDistEnd = new NumericUpDown
             {
-                Location = new Point(365, 49),
+                Location = new Point(380, 49),
                 Size = new Size(70, 24),
                 Minimum = 1, Maximum = 6, Value = 6, DecimalPlaces = 1, Increment = 0.5m
             };

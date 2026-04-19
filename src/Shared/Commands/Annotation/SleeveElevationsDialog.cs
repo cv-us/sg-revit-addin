@@ -56,13 +56,13 @@ namespace SSG_FP_Suite.Commands.Annotation
             {
                 Text = "AFF Reference (Architectural Link):",
                 Location = new Point(10, 25),
-                Size = new Size(200, 20)
+                Size = new Size(225, 20)
             };
             cboAFFLink = new ComboBox
             {
                 DropDownStyle = ComboBoxStyle.DropDownList,
-                Location = new Point(215, 22),
-                Size = new Size(200, 24)
+                Location = new Point(240, 22),
+                Size = new Size(180, 24)
             };
             foreach (var name in _linkNames)
                 cboAFFLink.Items.Add(name);
@@ -72,13 +72,13 @@ namespace SSG_FP_Suite.Commands.Annotation
             {
                 Text = "BBD Reference (Structural Link):",
                 Location = new Point(10, 60),
-                Size = new Size(200, 20)
+                Size = new Size(225, 20)
             };
             cboBBDLink = new ComboBox
             {
                 DropDownStyle = ComboBoxStyle.DropDownList,
-                Location = new Point(215, 57),
-                Size = new Size(200, 24)
+                Location = new Point(240, 57),
+                Size = new Size(180, 24)
             };
             foreach (var name in _linkNames)
                 cboBBDLink.Items.Add(name);

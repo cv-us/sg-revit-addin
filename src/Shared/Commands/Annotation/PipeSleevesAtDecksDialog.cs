@@ -71,13 +71,13 @@ namespace SSG_FP_Suite.Commands.Annotation
             {
                 Text = "Structural/Arch Link:",
                 Location = new Point(10, 23),
-                Size = new Size(130, 20)
+                Size = new Size(150, 20)
             };
             cboLink = new ComboBox
             {
                 DropDownStyle = ComboBoxStyle.DropDownList,
-                Location = new Point(145, 20),
-                Size = new Size(290, 24)
+                Location = new Point(165, 20),
+                Size = new Size(270, 24)
             };
             foreach (var name in _linkNames)
                 cboLink.Items.Add(name);

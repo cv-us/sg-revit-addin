@@ -33,7 +33,7 @@ namespace SSG_FP_Suite.Commands.ModelCheck
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(400, 350);
+            ClientSize = new Size(500, 350);
 
             int y = 15;
 
@@ -51,21 +51,21 @@ namespace SSG_FP_Suite.Commands.ModelCheck
             {
                 Text = "NFPA 13 Maximum Deflector Distance",
                 Location = new Point(15, y),
-                Size = new Size(370, 105)
+                Size = new Size(470, 105)
             };
 
             rbUnobstructed = new RadioButton
             {
                 Text = "Unobstructed construction — 1\" to 12\" (NFPA 13 Table 8.6.2.1.1)",
                 Location = new Point(15, 22),
-                Size = new Size(340, 20),
+                Size = new Size(445, 20),
                 Checked = true
             };
             rbObstructed = new RadioButton
             {
                 Text = "Obstructed construction — 1\" to 22\" (NFPA 13 Table 8.6.2.1.1)",
                 Location = new Point(15, 46),
-                Size = new Size(340, 20)
+                Size = new Size(445, 20)
             };
             rbCustom = new RadioButton
             {
@@ -103,7 +103,7 @@ namespace SSG_FP_Suite.Commands.ModelCheck
             {
                 Text = "Sprinkler Head Height (pipe center to deflector top)",
                 Location = new Point(15, y),
-                Size = new Size(370, 55)
+                Size = new Size(470, 55)
             };
 
             var lblHead = new Label
@@ -138,7 +138,7 @@ namespace SSG_FP_Suite.Commands.ModelCheck
             {
                 Text = "Annotation Mode",
                 Location = new Point(15, y),
-                Size = new Size(370, 55)
+                Size = new Size(470, 55)
             };
             rbAnnotateExceeds = new RadioButton
             {
@@ -162,7 +162,7 @@ namespace SSG_FP_Suite.Commands.ModelCheck
             {
                 Text = "Check",
                 DialogResult = DialogResult.OK,
-                Location = new Point(220, y),
+                Location = new Point(320, y),
                 Size = new Size(80, 30)
             };
             btnOK.Click += (s, e) =>
@@ -184,7 +184,7 @@ namespace SSG_FP_Suite.Commands.ModelCheck
             {
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
-                Location = new Point(305, y),
+                Location = new Point(405, y),
                 Size = new Size(80, 30)
             };
             CancelButton = btnCancel;

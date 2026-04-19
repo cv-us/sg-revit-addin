@@ -53,7 +53,7 @@ namespace SSG_FP_Suite.Commands.Annotation
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(450, 380);
+            ClientSize = new Size(450, 400);
 
             int margin = 15;
             int y = margin;

@@ -156,7 +156,7 @@ namespace SSG_FP_Suite.Commands.Hangers
             {
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 Location = new Point(tx, gy),
-                Size = new Size(200, 22)
+                Size = new Size(190, 22)
             };
             cboFramingSync.Items.Add("BOTTOM where possible (Default)");
             cboFramingSync.Items.Add("TOP of Structural Elements");

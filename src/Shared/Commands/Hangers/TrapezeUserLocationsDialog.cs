@@ -194,7 +194,7 @@ namespace SSG_FP_Suite.Commands.Hangers
 
             cboStructuralLink = new ComboBox
             {
-                Left = 180, Top = y - 2, Width = 320,
+                Left = 180, Top = y - 2, Width = 300,
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 Enabled = false
             };

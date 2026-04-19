@@ -21,7 +21,7 @@ namespace SSG_FP_Suite.Commands.Coordination
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(340, 230);
+            ClientSize = new Size(440, 230);
 
             int y = 15;
 
@@ -38,27 +38,27 @@ namespace SSG_FP_Suite.Commands.Coordination
             {
                 Text = "Color Mode",
                 Location = new Point(15, y),
-                Size = new Size(310, 110)
+                Size = new Size(410, 110)
             };
 
             rbBySize = new RadioButton
             {
                 Text = "By Size — color pipes by nominal diameter",
                 Location = new Point(15, 22),
-                Size = new Size(280, 20),
+                Size = new Size(390, 20),
                 Checked = true
             };
             rbByType = new RadioButton
             {
                 Text = "By Type — color pipes by type name (threaded, welded, etc.)",
                 Location = new Point(15, 48),
-                Size = new Size(280, 20)
+                Size = new Size(390, 20)
             };
             rbReset = new RadioButton
             {
                 Text = "Reset — remove all color overrides from pipes",
                 Location = new Point(15, 74),
-                Size = new Size(280, 20)
+                Size = new Size(390, 20)
             };
             grp.Controls.AddRange(new Control[] { rbBySize, rbByType, rbReset });
             Controls.Add(grp);
@@ -68,7 +68,7 @@ namespace SSG_FP_Suite.Commands.Coordination
             {
                 Text = "Apply",
                 DialogResult = DialogResult.OK,
-                Location = new Point(165, y),
+                Location = new Point(265, y),
                 Size = new Size(80, 30)
             };
             btnOK.Click += (s, e) =>
@@ -84,7 +84,7 @@ namespace SSG_FP_Suite.Commands.Coordination
             {
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
-                Location = new Point(250, y),
+                Location = new Point(350, y),
                 Size = new Size(75, 30)
             };
             CancelButton = btnCancel;

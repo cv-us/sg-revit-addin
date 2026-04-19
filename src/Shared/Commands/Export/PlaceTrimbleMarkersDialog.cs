@@ -28,7 +28,7 @@ namespace SSG_FP_Suite.Commands.Export
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
-            Size = new Size(420, 310);
+            ClientSize = new Size(420, 315);
 
             int y = 15;
 
