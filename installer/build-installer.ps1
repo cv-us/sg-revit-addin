@@ -89,10 +89,22 @@ Write-Host "  Found Inno Setup: $iscc" -ForegroundColor Green
 # ── Step 4: Compile installer ──
 Write-Host "`n[4/4] Compiling installer..." -ForegroundColor Yellow
 
-# Ensure dist output folder exists
-$distDir = "$SolutionRoot\dist"
-if (-not (Test-Path $distDir)) {
-    New-Item -ItemType Directory -Path $distDir -Force | Out-Null
+# Ensure output folder exists (installer/Output/ - self-contained under installer/)
+$outputDir = "$InstallerDir\Output"
+if (-not (Test-Path $outputDir)) {
+    New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
+}
+
+# Info: report whether any families are bundled this build
+$familiesDir = "$InstallerDir\Families"
+$rfaCount = 0
+if (Test-Path $familiesDir) {
+    $rfaCount = (Get-ChildItem -Path $familiesDir -Filter '*.rfa' -Recurse -ErrorAction SilentlyContinue).Count
+}
+if ($rfaCount -gt 0) {
+    Write-Host "  Bundling $rfaCount .rfa families from installer\Families\" -ForegroundColor Green
+} else {
+    Write-Host "  No .rfa files in installer\Families\ - installer will ship with no families." -ForegroundColor DarkYellow
 }
 
 & $iscc "$InstallerDir\ssg-fp-suite.iss"
@@ -102,8 +114,8 @@ if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed" }
 if ($Sign) {
     if (-not $CertPath) { throw "Code signing requested but -CertPath not provided" }
 
-    $installerExe = Get-ChildItem "$distDir\SSG-FP-Suite-*-Setup.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-    if (-not $installerExe) { throw "Installer .exe not found in dist/" }
+    $installerExe = Get-ChildItem "$outputDir\SSG-FP-Suite-*-Setup.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if (-not $installerExe) { throw "Installer .exe not found in installer\Output\" }
 
     Write-Host "`n[Signing] Signing $($installerExe.Name)..." -ForegroundColor Yellow
 
@@ -129,7 +141,7 @@ if ($Sign) {
 }
 
 # ── Done ──
-$output = Get-ChildItem "$distDir\SSG-FP-Suite-*-Setup.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+$output = Get-ChildItem "$outputDir\SSG-FP-Suite-*-Setup.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 Write-Host "`n========================================" -ForegroundColor Green
 Write-Host "  Installer built successfully!" -ForegroundColor Green
 Write-Host "  Output: $($output.FullName)" -ForegroundColor Green

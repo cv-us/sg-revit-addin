@@ -1,5 +1,6 @@
 ; SSG FP Suite - Inno Setup Installer Script
 ; Builds a single .exe installer that deploys to Revit 2023-2026
+; and bundles shared .rfa families to C:\SSG FP\Revit Families\.
 ;
 ; Prerequisites:
 ;   - Inno Setup 6.x (https://jrsoftware.org/isinfo.php)
@@ -7,6 +8,8 @@
 ;
 ; To compile: right-click this file > Compile, or run:
 ;   "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\ssg-fp-suite.iss
+;
+; Output: installer\Output\SSG-FP-Suite-{version}-Setup.exe
 
 #define MyAppName "SSG FP Suite"
 #define MyAppVersion "1.0.0"
@@ -16,6 +19,8 @@
 ; Paths relative to this .iss file's location
 #define SSG24Build "..\src\SSG24\bin\Release"
 #define SSG25Build "..\src\SSG25\bin\Release"
+#define FamiliesDir "Families"
+#define FamiliesInstallDir "C:\SSG FP\Revit Families"
 
 [Setup]
 AppId={{B7E3A4F1-9D2C-4A8E-B6F5-1C3D7E9A2B4F}
@@ -27,7 +32,7 @@ AppSupportURL={#MyAppURL}
 DefaultDirName={commonpf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
-OutputDir=..\dist
+OutputDir=Output
 OutputBaseFilename=SSG-FP-Suite-{#MyAppVersion}-Setup
 Compression=lzma2/ultra64
 SolidCompression=yes
@@ -36,6 +41,13 @@ WizardStyle=modern
 SetupIconFile=icon.ico
 UninstallDisplayIcon={app}\icon.ico
 UninstallDisplayName={#MyAppName}
+; Allow re-install / upgrade without uninstalling first
+UsePreviousAppDir=yes
+UsePreviousGroup=yes
+; Auto-prompt to close Revit if it's running during install/uninstall
+CloseApplications=yes
+CloseApplicationsFilter=*.exe
+RestartApplications=no
 ; Minimum Windows 10
 MinVersion=10.0
 
@@ -43,7 +55,15 @@ MinVersion=10.0
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Messages]
-WelcomeLabel2=This will install [name/ver] for Autodesk Revit.%n%nThe add-in provides fire protection design automation tools including hanger placement, pipe routing, annotation, and model checking.%n%nRevit must be closed during installation.
+WelcomeLabel2=This will install [name/ver] for Autodesk Revit.%n%nThe add-in provides fire protection design automation tools including hanger placement, pipe routing, annotation, and model checking.%n%nRevit must be closed during installation — the installer will prompt you to close it if needed.
+
+; ── InstallDelete: wipe old addin files before copying new ones ──
+; Ensures a clean upgrade even if file names changed between versions.
+[InstallDelete]
+Type: filesandordirs; Name: "{commonappdata}\Autodesk\Revit\Addins\2023\SSG-FP-Suite"; Check: ShouldInstall2023
+Type: filesandordirs; Name: "{commonappdata}\Autodesk\Revit\Addins\2024\SSG-FP-Suite"; Check: ShouldInstall2024
+Type: filesandordirs; Name: "{commonappdata}\Autodesk\Revit\Addins\2025\SSG-FP-Suite"; Check: ShouldInstall2025
+Type: filesandordirs; Name: "{commonappdata}\Autodesk\Revit\Addins\2026\SSG-FP-Suite"; Check: ShouldInstall2026
 
 ; ── Custom pages for Revit version selection ──
 [Code]
@@ -73,16 +93,6 @@ begin
     Result := DirExists(RevitAddinPath(Year));
 end;
 
-function IsRevitRunning: Boolean;
-var
-  ResultCode: Integer;
-begin
-  // Use tasklist to check for Revit.exe
-  Result := Exec('cmd.exe', '/c tasklist /FI "IMAGENAME eq Revit.exe" | find /i "Revit.exe"',
-    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Result := (ResultCode = 0);
-end;
-
 procedure InitializeWizard;
 var
   lbl: TNewStaticText;
@@ -105,7 +115,6 @@ begin
   chk2023.Parent := RevitPage.Surface;
   chk2023.Top := y;
   chk2023.Width := 400;
-  chk2023.Caption := 'Revit 2023';
   chk2023.Checked := RevitIsInstalled('2023');
   if RevitIsInstalled('2023') then
     chk2023.Caption := 'Revit 2023 (detected)'
@@ -187,21 +196,15 @@ begin
   Result := chk2026.Checked;
 end;
 
-function PrepareToInstall(var NeedsRestart: Boolean): String;
-begin
-  Result := '';
-  if IsRevitRunning then
-  begin
-    Result := 'Revit is currently running. Please close all Revit instances and try again.';
-  end;
-end;
-
 // ── Uninstall: clean up addin files and folders ──
+// Also prompts (default No) whether to remove the families folder.
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   Years: array[0..3] of String;
   i: Integer;
   AddinPath, SubFolder, AddinFile24, AddinFile25: String;
+  FamInstallPath: String;
+  RemoveFamilies: Integer;
 begin
   if CurUninstallStep = usPostUninstall then
   begin
@@ -227,14 +230,30 @@ begin
       if DirExists(SubFolder) then
         DelTree(SubFolder, True, True, True);
     end;
+
+    // Ask whether to remove the shared Revit families folder.
+    // Default is No so users who customized families don't lose them.
+    FamInstallPath := '{#FamiliesInstallDir}';
+    if DirExists(FamInstallPath) then
+    begin
+      RemoveFamilies := MsgBox(
+        'Also remove the installed Revit families at:' + #13#10 + #13#10 +
+        FamInstallPath + #13#10 + #13#10 +
+        'Select "No" if you want to keep these families (for example, if you have added your own custom families to that folder).',
+        mbConfirmation, MB_YESNO or MB_DEFBUTTON2);
+      if RemoveFamilies = IDYES then
+      begin
+        DelTree(FamInstallPath, True, True, True);
+      end;
+    end;
   end;
 end;
 
 [Files]
 ; ── SSG24 files (Revit 2023 & 2024) ──
 ; .addin manifest goes in the Addins\{year}\ root
-Source: "SSG24-installer.addin"; DestDir: "{commonappdata}\Autodesk\Revit\Addins\2023"; DestName: "SSG24.addin"; Flags: ignoreversion; Check: ShouldInstall2023
-Source: "SSG24-installer.addin"; DestDir: "{commonappdata}\Autodesk\Revit\Addins\2024"; DestName: "SSG24.addin"; Flags: ignoreversion; Check: ShouldInstall2024
+Source: "SSG24.addin"; DestDir: "{commonappdata}\Autodesk\Revit\Addins\2023"; Flags: ignoreversion; Check: ShouldInstall2023
+Source: "SSG24.addin"; DestDir: "{commonappdata}\Autodesk\Revit\Addins\2024"; Flags: ignoreversion; Check: ShouldInstall2024
 
 ; DLLs and config go in a subfolder
 Source: "{#SSG24Build}\SSG24.dll"; DestDir: "{commonappdata}\Autodesk\Revit\Addins\2023\SSG-FP-Suite"; Flags: ignoreversion; Check: ShouldInstall2023
@@ -274,8 +293,8 @@ Source: "{#SSG24Build}\Config\defaults.json"; DestDir: "{commonappdata}\Autodesk
 
 ; ── SSG25 files (Revit 2025 & 2026) ──
 ; .addin manifest
-Source: "SSG25-installer.addin"; DestDir: "{commonappdata}\Autodesk\Revit\Addins\2025"; DestName: "SSG25.addin"; Flags: ignoreversion; Check: ShouldInstall2025
-Source: "SSG25-installer.addin"; DestDir: "{commonappdata}\Autodesk\Revit\Addins\2026"; DestName: "SSG25.addin"; Flags: ignoreversion; Check: ShouldInstall2026
+Source: "SSG25.addin"; DestDir: "{commonappdata}\Autodesk\Revit\Addins\2025"; Flags: ignoreversion; Check: ShouldInstall2025
+Source: "SSG25.addin"; DestDir: "{commonappdata}\Autodesk\Revit\Addins\2026"; Flags: ignoreversion; Check: ShouldInstall2026
 
 ; DLLs
 Source: "{#SSG25Build}\SSG25.dll"; DestDir: "{commonappdata}\Autodesk\Revit\Addins\2025\SSG-FP-Suite"; Flags: ignoreversion; Check: ShouldInstall2025
@@ -287,6 +306,14 @@ Source: "{#SSG25Build}\SSG25.deps.json"; DestDir: "{commonappdata}\Autodesk\Revi
 ; Config
 Source: "{#SSG25Build}\Config\defaults.json"; DestDir: "{commonappdata}\Autodesk\Revit\Addins\2025\SSG-FP-Suite\Config"; Flags: ignoreversion; Check: ShouldInstall2025
 Source: "{#SSG25Build}\Config\defaults.json"; DestDir: "{commonappdata}\Autodesk\Revit\Addins\2026\SSG-FP-Suite\Config"; Flags: ignoreversion; Check: ShouldInstall2026
+
+; ── Shared Revit families (bundled with installer) ──
+; All .rfa files under installer\Families\ are deployed to C:\SSG FP\Revit Families\
+; Subfolder structure is preserved via recursesubdirs + createallsubdirs.
+; skipifsourcedoesntexist lets the installer compile even when no .rfa files have
+; been dropped in yet (useful during early development).
+Source: "{#FamiliesDir}\*.rfa"; DestDir: "{#FamiliesInstallDir}"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
+Source: "{#FamiliesDir}\*"; Excludes: "*.rfa,README.txt"; DestDir: "{#FamiliesInstallDir}"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 
 ; ── App icon (stored in install dir for uninstall display) ──
 Source: "icon.ico"; DestDir: "{app}"; Flags: ignoreversion

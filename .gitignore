@@ -50,4 +50,11 @@ Desktop.ini
 # Sandbox experiments are tracked, but ignore any temp outputs
 sandbox/**/*.dll
 sandbox/**/*.pdb
-dist/
+
+# Installer build output (compiled .exe lands here)
+installer/Output/*
+!installer/Output/.gitkeep
+
+# Revit families bundled into the installer (large binary files, kept out of git)
+installer/Families/**/*.rfa
+installer/Families/**/*.rfa.bak
