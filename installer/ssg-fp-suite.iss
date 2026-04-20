@@ -308,12 +308,13 @@ Source: "{#SSG25Build}\Config\defaults.json"; DestDir: "{commonappdata}\Autodesk
 Source: "{#SSG25Build}\Config\defaults.json"; DestDir: "{commonappdata}\Autodesk\Revit\Addins\2026\SSG-FP-Suite\Config"; Flags: ignoreversion; Check: ShouldInstall2026
 
 ; ── Shared Revit families (bundled with installer) ──
-; All .rfa files under installer\Families\ are deployed to C:\SSG FP\Revit Families\
-; Subfolder structure is preserved via recursesubdirs + createallsubdirs.
-; skipifsourcedoesntexist lets the installer compile even when no .rfa files have
-; been dropped in yet (useful during early development).
+; All .rfa files under installer\Families\ (recursively) are deployed to
+; C:\SSG FP\Revit Families\. Subfolder structure (year + category) is
+; preserved via recursesubdirs + createallsubdirs so the LoadFamilies
+; command can resolve the correct year folder at runtime.
+; skipifsourcedoesntexist lets the installer compile even when no .rfa
+; files have been dropped in yet.
 Source: "{#FamiliesDir}\*.rfa"; DestDir: "{#FamiliesInstallDir}"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
-Source: "{#FamiliesDir}\*"; Excludes: "*.rfa,README.txt"; DestDir: "{#FamiliesInstallDir}"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 
 ; ── App icon (stored in install dir for uninstall display) ──
 Source: "icon.ico"; DestDir: "{app}"; Flags: ignoreversion

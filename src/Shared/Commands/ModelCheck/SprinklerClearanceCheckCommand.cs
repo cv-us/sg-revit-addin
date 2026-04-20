@@ -34,7 +34,7 @@ namespace SSG_FP_Suite.Commands.ModelCheck
         private const double SearchHeight = 1.0;
 
         /// <summary>Annotation family name to place at conflict locations.</summary>
-        private const string AnnotationFamilyName = "- Clearance - Upright vs Hanger";
+        private const string AnnotationFamilyName = "-Clearance - Upright vs Hanger";
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {

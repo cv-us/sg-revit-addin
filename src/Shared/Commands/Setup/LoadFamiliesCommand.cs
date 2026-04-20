@@ -37,11 +37,14 @@ namespace SSG_FP_Suite.Commands.Setup
             try
             {
                 // ── Detect Revit version for default subfolder ──
+                // Families are saved per Revit year. Revit can upgrade older-year
+                // families on load, but cannot open newer-year ones. So we pick
+                // the year folder that exactly matches the running Revit version,
+                // falling back to the newest available folder <= the Revit year.
                 string revitVersion = commandData.Application.Application.VersionNumber;
                 int versionNum;
                 int.TryParse(revitVersion, out versionNum);
-                string versionSubfolder = versionNum >= 2021 ? "2021" : "2017";
-                string defaultFolder = DefaultBasePath + versionSubfolder;
+                string defaultFolder = ResolveVersionFolder(DefaultBasePath, versionNum);
 
                 // ── Show dialog ──
                 using (var dlg = new LoadFamiliesDialog(defaultFolder))
@@ -151,6 +154,54 @@ namespace SSG_FP_Suite.Commands.Setup
                 message = ex.Message;
                 return Result.Failed;
             }
+        }
+
+        /// <summary>
+        /// Picks the best year subfolder under <paramref name="basePath"/> for the
+        /// given Revit version. Prefers an exact-year match, otherwise falls back
+        /// to the highest-numbered year folder that is &lt;= the Revit version
+        /// (so we never hand a newer-format family to an older Revit).
+        ///
+        /// If no year folders are present, returns the base path itself so the
+        /// user can still browse and pick manually.
+        /// </summary>
+        private static string ResolveVersionFolder(string basePath, int revitYear)
+        {
+            if (!Directory.Exists(basePath))
+                return basePath;
+
+            // Enumerate subfolders whose name is a 4-digit year
+            var yearFolders = new List<int>();
+            foreach (var dir in Directory.GetDirectories(basePath))
+            {
+                string name = Path.GetFileName(dir);
+                if (name.Length == 4 && int.TryParse(name, out int y))
+                    yearFolders.Add(y);
+            }
+
+            if (yearFolders.Count == 0)
+                return basePath;
+
+            yearFolders.Sort();
+
+            // Exact match?
+            if (yearFolders.Contains(revitYear))
+                return Path.Combine(basePath, revitYear.ToString());
+
+            // Highest folder <= revitYear (safe: Revit can upgrade older families)
+            int best = -1;
+            foreach (int y in yearFolders)
+            {
+                if (y <= revitYear && y > best)
+                    best = y;
+            }
+            if (best > 0)
+                return Path.Combine(basePath, best.ToString());
+
+            // All folders are newer than the running Revit - fall back to the
+            // lowest-numbered one and let Revit reject incompatible families
+            // with a clear error rather than us guessing.
+            return Path.Combine(basePath, yearFolders[0].ToString());
         }
     }
 }
