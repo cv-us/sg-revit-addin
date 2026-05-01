@@ -21,9 +21,22 @@ restraint per Hydratec / NFPA convention.
      the selection — only codes actually present are shown).
    - Tick which **pipe sizes** to include (also pulled from the selection).
    - Set the **gap threshold** in inches (default 6").
-4. Click **Check**.
+4. Click one of:
+   - **Check** — runs the check, clears any prior markers, and places new
+     ones on flagged hangers.
+   - **Clear Markers Only** — wipes every existing `-Hanger Gap Marker`
+     instance from the project and exits without checking. No selection
+     filters apply.
+   - **Cancel** — exits without changes.
 5. The command reports how many hangers were flagged, places markers on
    them, and adds them to the active selection.
+
+### Clearing markers without a selection
+
+If you run the command with **no hangers selected** and there are existing
+markers in the project, you'll get a confirmation dialog asking whether to
+clear them. Use this as a quick "wipe everything" path without having to
+select hangers first.
 
 ## Math
 

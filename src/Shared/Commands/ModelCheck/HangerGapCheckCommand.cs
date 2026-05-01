@@ -71,10 +71,34 @@ namespace SSG_FP_Suite.Commands.ModelCheck
 
                 if (hangers.Count == 0)
                 {
+                    // No selection — offer to clear existing markers if any are present
+                    int existingMarkerCount = CountExistingMarkers(doc);
+                    if (existingMarkerCount > 0)
+                    {
+                        var td = new TaskDialog("Hanger Gap Check")
+                        {
+                            MainInstruction = "No hangers selected.",
+                            MainContent = $"There are {existingMarkerCount} existing " +
+                                $"\"{MarkerFamilyName}\" instance{(existingMarkerCount != 1 ? "s" : "")} " +
+                                "in the project. Would you like to clear them?",
+                            CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.Cancel,
+                            DefaultButton = TaskDialogResult.Cancel
+                        };
+                        if (td.Show() == TaskDialogResult.Yes)
+                        {
+                            int cleared = ClearAllMarkers(doc);
+                            TaskDialog.Show("Hanger Gap Check",
+                                $"Cleared {cleared} marker{(cleared != 1 ? "s" : "")}.");
+                            return Result.Succeeded;
+                        }
+                        return Result.Cancelled;
+                    }
+
                     TaskDialog.Show("Hanger Gap Check",
                         "No pipe hangers found in the current selection.\n\n" +
                         "Select hanger family instances (family name contains \"-Pipe Hanger\" " +
-                        "or \"-Pipe Trapeze\") and run the command again.");
+                        "or \"-Pipe Trapeze\") and run the command again.\n\n" +
+                        "(No existing markers were found in the project either.)");
                     return Result.Cancelled;
                 }
 
@@ -129,6 +153,17 @@ namespace SSG_FP_Suite.Commands.ModelCheck
                 {
                     if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK)
                         return Result.Cancelled;
+
+                    // ClearOnly mode short-circuits: wipe existing markers and report
+                    if (dlg.Mode == HangerGapCheckDialog.ActionMode.ClearOnly)
+                    {
+                        int cleared = ClearAllMarkers(doc);
+                        TaskDialog.Show("Hanger Gap Check",
+                            $"Cleared {cleared} \"{MarkerFamilyName}\" " +
+                            $"instance{(cleared != 1 ? "s" : "")} from the project.\n\n" +
+                            "No gap check was run.");
+                        return Result.Succeeded;
+                    }
 
                     var selectedTypeCodes = new HashSet<string>(
                         dlg.SelectedTypeCodes, StringComparer.OrdinalIgnoreCase);
@@ -372,9 +407,41 @@ namespace SSG_FP_Suite.Commands.ModelCheck
                     MarkerFamilyName, StringComparison.OrdinalIgnoreCase));
         }
 
-        private void ClearPreviousMarkers(Document doc)
+        /// <summary>
+        /// Deletes all existing marker family instances from the project.
+        /// Must be called inside a transaction. Returns count deleted.
+        /// </summary>
+        private int ClearPreviousMarkers(Document doc)
         {
-            var existing = new FilteredElementCollector(doc)
+            var ids = GetMarkerInstanceIds(doc);
+            if (ids.Count > 0)
+                doc.Delete(ids);
+            return ids.Count;
+        }
+
+        /// <summary>
+        /// Standalone marker-clear with its own transaction (used by the
+        /// ClearOnly path and the no-selection prompt). Returns count deleted.
+        /// </summary>
+        private int ClearAllMarkers(Document doc)
+        {
+            var ids = GetMarkerInstanceIds(doc);
+            if (ids.Count == 0) return 0;
+
+            using (var tx = new Transaction(doc, "Clear Hanger Gap Markers"))
+            {
+                tx.Start();
+                doc.Delete(ids);
+                tx.Commit();
+            }
+            return ids.Count;
+        }
+
+        private int CountExistingMarkers(Document doc) => GetMarkerInstanceIds(doc).Count;
+
+        private List<ElementId> GetMarkerInstanceIds(Document doc)
+        {
+            return new FilteredElementCollector(doc)
                 .OfCategory(BuiltInCategory.OST_GenericModel)
                 .WhereElementIsNotElementType()
                 .Where(e =>
@@ -385,9 +452,6 @@ namespace SSG_FP_Suite.Commands.ModelCheck
                 })
                 .Select(e => e.Id)
                 .ToList();
-
-            if (existing.Count > 0)
-                doc.Delete(existing);
         }
     }
 }

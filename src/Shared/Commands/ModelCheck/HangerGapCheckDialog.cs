@@ -9,11 +9,16 @@ namespace SSG_FP_Suite.Commands.ModelCheck
     /// <summary>
     /// Dialog for the Hanger Gap Check command.
     /// Lets the user pick which Type Codes and pipe sizes to check, plus
-    /// the gap threshold above which hangers are flagged.
+    /// the gap threshold above which hangers are flagged. Also exposes
+    /// a "Clear Markers Only" action for wiping existing markers without
+    /// running a check.
     /// </summary>
     public class HangerGapCheckDialog : Form
     {
+        public enum ActionMode { Check, ClearOnly }
+
         // ── Results ──
+        public ActionMode Mode { get; private set; } = ActionMode.Check;
         public List<string> SelectedTypeCodes { get; private set; } = new List<string>();
         public List<double> SelectedSizes { get; private set; } = new List<double>();
         public double ThresholdInches { get; private set; } = 6.0;
@@ -176,16 +181,34 @@ namespace SSG_FP_Suite.Commands.ModelCheck
             y += 90;
 
             // ── Buttons ──
-            var btnOK = new Button
+            var btnCheck = new Button
             {
                 Text = "Check",
-                DialogResult = DialogResult.OK,
-                Location = new Point(355, y),
-                Size = new Size(85, 30)
+                Location = new Point(margin, y),
+                Size = new Size(110, 30)
             };
-            btnOK.Click += BtnOK_Click;
-            AcceptButton = btnOK;
-            Controls.Add(btnOK);
+            btnCheck.Click += (s, e) =>
+            {
+                Mode = ActionMode.Check;
+                CollectFilters();
+                DialogResult = DialogResult.OK;
+            };
+            AcceptButton = btnCheck;
+            Controls.Add(btnCheck);
+
+            var btnClear = new Button
+            {
+                Text = "Clear Markers Only",
+                Location = new Point(margin + 120, y),
+                Size = new Size(160, 30)
+            };
+            btnClear.Click += (s, e) =>
+            {
+                Mode = ActionMode.ClearOnly;
+                // No filters needed for clear; we just leave the defaults
+                DialogResult = DialogResult.OK;
+            };
+            Controls.Add(btnClear);
 
             var btnCancel = new Button
             {
@@ -198,18 +221,18 @@ namespace SSG_FP_Suite.Commands.ModelCheck
             Controls.Add(btnCancel);
         }
 
-        private void SetAllChecked(CheckedListBox list, bool checkedState)
-        {
-            for (int i = 0; i < list.Items.Count; i++)
-                list.SetItemChecked(i, checkedState);
-        }
-
-        private void BtnOK_Click(object sender, EventArgs e)
+        private void CollectFilters()
         {
             SelectedTypeCodes = lstTypeCodes.CheckedItems.Cast<string>().ToList();
             SelectedSizes = lstSizes.CheckedItems.Cast<SizeItem>()
                 .Select(si => si.SizeFt).ToList();
             ThresholdInches = (double)nudThreshold.Value;
+        }
+
+        private void SetAllChecked(CheckedListBox list, bool checkedState)
+        {
+            for (int i = 0; i < list.Items.Count; i++)
+                list.SetItemChecked(i, checkedState);
         }
 
         /// <summary>
