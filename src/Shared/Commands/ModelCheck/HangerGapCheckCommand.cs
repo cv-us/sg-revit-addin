@@ -30,29 +30,42 @@ namespace SSG_FP_Suite.Commands.ModelCheck
     ///   3. For each matching hanger, find the closest pipe centerline,
     ///      read pipe Outside Diameter and hanger Rod Length
     ///   4. Apply the type-code-specific math
-    ///   5. If gap > threshold, place "-Hanger Gap Marker" family at
-    ///      the hanger's location and add to selection
+    ///   5. If gap > threshold, place a DirectShape marker (a small
+    ///      vertical cylinder) at the hanger's location and add to selection
     ///   6. Report summary
     ///
-    /// REQUIRED FAMILY:
-    ///   "-Hanger Gap Marker" — Generic Model category, visible in both
-    ///   plan and 3D. Suggested geometry: red sphere or cylinder at the
-    ///   family origin. If the family isn't loaded, the command still runs
-    ///   and reports flagged hangers via selection highlight.
+    /// MARKER GEOMETRY:
+    ///   The marker is a Revit DirectShape — a built-in 3D shape created
+    ///   directly in the project, with no family file required. It's a
+    ///   vertical cylinder (~4" diameter × 4" tall) categorized as Generic
+    ///   Model so it shows in both plan and 3D views. Markers are tagged
+    ///   with ApplicationId/ApplicationDataId so the command can find and
+    ///   delete them on re-run or via "Clear Markers Only".
     /// </summary>
     [Transaction(TransactionMode.Manual)]
     [Regeneration(RegenerationOption.Manual)]
     public class HangerGapCheckCommand : IExternalCommand
     {
-        private const string MarkerFamilyName = "-Hanger Gap Marker";
         private const string TypeCodeParam = "Type Code (Hydratec)";
         private const string RodLengthParam = "Rod Length";
+
+        /// <summary>ApplicationId stamped on every marker DirectShape.</summary>
+        private const string MarkerAppId = "SSG_FP_Suite";
+
+        /// <summary>ApplicationDataId stamped on every marker so we can find ours specifically.</summary>
+        private const string MarkerAppDataId = "HangerGapMarker";
 
         /// <summary>Hardware offset for Type 02 adjustable hangers, in feet (1.5 inches).</summary>
         private const double Type02HardwareOffset = 1.5 / 12.0;
 
-        /// <summary>Vertical offset above the hanger location to place the marker, in feet.</summary>
+        /// <summary>Vertical offset above the hanger location for the marker base, in feet.</summary>
         private const double MarkerZOffset = 0.5; // 6 inches
+
+        /// <summary>Marker cylinder radius, in feet (2 inches → 4-inch diameter).</summary>
+        private const double MarkerRadius = 2.0 / 12.0;
+
+        /// <summary>Marker cylinder height, in feet (4 inches).</summary>
+        private const double MarkerHeight = 4.0 / 12.0;
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
@@ -78,9 +91,10 @@ namespace SSG_FP_Suite.Commands.ModelCheck
                         var td = new TaskDialog("Hanger Gap Check")
                         {
                             MainInstruction = "No hangers selected.",
-                            MainContent = $"There are {existingMarkerCount} existing " +
-                                $"\"{MarkerFamilyName}\" instance{(existingMarkerCount != 1 ? "s" : "")} " +
-                                "in the project. Would you like to clear them?",
+                            MainContent = $"There {(existingMarkerCount == 1 ? "is" : "are")} " +
+                                $"{existingMarkerCount} existing hanger gap " +
+                                $"marker{(existingMarkerCount != 1 ? "s" : "")} in the project. " +
+                                "Would you like to clear them?",
                             CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.Cancel,
                             DefaultButton = TaskDialogResult.Cancel
                         };
@@ -159,8 +173,8 @@ namespace SSG_FP_Suite.Commands.ModelCheck
                     {
                         int cleared = ClearAllMarkers(doc);
                         TaskDialog.Show("Hanger Gap Check",
-                            $"Cleared {cleared} \"{MarkerFamilyName}\" " +
-                            $"instance{(cleared != 1 ? "s" : "")} from the project.\n\n" +
+                            $"Cleared {cleared} hanger gap " +
+                            $"marker{(cleared != 1 ? "s" : "")} from the project.\n\n" +
                             "No gap check was run.");
                         return Result.Succeeded;
                     }
@@ -169,9 +183,6 @@ namespace SSG_FP_Suite.Commands.ModelCheck
                         dlg.SelectedTypeCodes, StringComparer.OrdinalIgnoreCase);
                     var selectedSizes = new HashSet<double>(dlg.SelectedSizes);
                     double thresholdFt = dlg.ThresholdInches / 12.0;
-
-                    // ── Find marker family symbol ──
-                    FamilySymbol marker = FindMarkerFamily(doc);
 
                     // ── Process each hanger ──
                     var flaggedIds = new List<ElementId>();
@@ -185,9 +196,8 @@ namespace SSG_FP_Suite.Commands.ModelCheck
                     {
                         tx.Start();
 
-                        // Clear any previous markers in the project (keeps re-runs clean)
-                        if (marker != null)
-                            ClearPreviousMarkers(doc);
+                        // Clear any previous markers (keeps re-runs clean)
+                        ClearPreviousMarkers(doc);
 
                         foreach (var hanger in hangers)
                         {
@@ -222,20 +232,15 @@ namespace SSG_FP_Suite.Commands.ModelCheck
                                 flaggedIds.Add(hanger.Id);
                                 worstOffenders.Add((hanger, gapFt * 12.0, typeCode));
 
-                                // Place marker
-                                if (marker != null)
+                                // Place DirectShape cylinder marker above the hanger
+                                try
                                 {
-                                    try
-                                    {
-                                        if (!marker.IsActive) marker.Activate();
-                                        XYZ markerPt = new XYZ(
-                                            hangerPt.X, hangerPt.Y, hangerPt.Z + MarkerZOffset);
-                                        doc.Create.NewFamilyInstance(markerPt, marker,
-                                            Autodesk.Revit.DB.Structure.StructuralType.NonStructural);
-                                        markersPlaced++;
-                                    }
-                                    catch { /* non-critical, still flag via selection */ }
+                                    XYZ markerBase = new XYZ(
+                                        hangerPt.X, hangerPt.Y, hangerPt.Z + MarkerZOffset);
+                                    CreateMarker(doc, markerBase);
+                                    markersPlaced++;
                                 }
+                                catch { /* non-critical, hanger still flagged via selection */ }
                             }
                         }
 
@@ -260,16 +265,7 @@ namespace SSG_FP_Suite.Commands.ModelCheck
                         report += $"\nSkipped (no rod length):  {skippedNoRod}";
 
                     if (markersPlaced > 0)
-                    {
-                        report += $"\n\nMarkers placed: {markersPlaced} " +
-                                  $"({MarkerFamilyName})";
-                    }
-                    else if (marker == null && flaggedIds.Count > 0)
-                    {
-                        report += $"\n\nMarker family \"{MarkerFamilyName}\" is not loaded — " +
-                                  $"flagged hangers are selected but no markers were placed.\n" +
-                                  $"Load the family via Setup > Load Families to enable markers.";
-                    }
+                        report += $"\n\nMarkers placed: {markersPlaced} (small red cylinders above hangers)";
 
                     if (worstOffenders.Count > 0)
                     {
@@ -397,18 +393,36 @@ namespace SSG_FP_Suite.Commands.ModelCheck
             return (bestPipe, bestPoint, bestCurve);
         }
 
-        private FamilySymbol FindMarkerFamily(Document doc)
+        // ── Marker DirectShape creation and cleanup ──
+
+        /// <summary>
+        /// Creates a DirectShape cylinder marker at the given base point.
+        /// The cylinder is vertical, centered horizontally on the point,
+        /// and extends MarkerHeight upward. Tagged with our application
+        /// IDs so the cleanup query can find it later.
+        /// Must be called inside a transaction.
+        /// </summary>
+        private void CreateMarker(Document doc, XYZ basePoint)
         {
-            return new FilteredElementCollector(doc)
-                .OfClass(typeof(FamilySymbol))
-                .OfCategory(BuiltInCategory.OST_GenericModel)
-                .Cast<FamilySymbol>()
-                .FirstOrDefault(fs => string.Equals(fs.Family.Name,
-                    MarkerFamilyName, StringComparison.OrdinalIgnoreCase));
+            // A full circle in Revit's CurveLoop API is two semi-circular arcs.
+            var arc1 = Arc.Create(basePoint, MarkerRadius, 0, Math.PI,
+                XYZ.BasisX, XYZ.BasisY);
+            var arc2 = Arc.Create(basePoint, MarkerRadius, Math.PI, 2 * Math.PI,
+                XYZ.BasisX, XYZ.BasisY);
+            var profile = CurveLoop.Create(new List<Curve> { arc1, arc2 });
+
+            Solid cylinder = GeometryCreationUtilities.CreateExtrusionGeometry(
+                new List<CurveLoop> { profile }, XYZ.BasisZ, MarkerHeight);
+
+            var ds = DirectShape.CreateElement(doc,
+                new ElementId(BuiltInCategory.OST_GenericModel));
+            ds.ApplicationId = MarkerAppId;
+            ds.ApplicationDataId = MarkerAppDataId;
+            ds.SetShape(new GeometryObject[] { cylinder });
         }
 
         /// <summary>
-        /// Deletes all existing marker family instances from the project.
+        /// Deletes all existing marker DirectShapes from the project.
         /// Must be called inside a transaction. Returns count deleted.
         /// </summary>
         private int ClearPreviousMarkers(Document doc)
@@ -439,18 +453,19 @@ namespace SSG_FP_Suite.Commands.ModelCheck
 
         private int CountExistingMarkers(Document doc) => GetMarkerInstanceIds(doc).Count;
 
+        /// <summary>
+        /// Returns the IDs of all DirectShape elements stamped with our
+        /// MarkerAppId/MarkerAppDataId (so we never delete unrelated DirectShapes
+        /// that other addins may have placed in the project).
+        /// </summary>
         private List<ElementId> GetMarkerInstanceIds(Document doc)
         {
             return new FilteredElementCollector(doc)
-                .OfCategory(BuiltInCategory.OST_GenericModel)
-                .WhereElementIsNotElementType()
-                .Where(e =>
-                {
-                    var fi = e as FamilyInstance;
-                    return string.Equals(fi?.Symbol?.Family?.Name,
-                        MarkerFamilyName, StringComparison.OrdinalIgnoreCase);
-                })
-                .Select(e => e.Id)
+                .OfClass(typeof(DirectShape))
+                .Cast<DirectShape>()
+                .Where(ds => ds.ApplicationId == MarkerAppId
+                          && ds.ApplicationDataId == MarkerAppDataId)
+                .Select(ds => ds.Id)
                 .ToList();
         }
     }

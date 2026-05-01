@@ -65,20 +65,17 @@ If a hanger has no `Type Code (Hydratec)` value, it's silently skipped — the
 dialog already filters available codes from the selection. If a hanger has no
 `Rod Length` value, it's reported in the "skipped" count.
 
-## Required marker family
+## Marker geometry
 
-The command places `-Hanger Gap Marker.rfa` (Generic Model category) at each
-flagged hanger's XY location, 6" above the hanger Z. **This family is not
-shipped with the installer yet** — you'll need to author one in Revit:
+The command places a Revit `DirectShape` at each flagged hanger — a small
+vertical cylinder (4" diameter × 4" tall, Generic Model category) created
+directly in the project, no family file required. It's visible in plan and
+3D views automatically.
 
-- Category: **Generic Model**
-- Geometry: a recognizable shape at the family origin (recommended: a red
-  sphere ~3" diameter, or a small red cylinder)
-- No required parameters
-
-If the family isn't loaded when the command runs, flagged hangers are still
-selected and reported, but no markers are placed. The summary dialog notes
-this.
+Markers are stamped with `ApplicationId = "SSG_FP_Suite"` and
+`ApplicationDataId = "HangerGapMarker"` so the command can find and delete
+its own markers without touching unrelated DirectShape elements created by
+other tools or addins.
 
 ## Re-running
 

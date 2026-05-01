@@ -51,14 +51,4 @@ flagging step.
               named "Model Check - Text". Optionally style by status
               (green for OK, red for EXCEEDS).
 
-  -Hanger Gap Marker.rfa
-    Used by:  HangerGapCheckCommand (new in v0.1.x)
-    Category: Generic Model (so it is visible in plan AND 3D)
-    Spec:     A simple eye-catching marker placed at the hanger
-              location to visually flag it. Recommended geometry:
-              a red sphere (~3" diameter) or vertical cylinder
-              centered at the family origin. No required parameters.
-              The command places the marker 6" above the hanger XY
-              location, so design the family with its visible
-              geometry around the origin (not above or below).
 
