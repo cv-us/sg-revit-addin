@@ -9,25 +9,14 @@ namespace SSG_FP_Suite
     {
         public Result OnStartup(UIControlledApplication application)
         {
-            string tabName = "SSG FP Suite";
+            string tabName = "SG";
             string asmPath = Assembly.GetExecutingAssembly().Location;
 
             try { application.CreateRibbonTab(tabName); }
             catch (Exception) { }
 
-            // ── Sprinkler Layout panel ──
-            RibbonPanel layoutPanel = application.CreateRibbonPanel(tabName, "Sprinkler Layout");
-            AddLargeButton(layoutPanel, "PlaceSprinklers", "Place\nSprinklers", asmPath,
-                "SSG_FP_Suite.Commands.SprinklerLayout.PlaceSprinklersCommand",
-                "sprinkler-layout-32.png", "sprinkler-layout-16.png",
-                "Place sprinkler heads in rooms based on coverage rules.");
-
             // ── Pipe Routing panel ──
             RibbonPanel pipingPanel = application.CreateRibbonPanel(tabName, "Pipe Routing");
-            AddLargeButton(pipingPanel, "AutoRouteBranchlines", "Auto Route\nBranchlines", asmPath,
-                "SSG_FP_Suite.Commands.PipeRouting.RouteBranchlinesCommand",
-                "pipe-routing-32.png", "pipe-routing-16.png",
-                "Auto-route branchlines from mains to sprinkler heads.");
             AddLargeButton(pipingPanel, "AutoShortenFlexPipes", "Shorten\nFlex Pipes", asmPath,
                 "SSG_FP_Suite.Commands.PipeRouting.ShortenFlexPipesCommand",
                 "shorten-flex-32.png", "shorten-flex-16.png",
@@ -36,11 +25,6 @@ namespace SSG_FP_Suite
             // ── Hangers panel ──
             RibbonPanel hangersPanel = application.CreateRibbonPanel(tabName, "Hangers");
 
-            // Large: primary placement commands
-            AddLargeButton(hangersPanel, "AutoHang", "Auto\nHang", asmPath,
-                "SSG_FP_Suite.Commands.Hangers.HangCommand",
-                "hangers-32.png", "hangers-16.png",
-                "Auto-place hangers at typical spacing along pipes.");
             // Small stack: alternate placement methods
             hangersPanel.AddStackedItems(
                 MakeButton("AutoHangCAD", "Hang at CAD", asmPath,
@@ -127,20 +111,6 @@ namespace SSG_FP_Suite
                 "seismic-braces-32.png", "seismic-braces-16.png",
                 "Auto-place seismic braces on welded mains with NFPA spacing and rod length calculation.");
 
-            // ── Hydraulics panel ──
-            RibbonPanel hydraulicsPanel = application.CreateRibbonPanel(tabName, "Hydraulics");
-            AddLargeButton(hydraulicsPanel, "HydraulicCalc", "Hydraulic\nCalc", asmPath,
-                "SSG_FP_Suite.Commands.Hydraulics.HydraulicCalcCommand",
-                "hydraulics-32.png", "hydraulics-16.png",
-                "Run or export hydraulic calculation data.");
-
-            // ── Fabrication panel ──
-            RibbonPanel fabPanel = application.CreateRibbonPanel(tabName, "Fabrication");
-            AddLargeButton(fabPanel, "PipeCutList", "Pipe\nCut List", asmPath,
-                "SSG_FP_Suite.Commands.Fabrication.PipeCutListCommand",
-                "fabrication-32.png", "fabrication-16.png",
-                "Generate pipe cut list for fabrication shop.");
-
             // ── Coordination panel ──
             RibbonPanel coordPanel = application.CreateRibbonPanel(tabName, "Coordination");
             AddLargeButton(coordPanel, "ColorCodePipes", "Color Code\nPipes", asmPath,
@@ -204,15 +174,11 @@ namespace SSG_FP_Suite
             // ── Views & Sheets panel ──
             RibbonPanel viewsPanel = application.CreateRibbonPanel(tabName, "Views & Sheets");
 
-            // Large: primary view creation commands
+            // Large: primary view creation command
             AddLargeButton(viewsPanel, "CreatePlanViews", "Create\nPlan Views", asmPath,
                 "SSG_FP_Suite.Commands.ViewsAndSheets.CreatePlanViewsCommand",
                 "plan-views-32.png", "plan-views-16.png",
                 "Create floor and/or ceiling plan views for selected levels with templates and naming.");
-            AddLargeButton(viewsPanel, "DuplicateViews", "Duplicate\nViews", asmPath,
-                "SSG_FP_Suite.Commands.ViewsAndSheets.DuplicateViewsCommand",
-                "duplicate-views-32.png", "duplicate-views-16.png",
-                "Duplicate fire protection plan views.");
             // Small stack: dependent views + scope boxes
             viewsPanel.AddStackedItems(
                 MakeButton("CreateDependentViews", "Dependent Views", asmPath,

@@ -42,11 +42,11 @@ One DLL keeps everything simple. One build, one deploy, one ribbon tab.
 ## How a Command Gets From Code to Ribbon Button
 
 ```
-1. You write:     src/Shared/Commands/Hangers/AutoHangCommand.cs
-                  (class SSG_FP_Suite.Commands.Hangers.AutoHangCommand)
+1. You write:     src/Shared/Commands/Hangers/HangAtCADLinesCommand.cs
+                  (class SSG_FP_Suite.Commands.Hangers.HangAtCADLinesCommand)
 
 2. You register:  src/SSG24/SSG24.addin
-                  <FullClassName>SSG_FP_Suite.Commands.Hangers.AutoHangCommand</FullClassName>
+                  <FullClassName>SSG_FP_Suite.Commands.Hangers.HangAtCADLinesCommand</FullClassName>
 
 3. You add UI:    src/SSG24/App.cs
                   (create a PushButton pointing to the same class name)
@@ -55,7 +55,7 @@ One DLL keeps everything simple. One build, one deploy, one ribbon tab.
 
 5. You deploy:    .\tools\deploy-addin.ps1 -RevitVersion 2024
 
-6. User sees:     Revit ribbon → "SSG Fire Protection" tab → "Hangers" panel → "Auto Hang" button
+6. User sees:     Revit ribbon → "SG" tab → "Hangers" panel → "Hang at CAD" button
 ```
 
 ## The Transaction Model
