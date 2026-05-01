@@ -12,7 +12,7 @@
 ; Output: installer\Output\SSG-FP-Suite-{version}-Setup.exe
 
 #define MyAppName "SSG FP Suite"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "0.1.0"
 #define MyAppPublisher "SSG Fire Protection"
 #define MyAppURL "https://github.com/cv-us/ssg-fp-suite"
 
