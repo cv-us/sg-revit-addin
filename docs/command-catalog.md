@@ -70,3 +70,4 @@ Master list of all SSG FP Suite commands.
 - `SprinklerClearanceCheckCommand` - Check upright sprinklers for NFPA 3" clearance violations from pipes and hangers with annotation placement
 - `DeflectorDistanceCheckCommand` - Measure upright deflector-to-structure distance via raybounce and check against NFPA 13 limits (unobstructed/obstructed/custom)
 - `PipesTooShortCommand` - Flag pipes shorter than the minimum fabricable nipple length for their size and type (threaded vs welded)
+- `HangerGapCheckCommand` - Flag selected hangers whose top-of-pipe to structure gap exceeds a threshold (per-Type-Code math, default 6"); appears on the Seismic panel

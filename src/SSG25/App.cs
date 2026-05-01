@@ -110,6 +110,10 @@ namespace SSG_FP_Suite
                 "SSG_FP_Suite.Commands.Annotation.SeismicBracesCommand",
                 "seismic-braces-32.png", "seismic-braces-16.png",
                 "Auto-place seismic braces on welded mains with NFPA spacing and rod length calculation.");
+            AddLargeButton(seismicPanel, "HangerGapCheck", "Hanger Gap\nCheck", asmPath,
+                "SSG_FP_Suite.Commands.ModelCheck.HangerGapCheckCommand",
+                "hanger-gap-32.png", "hanger-gap-16.png",
+                "Flag selected hangers whose top-of-pipe to structure gap exceeds a threshold (default 6\").");
 
             // ── Coordination panel ──
             RibbonPanel coordPanel = application.CreateRibbonPanel(tabName, "Coordination");
