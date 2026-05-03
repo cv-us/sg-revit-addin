@@ -156,7 +156,7 @@ namespace SSG_FP_Suite.Commands.ModelCheck
                     if (!string.IsNullOrWhiteSpace(tc))
                         availableTypeCodes.Add(tc.Trim());
 
-                    var nearestPipe = FindClosestPipe(GetLocation(hanger), pipeCurves);
+                    var nearestPipe = FindClosestPipe(GetVisualLocation(hanger), pipeCurves);
                     if (nearestPipe != null)
                     {
                         double diaFt = GetParamDouble(
@@ -224,7 +224,7 @@ namespace SSG_FP_Suite.Commands.ModelCheck
                             string typeCode = GetParamString(hanger, TypeCodeParam)?.Trim() ?? "";
                             if (!selectedTypeCodes.Contains(typeCode)) continue;
 
-                            XYZ hangerPt = GetLocation(hanger);
+                            XYZ hangerPt = GetVisualLocation(hanger);
                             if (hangerPt == null) continue;
 
                             var nearest = FindClosestPipe(hangerPt, pipeCurves);
@@ -375,6 +375,31 @@ namespace SSG_FP_Suite.Commands.ModelCheck
             return loc?.Point;
         }
 
+        /// <summary>
+        /// Returns the XYZ that best represents where a hanger visually sits
+        /// in the model. Uses the bounding-box center rather than LocationPoint:
+        /// some hanger families (notably Hydratec ones) are connector-hosted
+        /// with their family origin at one end of the host pipe segment and a
+        /// "distance from pipe end" parameter shifting the visible geometry
+        /// along the pipe. LocationPoint for those families points at a pipe
+        /// endpoint, not the actual hanger position. The bounding box always
+        /// wraps the visible geometry, so its XY center is reliably above the
+        /// pipe at the hanger's true location.
+        /// </summary>
+        private XYZ GetVisualLocation(Element element)
+        {
+            BoundingBoxXYZ bb = element.get_BoundingBox(null);
+            if (bb != null)
+            {
+                return new XYZ(
+                    (bb.Min.X + bb.Max.X) * 0.5,
+                    (bb.Min.Y + bb.Max.Y) * 0.5,
+                    (bb.Min.Z + bb.Max.Z) * 0.5);
+            }
+            // Fallback for elements without geometry (rare for hangers)
+            return GetLocation(element);
+        }
+
         private string GetParamString(Element element, string paramName)
         {
             var p = element.LookupParameter(paramName);
@@ -423,25 +448,35 @@ namespace SSG_FP_Suite.Commands.ModelCheck
             Element bestPipe = null;
             XYZ bestPoint = null;
             Curve bestCurve = null;
-            double bestDist = double.MaxValue;
+            double bestXyDist = double.MaxValue;
 
             foreach (var (pipe, curve) in pipeCurves)
             {
                 IntersectionResult projResult = curve.Project(hangerPoint);
                 if (projResult == null) continue;
 
-                double dist = projResult.Distance;
-                if (dist < bestDist)
+                XYZ closest = projResult.XYZPoint;
+                // Rank by XY distance only. The hanger's vertical offset from
+                // the pipe (rod length, plus any BB-Z averaging) is not a
+                // signal for which pipe it's on — what matters is which pipe
+                // sits below the hanger's XY footprint.
+                double xyDist = Math.Sqrt(
+                    Math.Pow(closest.X - hangerPoint.X, 2) +
+                    Math.Pow(closest.Y - hangerPoint.Y, 2));
+
+                if (xyDist < bestXyDist)
                 {
-                    bestDist = dist;
+                    bestXyDist = xyDist;
                     bestPipe = pipe;
-                    bestPoint = projResult.XYZPoint;
+                    bestPoint = closest;
                     bestCurve = curve;
                 }
             }
 
-            // Reject if nothing within ~1 ft (sanity check — hangers should be on the pipe)
-            if (bestPipe == null || bestDist > 1.0) return null;
+            // Reject if no pipe within 6" XY — a real hanger sits directly
+            // above its pipe. A larger XY gap means we matched something that
+            // isn't actually the hanger's host.
+            if (bestPipe == null || bestXyDist > 0.5) return null;
 
             return (bestPipe, bestPoint, bestCurve);
         }
