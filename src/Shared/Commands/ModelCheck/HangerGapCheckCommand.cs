@@ -67,6 +67,16 @@ namespace SSG_FP_Suite.Commands.ModelCheck
         /// <summary>Marker cylinder height, in feet (4 inches).</summary>
         private const double MarkerHeight = 4.0 / 12.0;
 
+        /// <summary>
+        /// Pipes whose direction is more vertical than this are excluded from
+        /// the hanger-pipe matching step. 0.5 ≈ 30° off horizontal — keeps
+        /// horizontal mains and sloped armovers, excludes sprigs/risers.
+        /// </summary>
+        private const double MaxPipeSlopeFromHorizontal = 0.5;
+
+        /// <summary>Project material name for the red marker fill.</summary>
+        private const string MarkerMaterialName = "SSG_HangerGapMarker";
+
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
             UIDocument uidoc = commandData.Application.ActiveUIDocument;
@@ -117,17 +127,21 @@ namespace SSG_FP_Suite.Commands.ModelCheck
                 }
 
                 // ── Get pipe centerlines from the entire project (any view) ──
+                // Exclude vertical sprigs and risers — hangers don't go on those,
+                // and including them causes Curve.Project to clamp to a sprig
+                // endpoint when a hanger's LocationPoint is at the structure.
                 var pipeCurves = new FilteredElementCollector(doc)
                     .OfCategory(BuiltInCategory.OST_PipeCurves)
                     .WhereElementIsNotElementType()
                     .Select(p => (pipe: (Element)p, curve: (p.Location as LocationCurve)?.Curve))
-                    .Where(t => t.curve != null)
+                    .Where(t => t.curve != null && IsNearHorizontal(t.curve))
                     .ToList();
 
                 if (pipeCurves.Count == 0)
                 {
                     TaskDialog.Show("Hanger Gap Check",
-                        "No pipes found in the project.");
+                        "No near-horizontal pipes found in the project. " +
+                        "Hangers are only matched against pipes within 30° of horizontal.");
                     return Result.Cancelled;
                 }
 
@@ -192,12 +206,18 @@ namespace SSG_FP_Suite.Commands.ModelCheck
                     int markersPlaced = 0;
                     var worstOffenders = new List<(FamilyInstance hanger, double gapInches, string typeCode)>();
 
+                    ElementId markerMaterialId;
+
                     using (var tx = new Transaction(doc, "Hanger Gap Check"))
                     {
                         tx.Start();
 
                         // Clear any previous markers (keeps re-runs clean)
                         ClearPreviousMarkers(doc);
+
+                        // Ensure the red marker material exists (idempotent — reuses
+                        // existing one if present, creates it once otherwise)
+                        markerMaterialId = GetOrCreateMarkerMaterial(doc);
 
                         foreach (var hanger in hangers)
                         {
@@ -232,12 +252,18 @@ namespace SSG_FP_Suite.Commands.ModelCheck
                                 flaggedIds.Add(hanger.Id);
                                 worstOffenders.Add((hanger, gapFt * 12.0, typeCode));
 
-                                // Place DirectShape cylinder marker above the hanger
+                                // Place DirectShape marker at the pipe centerline, not at
+                                // the hanger's LocationPoint. SSG/Hydratec hanger families
+                                // have their LocationPoint at the top of the rod (at the
+                                // structure), which is rod_length above the pipe — placing
+                                // the marker there would put it floating up near structure
+                                // instead of at the hanger.
                                 try
                                 {
+                                    XYZ pipePt = nearest.Value.closestPoint;
                                     XYZ markerBase = new XYZ(
-                                        hangerPt.X, hangerPt.Y, hangerPt.Z + MarkerZOffset);
-                                    CreateMarker(doc, markerBase);
+                                        pipePt.X, pipePt.Y, pipePt.Z + MarkerZOffset);
+                                    CreateMarker(doc, markerBase, markerMaterialId);
                                     markersPlaced++;
                                 }
                                 catch { /* non-critical, hanger still flagged via selection */ }
@@ -309,11 +335,38 @@ namespace SSG_FP_Suite.Commands.ModelCheck
 
         private bool IsHanger(FamilyInstance fi)
         {
+            // Must be in PipeAccessory category. This rules out tag families
+            // like "-Pipe Hanger Tag" (Generic Annotation) that would otherwise
+            // match the substring filter below.
+            if (fi.Category == null) return false;
+            if (fi.Category.Id.IntegerValue != (int)BuiltInCategory.OST_PipeAccessory)
+                return false;
+
             string familyName = fi.Symbol?.Family?.Name ?? "";
             return familyName.IndexOf("-Pipe Hanger", StringComparison.OrdinalIgnoreCase) >= 0
                 || familyName.IndexOf("-Pipe Trapeze", StringComparison.OrdinalIgnoreCase) >= 0
                 || familyName.IndexOf("-Basic Adjustable", StringComparison.OrdinalIgnoreCase) >= 0
                 || familyName.IndexOf("Ring Hanger", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        /// <summary>
+        /// Returns true if the curve is within ~30° of horizontal. Used to
+        /// exclude vertical sprigs and risers from the candidate-pipe list,
+        /// since hangers are only placed on horizontal-ish pipes.
+        /// </summary>
+        private bool IsNearHorizontal(Curve curve)
+        {
+            try
+            {
+                XYZ direction = (curve.GetEndPoint(1) - curve.GetEndPoint(0)).Normalize();
+                // |direction.Z| of 0 = fully horizontal, 1 = fully vertical
+                return Math.Abs(direction.Z) < MaxPipeSlopeFromHorizontal;
+            }
+            catch
+            {
+                // Zero-length or degenerate curve — treat as not horizontal
+                return false;
+            }
         }
 
         private XYZ GetLocation(Element element)
@@ -398,11 +451,12 @@ namespace SSG_FP_Suite.Commands.ModelCheck
         /// <summary>
         /// Creates a DirectShape cylinder marker at the given base point.
         /// The cylinder is vertical, centered horizontally on the point,
-        /// and extends MarkerHeight upward. Tagged with our application
-        /// IDs so the cleanup query can find it later.
-        /// Must be called inside a transaction.
+        /// and extends MarkerHeight upward. Geometry is built with the
+        /// red marker material so it shows red in shaded plan and 3D.
+        /// Tagged with our ApplicationId/ApplicationDataId so the cleanup
+        /// query can find it later. Must be called inside a transaction.
         /// </summary>
-        private void CreateMarker(Document doc, XYZ basePoint)
+        private void CreateMarker(Document doc, XYZ basePoint, ElementId materialId)
         {
             // A full circle in Revit's CurveLoop API is two semi-circular arcs.
             var arc1 = Arc.Create(basePoint, MarkerRadius, 0, Math.PI,
@@ -411,14 +465,46 @@ namespace SSG_FP_Suite.Commands.ModelCheck
                 XYZ.BasisX, XYZ.BasisY);
             var profile = CurveLoop.Create(new List<Curve> { arc1, arc2 });
 
+            // SolidOptions binds the material to every face of the resulting solid
+            var solidOptions = new SolidOptions(materialId, ElementId.InvalidElementId);
             Solid cylinder = GeometryCreationUtilities.CreateExtrusionGeometry(
-                new List<CurveLoop> { profile }, XYZ.BasisZ, MarkerHeight);
+                new List<CurveLoop> { profile }, XYZ.BasisZ, MarkerHeight, solidOptions);
 
             var ds = DirectShape.CreateElement(doc,
                 new ElementId(BuiltInCategory.OST_GenericModel));
             ds.ApplicationId = MarkerAppId;
             ds.ApplicationDataId = MarkerAppDataId;
             ds.SetShape(new GeometryObject[] { cylinder });
+        }
+
+        /// <summary>
+        /// Returns the ElementId of a project-wide material named MarkerMaterialName,
+        /// creating it (red) if it doesn't already exist. Idempotent across runs.
+        /// Must be called inside a transaction.
+        /// </summary>
+        private ElementId GetOrCreateMarkerMaterial(Document doc)
+        {
+            // Look for an existing material with our well-known name
+            var existing = new FilteredElementCollector(doc)
+                .OfClass(typeof(Material))
+                .Cast<Material>()
+                .FirstOrDefault(m => string.Equals(m.Name, MarkerMaterialName,
+                    StringComparison.OrdinalIgnoreCase));
+
+            if (existing != null) return existing.Id;
+
+            // Create a fresh red material
+            ElementId newId = Material.Create(doc, MarkerMaterialName);
+            if (doc.GetElement(newId) is Material newMat)
+            {
+                var red = new Color(220, 30, 30); // bright red, easy to spot
+                newMat.Color = red;
+                newMat.SurfaceForegroundPatternColor = red;
+                newMat.CutForegroundPatternColor = red;
+                newMat.Transparency = 0;
+                newMat.Shininess = 0;
+            }
+            return newId;
         }
 
         /// <summary>
