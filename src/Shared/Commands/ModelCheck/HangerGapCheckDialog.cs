@@ -172,7 +172,7 @@ namespace SSG_FP_Suite.Commands.ModelCheck
 
             grpThreshold.Controls.Add(new Label
             {
-                Text = "Math: gap = rod length − (pipe OD ÷ 2). Type 02 also subtracts 1.5\" hardware.",
+                Text = "Math: gap = rod length − (pipe OD ÷ 2). Any 02* type (02, 02C, 02D…) also subtracts 1.5\".",
                 Location = new Point(10, 50),
                 Size = new Size(490, 18),
                 ForeColor = SystemColors.GrayText

@@ -17,10 +17,10 @@ namespace SSG_FP_Suite.Commands.ModelCheck
     /// such hangers by placing a marker family at the hanger location so
     /// they're easy to spot in plan and 3D views.
     ///
-    /// GAP MATH (by Type Code (Hydratec)):
-    ///   - Type 02 (adjustable ring + 1.5" hardware):
+    /// GAP MATH (by Type Code (Hydratec) prefix):
+    ///   - Type 02* (adjustable ring + 1.5" hardware — covers 02, 02C, 02D, …):
     ///       gap = rod_length - 1.5" - (pipe_OD / 2)
-    ///   - All other types (e.g. 03A, 04, etc.):
+    ///   - Type 03* and everything else (e.g. 03, 03A, 03B, 04, …):
     ///       gap = rod_length - (pipe_OD / 2)
     ///
     /// WORKFLOW:
@@ -325,8 +325,15 @@ namespace SSG_FP_Suite.Commands.ModelCheck
         {
             double gapFt = rodLengthFt - (pipeODFt / 2.0);
 
-            if (string.Equals(typeCode, "02", StringComparison.OrdinalIgnoreCase))
+            // Type 02 family (02, 02C, 02D, …) shares the adjustable-ring +
+            // 1.5" hardware offset. Everything else (Type 03 family — 03,
+            // 03A, 03B, …, plus 04 etc.) just uses the rod-minus-half-OD
+            // baseline.
+            if (!string.IsNullOrEmpty(typeCode) &&
+                typeCode.StartsWith("02", StringComparison.OrdinalIgnoreCase))
+            {
                 gapFt -= Type02HardwareOffset;
+            }
 
             return gapFt;
         }

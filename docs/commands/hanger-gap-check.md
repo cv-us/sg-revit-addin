@@ -45,11 +45,17 @@ reads the pipe's outside diameter (actual, not nominal), and computes:
 
 | Type Code | Formula |
 |---|---|
-| `02` (adjustable ring + hardware) | `gap = rod_length − 1.5" − (pipe_OD ÷ 2)` |
-| All others (e.g. `03A`, `04`) | `gap = rod_length − (pipe_OD ÷ 2)` |
+| `02*` — any code starting with `02` (e.g. `02`, `02C`, `02D`) | `gap = rod_length − 1.5" − (pipe_OD ÷ 2)` |
+| Everything else — `03*` (`03`, `03A`, `03B`, …), `04`, etc. | `gap = rod_length − (pipe_OD ÷ 2)` |
 
-The 1.5" subtraction for Type 02 accounts for the hardware between the rod
-end and the pipe top that isn't captured in the **Rod Length** parameter.
+The math is grouped by **Type Code prefix**, not the full code, because the
+hardware shape is the same across all variants in a family (Hydratec uses the
+trailing letter — `02C`, `02D`, `03A`, `03B`, … — to distinguish things like
+ceiling vs deck attachment that don't change the rod-to-ring geometry).
+
+The 1.5" subtraction for the `02` family accounts for the adjustable-ring
+hardware between the rod end and the pipe top that isn't captured in the
+**Rod Length** parameter.
 
 If `gap > threshold`, the hanger is flagged.
 
