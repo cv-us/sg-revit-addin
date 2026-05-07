@@ -210,6 +210,7 @@ namespace SSG_FP_Suite.Commands.Hangers
                 int failed = 0;
                 var failedOldIds = new List<ElementId>(); // for reporting
                 var newHangerIds = new List<ElementId>();  // for selection / drift markers (we only mark drift now)
+                var recreateErrors = new List<string>();   // diagnostic info from each TryRecreate call
 
                 if (mismatched.Count > 0)
                 {
@@ -262,7 +263,8 @@ namespace SSG_FP_Suite.Commands.Hangers
 
                             foreach (var m in mismatched)
                             {
-                                ElementId newId = TryRecreate(doc, m.hanger, m.targetDiaFt);
+                                ElementId newId = TryRecreate(doc, m.hanger,
+                                    m.targetDiaFt, recreateErrors);
                                 if (newId != null && newId != ElementId.InvalidElementId)
                                 {
                                     recreated++;
@@ -375,9 +377,17 @@ namespace SSG_FP_Suite.Commands.Hangers
 
                 if (failed > 0)
                 {
-                    report += "\n\nFailures may mean the host pipe couldn't be resolved or the " +
-                              "family symbol couldn't be activated. Check the failed hangers " +
-                              "manually.";
+                    report += "\n\nFailures usually mean NewFamilyInstance rejected the placement " +
+                              "(unsupported overload for this family, missing host, etc.). The old " +
+                              "hangers are preserved when create fails.";
+                    if (recreateErrors.Count > 0)
+                    {
+                        report += "\n\nFirst few errors:";
+                        foreach (var err in recreateErrors.Take(5))
+                            report += $"\n  • {err}";
+                        if (recreateErrors.Count > 5)
+                            report += $"\n  …and {recreateErrors.Count - 5} more";
+                    }
                 }
                 TaskDialog.Show("Match Hanger Sizes", report);
 
@@ -583,62 +593,147 @@ namespace SSG_FP_Suite.Commands.Hangers
         }
 
         /// <summary>
-        /// Deletes the old hanger and creates a fresh instance at the same
-        /// location, rotation, and FamilySymbol with the new Nominal
-        /// Diameter. Preserves all writable instance parameters.
+        /// Creates a fresh hanger instance at the same location, rotation,
+        /// and FamilySymbol as the old one but with the new Nominal Diameter,
+        /// then deletes the old. CRITICAL: creates BEFORE deleting, so if
+        /// NewFamilyInstance fails for any reason the old hanger is left
+        /// intact rather than vanishing.
+        ///
+        /// Tries multiple NewFamilyInstance overloads in fallback order:
+        ///   1. (point, symbol, host, level, structuralType) — most explicit
+        ///   2. (point, symbol, host, structuralType) — host-aware no level
+        ///   3. (point, symbol, level, structuralType) — level-aware no host
+        ///   4. (point, symbol, structuralType) — bare placement
+        /// Different family authoring may accept only some of these.
         ///
         /// Returns the new ElementId on success, or null on failure.
+        /// On failure, appends a diagnostic line to errorLog with the old
+        /// element id and what went wrong.
         /// Must be called inside a transaction.
         /// </summary>
-        private ElementId TryRecreate(Document doc, FamilyInstance oldHanger, double targetDiaFt)
+        private ElementId TryRecreate(Document doc, FamilyInstance oldHanger,
+            double targetDiaFt, List<string> errorLog)
         {
+            ElementId oldId = oldHanger.Id;
             try
             {
-                // Capture state from the old instance
+                // ── Capture state from the old instance (BEFORE any modification) ──
                 var locPt = oldHanger.Location as LocationPoint;
-                if (locPt == null) return null;
+                if (locPt == null)
+                {
+                    errorLog.Add($"id={oldId.IntegerValue}: hanger has no LocationPoint");
+                    return null;
+                }
                 XYZ originalPt = locPt.Point;
                 double originalRotation = locPt.Rotation;
 
                 FamilySymbol symbol = oldHanger.Symbol;
-                if (symbol == null) return null;
-
-                // Resolve a level — prefer the hanger's own LevelId; fall back
-                // to the host pipe's "Reference Level" if needed.
-                Level level = null;
-                if (oldHanger.LevelId != null && oldHanger.LevelId != ElementId.InvalidElementId)
-                    level = doc.GetElement(oldHanger.LevelId) as Level;
-                if (level == null && oldHanger.Host != null)
+                if (symbol == null)
                 {
-                    var hostLvlParam = oldHanger.Host.LookupParameter("Reference Level");
-                    if (hostLvlParam != null && hostLvlParam.HasValue)
-                        level = doc.GetElement(hostLvlParam.AsElementId()) as Level;
+                    errorLog.Add($"id={oldId.IntegerValue}: hanger has no FamilySymbol");
+                    return null;
                 }
-                if (level == null) return null;
+
+                // The host pipe — needed for the host-aware NewFamilyInstance overloads.
+                // Capture before delete since fi.Host queries the live element.
+                Element hostPipe = oldHanger.Host;
+
+                Level level = ResolveLevel(doc, oldHanger, hostPipe, originalPt);
 
                 var snapshots = CaptureWritableParameters(oldHanger);
 
-                // Delete old, then create new at the same point
-                doc.Delete(oldHanger.Id);
-
+                // ── Activate symbol (no-op if already active) ──
                 if (!symbol.IsActive) symbol.Activate();
-                FamilyInstance newHanger = doc.Create.NewFamilyInstance(
-                    originalPt, symbol, level,
-                    Autodesk.Revit.DB.Structure.StructuralType.NonStructural);
-                if (newHanger == null) return null;
 
-                // Apply rotation around the vertical axis through the placement point
-                if (Math.Abs(originalRotation) > 1e-9)
+                // ── Try NewFamilyInstance overloads in fallback order ──
+                FamilyInstance newHanger = null;
+                string lastError = "no overloads attempted";
+
+                // Overload 1: host + level
+                if (hostPipe != null && level != null)
                 {
-                    Line zAxis = Line.CreateBound(
-                        originalPt, originalPt + XYZ.BasisZ);
-                    ElementTransformUtils.RotateElement(
-                        doc, newHanger.Id, zAxis, originalRotation);
+                    try
+                    {
+                        newHanger = doc.Create.NewFamilyInstance(
+                            originalPt, symbol, hostPipe, level,
+                            Autodesk.Revit.DB.Structure.StructuralType.NonStructural);
+                    }
+                    catch (Exception ex) { lastError = $"host+level: {ex.Message}"; }
                 }
 
-                // Set Nominal Diameter to the TARGET (not the captured value).
-                // Set ALL parameters named "Nominal Diameter" since some families
-                // have a shared and a built-in copy.
+                // Overload 2: host only
+                if (newHanger == null && hostPipe != null)
+                {
+                    try
+                    {
+                        newHanger = doc.Create.NewFamilyInstance(
+                            originalPt, symbol, hostPipe,
+                            Autodesk.Revit.DB.Structure.StructuralType.NonStructural);
+                    }
+                    catch (Exception ex) { lastError = $"host: {ex.Message}"; }
+                }
+
+                // Overload 3: level only
+                if (newHanger == null && level != null)
+                {
+                    try
+                    {
+                        newHanger = doc.Create.NewFamilyInstance(
+                            originalPt, symbol, level,
+                            Autodesk.Revit.DB.Structure.StructuralType.NonStructural);
+                    }
+                    catch (Exception ex) { lastError = $"level: {ex.Message}"; }
+                }
+
+                // Overload 4: bare
+                if (newHanger == null)
+                {
+                    try
+                    {
+                        newHanger = doc.Create.NewFamilyInstance(
+                            originalPt, symbol,
+                            Autodesk.Revit.DB.Structure.StructuralType.NonStructural);
+                    }
+                    catch (Exception ex) { lastError = $"bare: {ex.Message}"; }
+                }
+
+                if (newHanger == null)
+                {
+                    // Old hanger is still intact since we haven't deleted yet
+                    errorLog.Add($"id={oldId.IntegerValue}: NewFamilyInstance failed " +
+                                 $"({lastError})");
+                    return null;
+                }
+
+                // ── New instance exists. Now safe to delete the old one. ──
+                try { doc.Delete(oldId); }
+                catch (Exception ex)
+                {
+                    // New is created but old won't delete — flag but don't fail
+                    // (better to have a duplicate than to lose the recreation work)
+                    errorLog.Add($"id={oldId.IntegerValue}: new id={newHanger.Id.IntegerValue} " +
+                                 $"created but old delete failed: {ex.Message}");
+                }
+
+                // ── Apply rotation around the vertical axis through the placement point ──
+                if (Math.Abs(originalRotation) > 1e-9)
+                {
+                    try
+                    {
+                        Line zAxis = Line.CreateBound(
+                            originalPt, originalPt + XYZ.BasisZ);
+                        ElementTransformUtils.RotateElement(
+                            doc, newHanger.Id, zAxis, originalRotation);
+                    }
+                    catch (Exception ex)
+                    {
+                        errorLog.Add($"id={oldId.IntegerValue}: rotation failed: {ex.Message}");
+                    }
+                }
+
+                // ── Set Nominal Diameter to TARGET (not the captured old value) ──
+                // Set ALL params named "Nominal Diameter" — some families have
+                // a shared + built-in pair with the same name.
                 foreach (Parameter p in newHanger.Parameters)
                 {
                     if (p == null || p.Definition == null || p.IsReadOnly) continue;
@@ -650,15 +745,81 @@ namespace SSG_FP_Suite.Commands.Hangers
                     }
                 }
 
-                // Restore everything else (skipping Nominal Diameter — already set)
-                RestoreCapturedParameters(newHanger, snapshots, skipName: NominalDiameterParam);
+                // ── Restore the rest of the captured parameters ──
+                RestoreCapturedParameters(newHanger, snapshots,
+                    skipName: NominalDiameterParam);
 
                 return newHanger.Id;
             }
-            catch
+            catch (Exception ex)
             {
+                errorLog.Add($"id={oldId.IntegerValue}: unexpected exception: {ex.Message}");
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Resolves a Level to use for the new hanger placement, trying
+        /// several sources in order:
+        ///   1. The hanger's own LevelId
+        ///   2. The host pipe's LevelId
+        ///   3. The host pipe's "Reference Level" parameter
+        ///   4. The level whose elevation is closest to the hanger's Z
+        /// Last resort guarantees a non-null level as long as the doc has any.
+        /// </summary>
+        private Level ResolveLevel(Document doc, FamilyInstance oldHanger,
+            Element hostPipe, XYZ hangerPt)
+        {
+            try
+            {
+                if (oldHanger.LevelId != null
+                    && oldHanger.LevelId != ElementId.InvalidElementId)
+                {
+                    var lvl = doc.GetElement(oldHanger.LevelId) as Level;
+                    if (lvl != null) return lvl;
+                }
+            }
+            catch { }
+
+            if (hostPipe != null)
+            {
+                try
+                {
+                    if (hostPipe.LevelId != null
+                        && hostPipe.LevelId != ElementId.InvalidElementId)
+                    {
+                        var lvl = doc.GetElement(hostPipe.LevelId) as Level;
+                        if (lvl != null) return lvl;
+                    }
+                }
+                catch { }
+
+                try
+                {
+                    var p = hostPipe.LookupParameter("Reference Level");
+                    if (p != null && p.HasValue
+                        && p.StorageType == StorageType.ElementId)
+                    {
+                        var lvl = doc.GetElement(p.AsElementId()) as Level;
+                        if (lvl != null) return lvl;
+                    }
+                }
+                catch { }
+            }
+
+            // Last resort: closest level by elevation
+            try
+            {
+                var levels = new FilteredElementCollector(doc)
+                    .OfClass(typeof(Level))
+                    .Cast<Level>()
+                    .ToList();
+                if (levels.Count > 0)
+                    return levels.OrderBy(l => Math.Abs(l.Elevation - hangerPt.Z)).First();
+            }
+            catch { }
+
+            return null;
         }
 
         /// <summary>
