@@ -19,6 +19,7 @@ Master list of all SSG FP Suite commands.
 - `FormatHangerTicksCommand` - Format pipe hanger tick symbols to consistent direction (/ or \) accounting for pipe rotation
 - `HangerSectionIDsCommand` - Populate Section_ID (Hydratec) with formatted rod length and type code for hanger tags
 - `SwapHydraCADHangersCommand` - Replace HydraCAD Adjustable Ring Hangers with SSG -Pipe Hanger - Standard with parameter transfer
+- `MatchHangerSizesCommand` - Resize selected hangers to match the nominal diameter of their connected pipes (size-only sync, no move/rotate)
 - `SyncHangersToPipesCommand` - Move hangers to closest pipe, rotate to match direction, set ring size and stocklist info
 - `SyncHangersToRefPlaneCommand` - Calculate rod lengths from hangers to a named reference plane representing structural underside
 - `SyncHangersRaybounceCommand` - Calculate rod lengths via raybounce to structural elements above including linked models, with per-category type codes

@@ -81,22 +81,27 @@ namespace SSG_FP_Suite
                 "SSG_FP_Suite.Commands.Hangers.SyncHangersToPipesCommand",
                 "sync-pipes-32.png", "sync-pipes-16.png",
                 "Move hangers to closest pipe, set rotation and ring size to match.");
-            // Small stack: swap + sync methods
+            // Small stack: hanger property edits (swap family, resize)
             hangersPanel.AddStackedItems(
                 MakeButton("AutoSwapHydraCAD", "Swap HydraCAD", asmPath,
                     "SSG_FP_Suite.Commands.Hangers.SwapHydraCADHangersCommand",
                     "swap-hydracad-16.png", "Replace HydraCAD hangers with SSG -Pipe Hanger - Standard family instances."),
+                MakeButton("MatchHangerSizes", "Match Sizes", asmPath,
+                    "SSG_FP_Suite.Commands.Hangers.MatchHangerSizesCommand",
+                    "match-sizes-16.png", "Resize selected hangers to match the nominal diameter of the pipes they're attached to."));
+            // Small stack: rod-length syncs
+            hangersPanel.AddStackedItems(
                 MakeButton("SyncHangersToRefPlane", "Sync Ref Plane", asmPath,
                     "SSG_FP_Suite.Commands.Hangers.SyncHangersToRefPlaneCommand",
                     "sync-refplane-16.png", "Calculate rod lengths from hangers to a named reference plane (slab underside)."),
                 MakeButton("SyncHangersToStructural", "Sync Raybounce", asmPath,
                     "SSG_FP_Suite.Commands.Hangers.SyncHangersRaybounceCommand",
-                    "sync-raybounce-16.png", "Calculate rod lengths via raybounce to structural elements above (floors, roofs, framing)."));
-            // Small stack: remaining sync + trapeze utilities
-            hangersPanel.AddStackedItems(
+                    "sync-raybounce-16.png", "Calculate rod lengths via raybounce to structural elements above (floors, roofs, framing)."),
                 MakeButton("SyncHangersToStructuralSurface", "Sync Surface", asmPath,
                     "SSG_FP_Suite.Commands.Hangers.SyncHangersSurfaceCommand",
-                    "sync-surface-16.png", "Calculate rod lengths via surface intersection to structural elements above (no raybounce)."),
+                    "sync-surface-16.png", "Calculate rod lengths via surface intersection to structural elements above (no raybounce)."));
+            // Small stack: trapeze utilities
+            hangersPanel.AddStackedItems(
                 MakeButton("SyncTrapeze", "Sync Trapeze", asmPath,
                     "SSG_FP_Suite.Commands.Hangers.SyncTrapezeHangersCommand",
                     "sync-trapeze-16.png", "Sync trapeze hanger rod lengths, offsets, and rotation to closest pipe and structure above."),
