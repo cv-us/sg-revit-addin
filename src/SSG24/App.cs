@@ -81,14 +81,19 @@ namespace SSG_FP_Suite
                 "SSG_FP_Suite.Commands.Hangers.SyncHangersToPipesCommand",
                 "sync-pipes-32.png", "sync-pipes-16.png",
                 "Move hangers to closest pipe, set rotation and ring size to match.");
-            // Small stack: hanger property edits + diagnostic
+            // Small stack: resize variants (parameter-set vs delete+recreate)
+            hangersPanel.AddStackedItems(
+                MakeButton("MatchHangerSizes", "Match Sizes", asmPath,
+                    "SSG_FP_Suite.Commands.Hangers.MatchHangerSizesCommand",
+                    "match-sizes-16.png", "Resize hangers to match pipe diameter via parameter set + rod-length compensation. Backup approach if Replace Sizes has issues."),
+                MakeButton("ReplaceHangerSizes", "Replace Sizes", asmPath,
+                    "SSG_FP_Suite.Commands.Hangers.ReplaceHangerSizesCommand",
+                    "replace-sizes-16.png", "Resize hangers by deleting + recreating them at the new size with parameters preserved. Avoids the centerline-drift bug from parametric resize."));
+            // Small stack: family swap + parameter diagnostic
             hangersPanel.AddStackedItems(
                 MakeButton("AutoSwapHydraCAD", "Swap HydraCAD", asmPath,
                     "SSG_FP_Suite.Commands.Hangers.SwapHydraCADHangersCommand",
                     "swap-hydracad-16.png", "Replace HydraCAD hangers with SSG -Pipe Hanger - Standard family instances."),
-                MakeButton("MatchHangerSizes", "Match Sizes", asmPath,
-                    "SSG_FP_Suite.Commands.Hangers.MatchHangerSizesCommand",
-                    "match-sizes-16.png", "Resize selected hangers to match the nominal diameter of the pipes they're attached to."),
                 MakeButton("InspectElementParameters", "Inspect Params", asmPath,
                     "SSG_FP_Suite.Commands.Hangers.InspectElementParametersCommand",
                     "inspect-params-16.png", "Diagnostic: dump every parameter of a selected element to a dialog + clipboard for debugging."));

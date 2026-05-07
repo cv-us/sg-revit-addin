@@ -20,7 +20,9 @@ namespace SSG_FP_Suite.Commands.Hangers
     ///
     /// WORKFLOW:
     ///   1. User selects both pipes and hangers (pre-selection or pick)
-    ///   2. Separate by family name: "-Pipe Hanger" = hangers, rest = pipes
+    ///   2. Separate by family name: any of "-Pipe Hanger", "-Pipe Trapeze",
+    ///      "-Basic Adjustable", "Ring Hanger" or "Adjustable Ring Hanger"
+    ///      → hangers; the rest of OST_PipeCurves → pipes
     ///   3. Filter out vertical/steep pipes (>60° from horizontal)
     ///   4. For each hanger, find closest pipe by distance to centerline
     ///   5. Move hanger to closest point on matched pipe
@@ -49,14 +51,10 @@ namespace SSG_FP_Suite.Commands.Hangers
 
             foreach (var elem in selectedElements)
             {
-                if (elem is FamilyInstance fi)
+                if (elem is FamilyInstance fi && IsHangerFamily(fi))
                 {
-                    string familyName = fi.Symbol?.Family?.Name ?? "";
-                    if (familyName.IndexOf("-Pipe Hanger", StringComparison.OrdinalIgnoreCase) >= 0)
-                    {
-                        hangers.Add(fi);
-                        continue;
-                    }
+                    hangers.Add(fi);
+                    continue;
                 }
 
                 // Check if it's a pipe (category OST_PipeCurves)
@@ -68,7 +66,9 @@ namespace SSG_FP_Suite.Commands.Hangers
             {
                 TaskDialog.Show("Sync Hangers to Pipes",
                     "No pipe hangers found in the selection.\n" +
-                    "Select elements whose family name contains \"-Pipe Hanger\".");
+                    "Select hanger family instances (family name contains " +
+                    "\"-Pipe Hanger\", \"-Pipe Trapeze\", \"-Basic Adjustable\", " +
+                    "\"Ring Hanger\", or \"Adjustable Ring Hanger\") together with their pipes.");
                 return Result.Failed;
             }
 
@@ -389,6 +389,24 @@ namespace SSG_FP_Suite.Commands.Hangers
             {
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Recognises a FamilyInstance as a pipe hanger by its family name.
+        /// Covers both the SSG family naming conventions ("-Pipe Hanger",
+        /// "-Pipe Trapeze", "-Basic Adjustable") and the HydraCAD ones
+        /// ("Adjustable Ring Hanger", "Ring Hanger", etc.). Same filter
+        /// the newer hanger commands (Match Sizes, Replace Sizes, Hanger
+        /// Gap Check) use.
+        /// </summary>
+        private static bool IsHangerFamily(FamilyInstance fi)
+        {
+            string familyName = fi.Symbol?.Family?.Name ?? "";
+            return familyName.IndexOf("-Pipe Hanger", StringComparison.OrdinalIgnoreCase) >= 0
+                || familyName.IndexOf("-Pipe Trapeze", StringComparison.OrdinalIgnoreCase) >= 0
+                || familyName.IndexOf("-Basic Adjustable", StringComparison.OrdinalIgnoreCase) >= 0
+                || familyName.IndexOf("Ring Hanger", StringComparison.OrdinalIgnoreCase) >= 0
+                || familyName.IndexOf("Adjustable Ring", StringComparison.OrdinalIgnoreCase) >= 0;
         }
     }
 }
