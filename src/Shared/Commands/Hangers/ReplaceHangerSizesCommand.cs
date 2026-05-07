@@ -377,18 +377,40 @@ namespace SSG_FP_Suite.Commands.Hangers
 
                 if (failed > 0)
                 {
-                    report += "\n\nFailures usually mean NewFamilyInstance rejected the placement " +
-                              "(unsupported overload for this family, missing host, etc.). The old " +
-                              "hangers are preserved when create fails.";
+                    report += "\n\nFailures: NewFamilyInstance produced an instance whose host " +
+                              "binding silently failed (no host or empty bounding box). When that " +
+                              "happens the bogus instance is deleted and the OLD hanger is " +
+                              "preserved. Detailed step-by-step log was copied to your clipboard — " +
+                              "paste it back if you want me to look at it.";
                     if (recreateErrors.Count > 0)
                     {
-                        report += "\n\nFirst few errors:";
-                        foreach (var err in recreateErrors.Take(5))
+                        report += "\n\nLast few log lines:";
+                        // Show last 5 entries — those typically contain the failure summary
+                        foreach (var err in recreateErrors.Skip(Math.Max(0, recreateErrors.Count - 5)))
                             report += $"\n  • {err}";
-                        if (recreateErrors.Count > 5)
-                            report += $"\n  …and {recreateErrors.Count - 5} more";
                     }
                 }
+
+                // Always dump the full step-by-step log to clipboard so the user can
+                // share it back when something doesn't work as expected.
+                if (recreateErrors.Count > 0)
+                {
+                    try
+                    {
+                        var sb = new System.Text.StringBuilder();
+                        sb.AppendLine("=== Replace Hanger Sizes — Diagnostic Log ===");
+                        sb.AppendLine($"Hangers checked:    {hangers.Count}");
+                        sb.AppendLine($"Already matching:   {alreadyMatching}");
+                        sb.AppendLine($"Mismatched:         {mismatched.Count}");
+                        sb.AppendLine($"Recreated:          {recreated}");
+                        sb.AppendLine($"Failed:             {failed}");
+                        sb.AppendLine();
+                        foreach (var line in recreateErrors) sb.AppendLine(line);
+                        System.Windows.Forms.Clipboard.SetText(sb.ToString());
+                    }
+                    catch { /* clipboard can fail in some session states */ }
+                }
+
                 TaskDialog.Show("Replace Hanger Sizes", report);
 
                 return Result.Succeeded;
@@ -611,17 +633,43 @@ namespace SSG_FP_Suite.Commands.Hangers
         /// element id and what went wrong.
         /// Must be called inside a transaction.
         /// </summary>
+        /// <summary>
+        /// Recreates a hanger at the same point/rotation with the new size.
+        ///
+        /// CRITICAL — verify after create:
+        /// NewFamilyInstance can return a "valid-looking" FamilyInstance whose
+        /// geometric host binding has silently failed (no exception thrown).
+        /// The instance has IsValidObject=true, but its geometry isn't
+        /// computed and its Host property is null. Setting parameters on
+        /// such a hollow reference and then deleting the old hanger leaves
+        /// the user with NOTHING visible — exactly the bug the user reported.
+        ///
+        /// To prevent that, each NewFamilyInstance attempt is followed by:
+        ///   1. doc.Regenerate() to force geometry computation
+        ///   2. Check IsValidObject
+        ///   3. Check Host is non-null (for hosted families)
+        ///   4. Check get_BoundingBox(null) is non-null AND non-degenerate
+        /// If any verification fails, the bogus new instance is deleted and
+        /// the next overload is tried. Only if a verified instance is
+        /// produced do we delete the old hanger.
+        ///
+        /// Returns the new ElementId on success, null on failure.
+        /// errorLog accumulates step-by-step diagnostic info; the caller
+        /// dumps it to clipboard at the end of the operation.
+        /// </summary>
         private ElementId TryRecreate(Document doc, FamilyInstance oldHanger,
             double targetDiaFt, List<string> errorLog)
         {
             ElementId oldId = oldHanger.Id;
+            string idTag = $"id={oldId.IntegerValue}";
+
             try
             {
-                // ── Capture state from the old instance (BEFORE any modification) ──
+                // ── Capture state from the old instance (before any modification) ──
                 var locPt = oldHanger.Location as LocationPoint;
                 if (locPt == null)
                 {
-                    errorLog.Add($"id={oldId.IntegerValue}: hanger has no LocationPoint");
+                    errorLog.Add($"{idTag}: SKIP — hanger has no LocationPoint");
                     return null;
                 }
                 XYZ originalPt = locPt.Point;
@@ -630,110 +678,91 @@ namespace SSG_FP_Suite.Commands.Hangers
                 FamilySymbol symbol = oldHanger.Symbol;
                 if (symbol == null)
                 {
-                    errorLog.Add($"id={oldId.IntegerValue}: hanger has no FamilySymbol");
+                    errorLog.Add($"{idTag}: SKIP — hanger has no FamilySymbol");
                     return null;
                 }
 
-                // The host pipe — needed for the host-aware NewFamilyInstance overloads.
-                // Capture before delete since fi.Host queries the live element.
                 Element hostPipe = oldHanger.Host;
-
                 Level level = ResolveLevel(doc, oldHanger, hostPipe, originalPt);
-
                 var snapshots = CaptureWritableParameters(oldHanger);
 
-                // ── Activate symbol (no-op if already active) ──
                 if (!symbol.IsActive) symbol.Activate();
 
-                // ── Try NewFamilyInstance overloads in fallback order ──
+                errorLog.Add($"{idTag}: starting recreate; " +
+                             $"family=\"{symbol.Family?.Name}\", type=\"{symbol.Name}\", " +
+                             $"host={(hostPipe != null ? hostPipe.Id.IntegerValue.ToString() : "(null)")}, " +
+                             $"level={(level != null ? level.Id.IntegerValue.ToString() : "(null)")}, " +
+                             $"point=({originalPt.X:F2},{originalPt.Y:F2},{originalPt.Z:F2})");
+
+                // ── Strategy chain: try each overload, verify, accept or delete-and-retry ──
                 FamilyInstance newHanger = null;
-                string lastError = "no overloads attempted";
-
-                // Overload 1: host + level
                 if (hostPipe != null && level != null)
-                {
-                    try
-                    {
-                        newHanger = doc.Create.NewFamilyInstance(
-                            originalPt, symbol, hostPipe, level,
-                            Autodesk.Revit.DB.Structure.StructuralType.NonStructural);
-                    }
-                    catch (Exception ex) { lastError = $"host+level: {ex.Message}"; }
-                }
+                    newHanger = TryStrategy(doc, errorLog, idTag, "NFI(point, symbol, host, level)",
+                        () => doc.Create.NewFamilyInstance(originalPt, symbol, hostPipe, level,
+                            Autodesk.Revit.DB.Structure.StructuralType.NonStructural),
+                        requireHost: true);
 
-                // Overload 2: host only
                 if (newHanger == null && hostPipe != null)
-                {
-                    try
-                    {
-                        newHanger = doc.Create.NewFamilyInstance(
-                            originalPt, symbol, hostPipe,
-                            Autodesk.Revit.DB.Structure.StructuralType.NonStructural);
-                    }
-                    catch (Exception ex) { lastError = $"host: {ex.Message}"; }
-                }
+                    newHanger = TryStrategy(doc, errorLog, idTag, "NFI(point, symbol, host)",
+                        () => doc.Create.NewFamilyInstance(originalPt, symbol, hostPipe,
+                            Autodesk.Revit.DB.Structure.StructuralType.NonStructural),
+                        requireHost: true);
 
-                // Overload 3: level only
                 if (newHanger == null && level != null)
-                {
-                    try
-                    {
-                        newHanger = doc.Create.NewFamilyInstance(
-                            originalPt, symbol, level,
-                            Autodesk.Revit.DB.Structure.StructuralType.NonStructural);
-                    }
-                    catch (Exception ex) { lastError = $"level: {ex.Message}"; }
-                }
+                    newHanger = TryStrategy(doc, errorLog, idTag, "NFI(point, symbol, level)",
+                        () => doc.Create.NewFamilyInstance(originalPt, symbol, level,
+                            Autodesk.Revit.DB.Structure.StructuralType.NonStructural),
+                        requireHost: false);
 
-                // Overload 4: bare
                 if (newHanger == null)
-                {
-                    try
-                    {
-                        newHanger = doc.Create.NewFamilyInstance(
-                            originalPt, symbol,
-                            Autodesk.Revit.DB.Structure.StructuralType.NonStructural);
-                    }
-                    catch (Exception ex) { lastError = $"bare: {ex.Message}"; }
-                }
+                    newHanger = TryStrategy(doc, errorLog, idTag, "NFI(point, symbol)",
+                        () => doc.Create.NewFamilyInstance(originalPt, symbol,
+                            Autodesk.Revit.DB.Structure.StructuralType.NonStructural),
+                        requireHost: false);
 
                 if (newHanger == null)
                 {
-                    // Old hanger is still intact since we haven't deleted yet
-                    errorLog.Add($"id={oldId.IntegerValue}: NewFamilyInstance failed " +
-                                 $"({lastError})");
+                    errorLog.Add($"{idTag}: ALL STRATEGIES FAILED — old hanger preserved.");
+                    errorLog.Add($"{idTag}:   If this is a HydraCAD family (e.g. \"Adjustable " +
+                                 "Ring Hanger\"), the family's geometry may require a host " +
+                                 "relationship that NewFamilyInstance can't establish via the " +
+                                 "API. Workaround: run \"Swap HydraCAD\" to convert it to the " +
+                                 "SSG -Pipe Hanger - Standard family first, then run Replace " +
+                                 "Sizes.");
                     return null;
                 }
 
-                // ── New instance exists. Now safe to delete the old one. ──
-                try { doc.Delete(oldId); }
+                // ── New instance is verified. Safe to delete the old one. ──
+                try
+                {
+                    doc.Delete(oldId);
+                    errorLog.Add($"{idTag}: deleted old; new id={newHanger.Id.IntegerValue}");
+                }
                 catch (Exception ex)
                 {
-                    // New is created but old won't delete — flag but don't fail
-                    // (better to have a duplicate than to lose the recreation work)
-                    errorLog.Add($"id={oldId.IntegerValue}: new id={newHanger.Id.IntegerValue} " +
-                                 $"created but old delete failed: {ex.Message}");
+                    errorLog.Add($"{idTag}: WARNING — new id={newHanger.Id.IntegerValue} " +
+                                 $"created but failed to delete old: {ex.Message}");
                 }
 
-                // ── Apply rotation around the vertical axis through the placement point ──
+                // ── Apply rotation about the vertical axis through the placement point ──
                 if (Math.Abs(originalRotation) > 1e-9)
                 {
                     try
                     {
-                        Line zAxis = Line.CreateBound(
-                            originalPt, originalPt + XYZ.BasisZ);
+                        Line zAxis = Line.CreateBound(originalPt, originalPt + XYZ.BasisZ);
                         ElementTransformUtils.RotateElement(
                             doc, newHanger.Id, zAxis, originalRotation);
                     }
                     catch (Exception ex)
                     {
-                        errorLog.Add($"id={oldId.IntegerValue}: rotation failed: {ex.Message}");
+                        errorLog.Add($"{idTag}: rotation by {originalRotation:F4} rad failed: " +
+                                     ex.Message);
                     }
                 }
 
-                // ── Set Nominal Diameter to TARGET (not the captured old value) ──
-                // Set ALL params named "Nominal Diameter" — some families have
-                // a shared + built-in pair with the same name.
+                // ── Set Nominal Diameter to the TARGET (not the captured old value).
+                //    Set ALL parameters named "Nominal Diameter" since some families have
+                //    a shared + built-in pair with the same name. ──
                 foreach (Parameter p in newHanger.Parameters)
                 {
                     if (p == null || p.Definition == null || p.IsReadOnly) continue;
@@ -746,15 +775,119 @@ namespace SSG_FP_Suite.Commands.Hangers
                 }
 
                 // ── Restore the rest of the captured parameters ──
-                RestoreCapturedParameters(newHanger, snapshots,
-                    skipName: NominalDiameterParam);
+                RestoreCapturedParameters(newHanger, snapshots, skipName: NominalDiameterParam);
+
+                // Final regen so any geometry that depends on the restored parameters
+                // gets computed. Without this, the user might briefly see a default-sized
+                // hanger before Revit's lazy regen catches up.
+                doc.Regenerate();
 
                 return newHanger.Id;
             }
             catch (Exception ex)
             {
-                errorLog.Add($"id={oldId.IntegerValue}: unexpected exception: {ex.Message}");
+                errorLog.Add($"{idTag}: unexpected exception: {ex.GetType().Name} {ex.Message}");
                 return null;
+            }
+        }
+
+        /// <summary>
+        /// Runs a NewFamilyInstance attempt, regenerates the document so the new
+        /// instance's geometry actually gets computed, and verifies the result is
+        /// a "real" instance (valid object, host bound if requested, non-degenerate
+        /// bounding box). If the verification fails, the bogus instance is deleted
+        /// so we don't leave orphans, and null is returned so the caller can try
+        /// the next strategy.
+        ///
+        /// This is the core of the verify-after-create pattern that fixes the
+        /// "NewFamilyInstance succeeded but no geometry appears" silent-failure
+        /// mode that plagues hosted MEP families like the HydraCAD Adjustable
+        /// Ring Hanger.
+        /// </summary>
+        private FamilyInstance TryStrategy(Document doc, List<string> log,
+            string idTag, string label, Func<FamilyInstance> create, bool requireHost)
+        {
+            FamilyInstance fi;
+            try
+            {
+                fi = create();
+            }
+            catch (Exception ex)
+            {
+                log.Add($"{idTag}: {label} threw {ex.GetType().Name}: {ex.Message}");
+                return null;
+            }
+
+            if (fi == null)
+            {
+                log.Add($"{idTag}: {label} returned null");
+                return null;
+            }
+
+            // Force geometry computation so the verification reads real data
+            try { doc.Regenerate(); }
+            catch (Exception ex)
+            {
+                log.Add($"{idTag}: {label} regenerate after create threw: {ex.Message}");
+                TryDeleteOrphan(doc, fi.Id, log, idTag, label);
+                return null;
+            }
+
+            if (!fi.IsValidObject)
+            {
+                log.Add($"{idTag}: {label} returned but IsValidObject=false");
+                return null; // can't delete an invalid object
+            }
+
+            // Host check — only fail if we EXPECTED a host (placed via host overload)
+            if (requireHost)
+            {
+                Element host = null;
+                try { host = fi.Host; } catch { }
+                if (host == null)
+                {
+                    log.Add($"{idTag}: {label} created id={fi.Id.IntegerValue} but Host is null " +
+                            "(hosted-family geometric binding failed)");
+                    TryDeleteOrphan(doc, fi.Id, log, idTag, label);
+                    return null;
+                }
+            }
+
+            // Bounding box check — null or near-zero size means no visible geometry
+            BoundingBoxXYZ bb = null;
+            try { bb = fi.get_BoundingBox(null); } catch { }
+            if (bb == null)
+            {
+                log.Add($"{idTag}: {label} created id={fi.Id.IntegerValue} but BoundingBox is null " +
+                        "(no geometry computed)");
+                TryDeleteOrphan(doc, fi.Id, log, idTag, label);
+                return null;
+            }
+            double bbDiag = (bb.Max - bb.Min).GetLength();
+            if (bbDiag < 0.01)
+            {
+                log.Add($"{idTag}: {label} created id={fi.Id.IntegerValue} but BB diag is " +
+                        $"{bbDiag:F4} ft (essentially zero — geometry not built)");
+                TryDeleteOrphan(doc, fi.Id, log, idTag, label);
+                return null;
+            }
+
+            log.Add($"{idTag}: {label} OK — id={fi.Id.IntegerValue}, BB diag {bbDiag:F2} ft");
+            return fi;
+        }
+
+        private void TryDeleteOrphan(Document doc, ElementId orphanId,
+            List<string> log, string idTag, string label)
+        {
+            try
+            {
+                doc.Delete(orphanId);
+                log.Add($"{idTag}: {label} orphan id={orphanId.IntegerValue} deleted");
+            }
+            catch (Exception ex)
+            {
+                log.Add($"{idTag}: {label} could not delete orphan id={orphanId.IntegerValue}: " +
+                        ex.Message);
             }
         }
 
