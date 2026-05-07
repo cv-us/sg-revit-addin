@@ -33,6 +33,7 @@ namespace SSG_FP_Suite.Commands.Hangers
     public class MatchHangerSizesCommand : IExternalCommand
     {
         private const string NominalDiameterParam = "Nominal Diameter";
+        private const string RodLengthParam = "Rod Length";
 
         /// <summary>
         /// Pipes whose direction is more vertical than this are excluded
@@ -46,6 +47,37 @@ namespace SSG_FP_Suite.Commands.Hangers
 
         /// <summary>Tolerance when comparing pipe vs hanger diameters (feet).</summary>
         private const double DiameterMatchTolerance = 1.0 / 32.0 / 12.0; // 1/32" — well below any real size step
+
+        /// <summary>
+        /// Standard NPS nominal-to-outside-diameter lookup, both values in
+        /// inches. Used to compute rod-length compensation when resizing a
+        /// hanger: the visible ring is sized to fit the pipe OD, so when
+        /// nominal changes the centerline shifts by half the OD delta. We
+        /// counter that shift with an opposite change to Rod Length so both
+        /// the rod-top (at structure) and the pipe centerline stay put.
+        ///
+        /// Covers all common fire protection sizes (1/2" through 12"). Sizes
+        /// outside this table fall back to nominal=OD which is good enough
+        /// to flag the case but won't compensate accurately.
+        /// </summary>
+        private static readonly (double nominalIn, double odIn)[] NpsTable = new[]
+        {
+            (0.50,  0.840),  //   1/2"
+            (0.75,  1.050),  //   3/4"
+            (1.00,  1.315),  //   1"
+            (1.25,  1.660),  // 1-1/4"
+            (1.50,  1.900),  // 1-1/2"
+            (2.00,  2.375),  //   2"
+            (2.50,  2.875),  // 2-1/2"
+            (3.00,  3.500),  //   3"
+            (3.50,  4.000),  // 3-1/2"
+            (4.00,  4.500),  //   4"
+            (5.00,  5.563),  //   5"
+            (6.00,  6.625),  //   6"
+            (8.00,  8.625),  //   8"
+            (10.00,10.750),  //  10"
+            (12.00,12.750),  //  12"
+        };
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
@@ -91,7 +123,8 @@ namespace SSG_FP_Suite.Commands.Hangers
                 int skippedNoDiameterParam = 0;
                 int skippedReadOnly = 0;
                 var mismatched = new List<(FamilyInstance hanger, double currentDiaFt,
-                    double targetDiaFt, Parameter diaParam)>();
+                    double targetDiaFt, Parameter diaParam,
+                    Parameter rodParam, double oldRodLengthFt)>();
 
                 foreach (var hanger in hangers)
                 {
@@ -120,9 +153,20 @@ namespace SSG_FP_Suite.Commands.Hangers
 
                     double hangerDiaFt = hangerDiaParam.AsDouble();
                     if (Math.Abs(pipeDiaFt - hangerDiaFt) <= DiameterMatchTolerance)
+                    {
                         alreadyMatching++;
+                    }
                     else
-                        mismatched.Add((hanger, hangerDiaFt, pipeDiaFt, hangerDiaParam));
+                    {
+                        // Capture the rod length BEFORE any change so we can
+                        // compute the compensated value during the apply step.
+                        var rodParam = hanger.LookupParameter(RodLengthParam);
+                        double oldRodLengthFt = (rodParam != null && rodParam.HasValue)
+                            ? rodParam.AsDouble() : 0.0;
+
+                        mismatched.Add((hanger, hangerDiaFt, pipeDiaFt,
+                            hangerDiaParam, rodParam, oldRodLengthFt));
+                    }
                 }
 
                 // ── Nothing to do? ──
@@ -141,9 +185,20 @@ namespace SSG_FP_Suite.Commands.Hangers
                 // ── Confirm ──
                 string preview = "";
                 foreach (var m in mismatched.Take(10))
-                    preview += $"\n  ID {m.hanger.Id}: {InchString(m.currentDiaFt)} → {InchString(m.targetDiaFt)}";
+                {
+                    double comp = ComputeRodCompensationFt(m.currentDiaFt, m.targetDiaFt);
+                    string sign = comp > 0 ? "−" : "+";
+                    string rodInfo = (m.rodParam != null && m.oldRodLengthFt > 0)
+                        ? $"  (rod {sign}{InchString(Math.Abs(comp))})"
+                        : "";
+                    preview += $"\n  ID {m.hanger.Id}: " +
+                               $"{InchString(m.currentDiaFt)} → {InchString(m.targetDiaFt)}{rodInfo}";
+                }
                 if (mismatched.Count > 10)
                     preview += $"\n  …and {mismatched.Count - 10} more";
+
+                int withRodComp = mismatched.Count(m => m.rodParam != null && m.oldRodLengthFt > 0);
+                int withoutRodComp = mismatched.Count - withRodComp;
 
                 string body =
                     $"Hangers checked:     {hangers.Count}\n" +
@@ -152,8 +207,15 @@ namespace SSG_FP_Suite.Commands.Hangers
                 if (skippedNoPipe > 0) body += $"\nNo nearby pipe:      {skippedNoPipe}";
                 if (skippedNoDiameterParam > 0) body += $"\nNo Nominal Diameter: {skippedNoDiameterParam}";
                 if (skippedReadOnly > 0) body += $"\nRead-only diameter:  {skippedReadOnly}";
-                body += "\n\nMismatches:" + preview +
-                        "\n\nResize the mismatched hangers to match their pipes?";
+                body += "\n\nResizing changes the ring radius, which would normally shift the " +
+                        "pipe centerline up or down. To keep both the rod top (at structure) " +
+                        "and the pipe centerline in place, the rod length is adjusted by half " +
+                        "the OD difference: shorter on upsize, longer on downsize.";
+                body += "\n\nMismatches:" + preview;
+                if (withoutRodComp > 0)
+                    body += $"\n\nNote: {withoutRodComp} hanger(s) have no \"Rod Length\" " +
+                            "parameter and will be resized without compensation.";
+                body += "\n\nResize the mismatched hangers and adjust rod lengths?";
 
                 var confirm = TaskDialog.Show("Match Hanger Sizes", body,
                     TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.Cancel,
@@ -164,6 +226,8 @@ namespace SSG_FP_Suite.Commands.Hangers
 
                 // ── Apply ──
                 int resized = 0;
+                int rodAdjusted = 0;
+                int rodSkippedNegative = 0;
                 int failed = 0;
                 var failedIds = new List<ElementId>();
 
@@ -174,13 +238,32 @@ namespace SSG_FP_Suite.Commands.Hangers
                     {
                         try
                         {
-                            if (m.diaParam.Set(m.targetDiaFt))
-                                resized++;
-                            else
+                            // Set the new nominal diameter first
+                            if (!m.diaParam.Set(m.targetDiaFt))
                             {
                                 failed++;
                                 failedIds.Add(m.hanger.Id);
+                                continue;
                             }
+                            resized++;
+
+                            // Compensate rod length so the pipe centerline stays put
+                            if (m.rodParam == null || m.rodParam.IsReadOnly || m.oldRodLengthFt <= 0)
+                                continue;
+
+                            double comp = ComputeRodCompensationFt(m.currentDiaFt, m.targetDiaFt);
+                            double newRodLengthFt = m.oldRodLengthFt - comp;
+
+                            // Refuse to drive rod length negative or absurdly small —
+                            // a hanger can't have a rod shorter than the hardware itself
+                            if (newRodLengthFt <= 0.5 / 12.0) // less than 1/2"
+                            {
+                                rodSkippedNegative++;
+                                continue;
+                            }
+
+                            if (m.rodParam.Set(newRodLengthFt))
+                                rodAdjusted++;
                         }
                         catch
                         {
@@ -195,13 +278,17 @@ namespace SSG_FP_Suite.Commands.Hangers
                 if (failedIds.Count > 0)
                     uidoc.Selection.SetElementIds(failedIds);
 
-                string report = $"Resized: {resized}";
+                string report =
+                    $"Resized:        {resized}\n" +
+                    $"Rod adjusted:   {rodAdjusted}";
+                if (rodSkippedNegative > 0)
+                    report += $"\nRod skipped:    {rodSkippedNegative} (compensation would have made rod < 1/2\")";
                 if (failed > 0)
                 {
-                    report += $"\nFailed:  {failed} (highlighted in selection)";
+                    report += $"\nFailed:         {failed} (highlighted in selection)";
                     report += "\n\nFailures usually mean the family's diameter is a type " +
                               "parameter or otherwise locked. Switch the family type manually " +
-                              "or use Sync Hangers to Pipes (which also moves and rotates).";
+                              "or use Sync Hangers to Pipes.";
                 }
                 TaskDialog.Show("Match Hanger Sizes", report);
 
@@ -292,6 +379,46 @@ namespace SSG_FP_Suite.Commands.Hangers
 
             if (bestPipe == null || bestXyDist > MaxHangerToPipeXyDist) return null;
             return (bestPipe, bestPoint, bestCurve);
+        }
+
+        /// <summary>
+        /// Returns the standard NPS outside diameter (in feet) for a given
+        /// nominal diameter (in feet). Snaps to the nearest known nominal
+        /// in NpsTable. Falls back to nominal=OD if the size isn't in the
+        /// table — non-ideal but at least keeps the math going.
+        /// </summary>
+        private double LookupOdFt(double nominalFt)
+        {
+            double nominalIn = nominalFt * 12.0;
+            double bestOd = nominalIn;
+            double bestDiff = double.MaxValue;
+            foreach (var (n, od) in NpsTable)
+            {
+                double diff = Math.Abs(n - nominalIn);
+                if (diff < bestDiff)
+                {
+                    bestDiff = diff;
+                    bestOd = od;
+                }
+            }
+            // Only trust the table if we're within 1/16" of a known nominal
+            if (bestDiff <= 0.0625) return bestOd / 12.0;
+            return nominalFt; // fallback
+        }
+
+        /// <summary>
+        /// Computes the rod-length compensation in feet. Positive value means
+        /// the rod must SHORTEN (upsize: ring grew, centerline would have
+        /// dropped). Negative means the rod must LENGTHEN (downsize).
+        ///
+        /// Formula: half the OD delta — ring radius is half of OD, and that's
+        /// the amount the centerline shifts when rod top is anchored.
+        /// </summary>
+        private double ComputeRodCompensationFt(double oldNominalFt, double newNominalFt)
+        {
+            double oldOd = LookupOdFt(oldNominalFt);
+            double newOd = LookupOdFt(newNominalFt);
+            return (newOd - oldOd) / 2.0;
         }
 
         /// <summary>
