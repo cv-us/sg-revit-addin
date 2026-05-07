@@ -216,7 +216,7 @@ namespace SSG_FP_Suite.Commands.Hangers
                         double comp = ComputeRodCompensationFt(m.currentDiaFt, m.targetDiaFt);
                         string sign = comp > 0 ? "−" : "+";
                         string rodInfo = (m.rodParam != null && m.oldRodLengthFt > 0)
-                            ? $"  (rod {sign}{InchString(Math.Abs(comp))})"
+                            ? $"  (rod ~{sign}{InchString(Math.Abs(comp))})"
                             : "";
                         preview += $"\n  ID {m.hanger.Id}: " +
                                    $"{InchString(m.currentDiaFt)} → {InchString(m.targetDiaFt)}{rodInfo}";
@@ -233,12 +233,13 @@ namespace SSG_FP_Suite.Commands.Hangers
                     if (driftedHangers.Count > 0) body += $"\nDrifted off pipe:    {driftedHangers.Count}";
                     if (skippedNoDiameterParam > 0) body += $"\nNo Nominal Diameter: {skippedNoDiameterParam}";
                     if (skippedReadOnly > 0) body += $"\nRead-only diameter:  {skippedReadOnly}";
-                    body += "\n\nResizing changes the ring radius, which would normally shift " +
-                            "the pipe centerline up or down. To keep both the rod top (at " +
-                            "structure) and the pipe centerline in place, the rod length is " +
-                            "adjusted by half the OD difference: shorter on upsize, longer on " +
-                            "downsize.";
-                    body += "\n\nMismatches:" + preview;
+                    body += "\n\nResizing changes the ring radius, which would shift the pipe " +
+                            "centerline up (downsize) or down (upsize). To keep both the rod " +
+                            "top (at structure) and the pipe centerline in place, the command " +
+                            "measures the actual ring shift after each resize and adjusts rod " +
+                            "length to undo it.";
+                    body += "\n\nMismatches (~rod values are estimates; actual amounts are " +
+                            "measured at apply time):" + preview;
                     if (withoutRodComp > 0)
                         body += $"\n\nNote: {withoutRodComp} hanger(s) have no \"Rod Length\" " +
                                 "parameter and will be resized without compensation.";
@@ -261,24 +262,96 @@ namespace SSG_FP_Suite.Commands.Hangers
                         using (var tx = new Transaction(doc, "Match Hanger Sizes"))
                         {
                             tx.Start();
+
+                            // Phase 1: snapshot each hanger's bottom-of-bounding-box Z
+                            // BEFORE any change. We'll compare against this after the
+                            // resize to figure out how much the ring actually shifted —
+                            // a static OD-based formula misses family-specific offsets.
+                            var bbMinZBefore = new Dictionary<ElementId, double>();
                             foreach (var m in mismatched)
                             {
+                                var bb = m.hanger.get_BoundingBox(null);
+                                if (bb != null)
+                                    bbMinZBefore[m.hanger.Id] = bb.Min.Z;
+                            }
+
+                            // Phase 2: set Nominal Diameter on every mismatched hanger
+                            var resizedSuccessIdx = new List<int>();
+                            for (int i = 0; i < mismatched.Count; i++)
+                            {
+                                var m = mismatched[i];
                                 try
                                 {
-                                    if (!m.diaParam.Set(m.targetDiaFt))
+                                    if (m.diaParam.Set(m.targetDiaFt))
+                                    {
+                                        resized++;
+                                        resizedSuccessIdx.Add(i);
+                                    }
+                                    else
                                     {
                                         failed++;
                                         failedIds.Add(m.hanger.Id);
-                                        continue;
                                     }
-                                    resized++;
+                                }
+                                catch
+                                {
+                                    failed++;
+                                    failedIds.Add(m.hanger.Id);
+                                }
+                            }
 
-                                    if (m.rodParam == null || m.rodParam.IsReadOnly
-                                        || m.oldRodLengthFt <= 0) continue;
+                            // Phase 3: force regen so the geometry — and thus the
+                            // bounding boxes — reflect the new diameters
+                            doc.Regenerate();
 
-                                    double comp = ComputeRodCompensationFt(
-                                        m.currentDiaFt, m.targetDiaFt);
-                                    double newRodLengthFt = m.oldRodLengthFt - comp;
+                            // Phase 4: for each successfully resized hanger, measure
+                            // how far the ring center moved and counter that with rod
+                            // length. The math:
+                            //   bbShift = (BB-min after) − (BB-min before)
+                            //   ringRadiusChange = (newOD − oldOD) / 2     ← geometry
+                            //   centerlineShift = bbShift + ringRadiusChange
+                            //   new_rod_length = old_rod_length + centerlineShift
+                            // (positive centerlineShift = ring went UP relative to
+                            // pipe = lengthen rod to bring it back down)
+                            foreach (int idx in resizedSuccessIdx)
+                            {
+                                var m = mismatched[idx];
+
+                                if (m.rodParam == null || m.rodParam.IsReadOnly
+                                    || m.oldRodLengthFt <= 0)
+                                    continue;
+
+                                try
+                                {
+                                    double newRodLengthFt;
+
+                                    if (bbMinZBefore.TryGetValue(m.hanger.Id, out double bbBefore))
+                                    {
+                                        var bbAfter = m.hanger.get_BoundingBox(null);
+                                        if (bbAfter == null)
+                                        {
+                                            // Couldn't measure after — fall back to OD formula
+                                            double comp = ComputeRodCompensationFt(
+                                                m.currentDiaFt, m.targetDiaFt);
+                                            newRodLengthFt = m.oldRodLengthFt - comp;
+                                        }
+                                        else
+                                        {
+                                            double bbShift = bbAfter.Min.Z - bbBefore;
+                                            double oldOd = LookupOdFt(m.currentDiaFt);
+                                            double newOd = LookupOdFt(m.targetDiaFt);
+                                            double ringRadiusChange = (newOd - oldOd) / 2.0;
+                                            double centerlineShift = bbShift + ringRadiusChange;
+                                            newRodLengthFt = m.oldRodLengthFt + centerlineShift;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        // No before-measurement available — fall back
+                                        double comp = ComputeRodCompensationFt(
+                                            m.currentDiaFt, m.targetDiaFt);
+                                        newRodLengthFt = m.oldRodLengthFt - comp;
+                                    }
 
                                     if (newRodLengthFt <= 0.5 / 12.0)
                                     {
@@ -290,10 +363,10 @@ namespace SSG_FP_Suite.Commands.Hangers
                                 }
                                 catch
                                 {
-                                    failed++;
-                                    failedIds.Add(m.hanger.Id);
+                                    // non-critical — hanger is resized, no compensation
                                 }
                             }
+
                             tx.Commit();
                         }
                     }

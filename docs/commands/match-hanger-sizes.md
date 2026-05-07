@@ -34,27 +34,49 @@ hangers — this command catches the drift in one shot.
 ## Rod-length compensation
 
 Hydratec hanger families anchor the rod top to the structure (the rod
-top stays fixed in space) while the pipe centerline = `rod_top −
-rod_length − ring_radius`. When you change `Nominal Diameter` the ring
-radius changes, which shifts the centerline up or down — the pipe stops
-sitting at the visible center of the ring. To keep BOTH the rod top
-AND the pipe centerline in their original positions, the command
-adjusts rod length by half the OD delta:
+top stays fixed in space). When you change `Nominal Diameter`, the ring
+geometry resizes around the pipe — and depending on how the family is
+built, this typically shifts the ring center up (downsize) or down
+(upsize), so the pipe stops sitting at the visible center of the ring.
 
-```
-new_rod_length = old_rod_length − (new_OD − old_OD) / 2
-```
+To keep BOTH the rod top AND the pipe centerline in their original
+positions, the command:
 
-| Resize | Ring change | Rod change |
-|---|---|---|
-| Upsize (1" → 2") | Ring radius grows by 0.53" | Rod **shortens** by 0.53" |
-| Downsize (2" → 1") | Ring radius shrinks by 0.53" | Rod **lengthens** by 0.53" |
+1. Snapshots the bottom of each hanger's bounding box (Z) **before**
+   any change.
+2. Sets the new `Nominal Diameter` for every mismatched hanger.
+3. Forces a Revit regenerate so the bounding boxes reflect the new
+   geometry.
+4. Reads each hanger's new bounding-box bottom and computes the actual
+   centerline shift:
+   ```
+   bb_shift = bb_min_after − bb_min_before
+   ring_radius_change = (new_OD − old_OD) / 2
+   centerline_shift = bb_shift + ring_radius_change
+   ```
+   (`ring_radius_change` is the predictable geometric component;
+   anything left over is the actual displacement to undo.)
+5. Adjusts rod length by exactly `centerline_shift` to bring the ring
+   center back to the pipe's centerline:
+   ```
+   new_rod_length = old_rod_length + centerline_shift
+   ```
 
-Outside-diameter values are pulled from the standard NPS Schedule 40
-table built into the command (covers 1/2" through 12"). For non-NPS
-content (e.g. CPVC or imperial-pipe families with non-standard ODs)
-the math falls back to nominal=OD which is less accurate but still in
-the right direction.
+The empirical measurement makes the compensation robust against
+family-specific geometry quirks — fixed offsets, strap thicknesses,
+non-standard ring sizing, etc. all wash out automatically because we
+read the actual after-resize bounding box rather than calculating a
+predicted one.
+
+Outside-diameter values for the `ring_radius_change` term come from
+the standard NPS Schedule 40 table built into the command (covers
+1/2" through 12"). For non-NPS content, the math falls back to
+nominal=OD, which biases the compensation slightly but still reduces
+displacement.
+
+The preview shows estimated rod adjustments (e.g. `rod ~−0.17"`); the
+actual amount applied is whatever the empirical measurement reads,
+which may differ a bit if the family has any internal offset.
 
 If a hanger has no `Rod Length` parameter, the resize still happens but
 the centerline will shift visibly. Affected hangers are noted in the
