@@ -87,28 +87,35 @@ adjustment is skipped (the resize still happens) — that hanger's rod
 is too short to lose any more length, and you'll need to look at it
 manually.
 
-## Marking drifted hangers
+## Review markers (resized + drifted hangers)
 
-When a selected hanger has **no near-horizontal pipe within 6"**, the
-command can't determine what pipe it should match. These hangers are
-counted separately as "Drifted off pipe" (often actual drift — the
-hanger was disconnected or the pipe under it was deleted) and offered
-a second prompt:
+After the resize phase, the command offers to place orange review
+markers above two categories of hangers:
 
-> *N hangers have no near-horizontal pipe within 6". Place orange
-> location markers above them so you can find and re-attach them?*
+| Category | Why it needs review |
+|---|---|
+| **Resized** | The empirical rod compensation isn't perfect for every family geometry — even after the auto-adjustment, the centerline may still need a small manual nudge in section view. Marking every resized hanger lets you tab through them and verify. |
+| **Drifted** | Hanger has no near-horizontal pipe within 6", so it likely became disconnected or its host pipe was deleted. Needs to be re-attached to a pipe. |
+
+A single prompt covers both:
+
+> *N hangers need review:*
+> *  • X resized — centerline may need manual adjustment after Revit re-renders*
+> *  • Y drifted — no nearby pipe found, may need re-attaching*
+>
+> *Place orange location markers above them so you can find and fix them in section views?*
 
 If you click **Yes**, the command places an orange DirectShape cylinder
-6" above each drifted hanger's bounding-box center (visible in plan
-and 3D), and selects all the drifted hangers so you can immediately
-work through them.
+6" above each flagged hanger's bounding-box center (visible in plan
+and 3D) and selects all flagged hangers so you can immediately tab
+through them.
 
 The orange markers use a different material and ApplicationDataId from
 the red Hanger Gap Check markers, so they won't interfere with each
 other and can be cleaned up independently. Re-running this command
-with **Yes** on the marker prompt always wipes any prior drift markers
-in the project before placing fresh ones, so they don't accumulate
-across runs.
+with **Yes** on the marker prompt always wipes any prior review
+markers in the project before placing fresh ones, so they don't
+accumulate across runs.
 
 ## Sister command
 

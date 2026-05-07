@@ -207,6 +207,13 @@ namespace SSG_FP_Suite.Commands.Hangers
                 int rodSkippedNegative = 0;
                 int failed = 0;
                 var failedIds = new List<ElementId>();
+                // Successfully resized hangers — captured pre-resize so the marker
+                // placement uses original geometry. The user wants these marked
+                // because the empirical rod compensation isn't yet perfect for
+                // every family design, so the centerline often still needs a
+                // manual nudge after the auto-adjustment.
+                var resizedHangerLocations = new List<XYZ>();
+                var resizedHangerIds = new List<ElementId>();
 
                 if (mismatched.Count > 0)
                 {
@@ -234,18 +241,20 @@ namespace SSG_FP_Suite.Commands.Hangers
                     if (skippedNoDiameterParam > 0) body += $"\nNo Nominal Diameter: {skippedNoDiameterParam}";
                     if (skippedReadOnly > 0) body += $"\nRead-only diameter:  {skippedReadOnly}";
                     body += "\n\nResizing changes the ring radius, which would shift the pipe " +
-                            "centerline up (downsize) or down (upsize). To keep both the rod " +
-                            "top (at structure) and the pipe centerline in place, the command " +
-                            "measures the actual ring shift after each resize and adjusts rod " +
-                            "length to undo it.";
-                    body += "\n\nMismatches (~rod values are estimates; actual amounts are " +
-                            "measured at apply time):" + preview;
+                            "centerline up (downsize) or down (upsize). To minimize this, the " +
+                            "command measures each ring's bounding box before and after the " +
+                            "resize and adjusts rod length to undo the observed shift. " +
+                            "Compensation isn't perfect for every family — see below.";
+                    body += "\n\nMismatches (~rod values are first-pass estimates; the actual " +
+                            "applied value is whatever the post-resize measurement reads):" + preview;
                     if (withoutRodComp > 0)
                         body += $"\n\nNote: {withoutRodComp} hanger(s) have no \"Rod Length\" " +
                                 "parameter and will be resized without compensation.";
+                    body += "\n\nAfter resizing, you'll be asked whether to place orange " +
+                            "review markers above all resized";
                     if (driftedHangers.Count > 0)
-                        body += $"\n\nAfter resizing, you'll be asked whether to mark the " +
-                                $"{driftedHangers.Count} drifted hanger(s).";
+                        body += $" and {driftedHangers.Count} drifted";
+                    body += " hangers so you can find and adjust them in section views.";
                     body += "\n\nResize the mismatched hangers and adjust rod lengths?";
 
                     var confirm = TaskDialog.Show("Match Hanger Sizes", body,
@@ -264,15 +273,20 @@ namespace SSG_FP_Suite.Commands.Hangers
                             tx.Start();
 
                             // Phase 1: snapshot each hanger's bottom-of-bounding-box Z
-                            // BEFORE any change. We'll compare against this after the
-                            // resize to figure out how much the ring actually shifted —
-                            // a static OD-based formula misses family-specific offsets.
+                            // AND its visual location BEFORE any change. The Z is for
+                            // the empirical rod compensation; the visual location is
+                            // for marker placement after the resize.
                             var bbMinZBefore = new Dictionary<ElementId, double>();
+                            var preResizeLocations = new Dictionary<ElementId, XYZ>();
                             foreach (var m in mismatched)
                             {
                                 var bb = m.hanger.get_BoundingBox(null);
                                 if (bb != null)
                                     bbMinZBefore[m.hanger.Id] = bb.Min.Z;
+
+                                var loc = GetVisualLocation(m.hanger);
+                                if (loc != null)
+                                    preResizeLocations[m.hanger.Id] = loc;
                             }
 
                             // Phase 2: set Nominal Diameter on every mismatched hanger
@@ -286,6 +300,10 @@ namespace SSG_FP_Suite.Commands.Hangers
                                     {
                                         resized++;
                                         resizedSuccessIdx.Add(i);
+                                        resizedHangerIds.Add(m.hanger.Id);
+                                        if (preResizeLocations.TryGetValue(
+                                                m.hanger.Id, out var loc))
+                                            resizedHangerLocations.Add(loc);
                                     }
                                     else
                                     {
@@ -372,55 +390,64 @@ namespace SSG_FP_Suite.Commands.Hangers
                     }
                 }
 
-                // ── Mark-drifted phase ──
+                // ── Mark-for-review phase ──
+                // Combines both "drifted" hangers (no nearby pipe) and successfully
+                // resized hangers (which may need centerline review since the rod
+                // compensation isn't yet perfect for every family). Single prompt,
+                // single transaction, single set of orange markers.
                 int markersPlaced = 0;
                 int markersCleared = 0;
                 bool markerPromptShown = false;
 
-                if (driftedHangers.Count > 0)
+                int reviewCount = resizedHangerLocations.Count + driftedHangers.Count;
+                if (reviewCount > 0)
                 {
-                    string markBody;
-                    if (mismatched.Count == 0)
-                    {
-                        // No resize was offered; this is the only action available
-                        markBody =
-                            $"Hangers checked:     {hangers.Count}\n" +
-                            $"Already matching:    {alreadyMatching}\n" +
-                            $"Drifted off pipe:    {driftedHangers.Count}\n\n" +
-                            $"{driftedHangers.Count} hanger" +
-                            (driftedHangers.Count != 1 ? "s have" : " has") +
-                            " no near-horizontal pipe within 6\" — they may have drifted " +
-                            "off their host pipes.\n\n" +
-                            "Place orange location markers above them so you can find and " +
-                            "re-attach them to a pipe?";
-                    }
-                    else
-                    {
-                        markBody =
-                            $"{driftedHangers.Count} hanger" +
-                            (driftedHangers.Count != 1 ? "s have" : " has") +
-                            " no near-horizontal pipe within 6\" and could not be matched. " +
-                            "They may have drifted off their host pipes.\n\n" +
-                            "Place orange location markers above them so you can find and " +
-                            "re-attach them?";
-                    }
+                    var lines = new List<string>();
+                    if (resizedHangerLocations.Count > 0)
+                        lines.Add($"  • {resizedHangerLocations.Count} resized — centerline " +
+                                  "may need manual adjustment after Revit re-renders");
+                    if (driftedHangers.Count > 0)
+                        lines.Add($"  • {driftedHangers.Count} drifted — no nearby pipe " +
+                                  "found, may need re-attaching");
+
+                    string markBody =
+                        $"{reviewCount} hanger{(reviewCount != 1 ? "s" : "")} " +
+                        $"need{(reviewCount == 1 ? "s" : "")} review:\n\n" +
+                        string.Join("\n", lines) + "\n\n" +
+                        "Place orange location markers above them so you can find and fix " +
+                        "them in section views?";
 
                     markerPromptShown = true;
                     var markConfirm = TaskDialog.Show("Match Hanger Sizes", markBody,
                         TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No,
-                        TaskDialogResult.No);
+                        TaskDialogResult.Yes);
 
                     if (markConfirm == TaskDialogResult.Yes)
                     {
-                        using (var tx = new Transaction(doc, "Mark Drifted Hangers"))
+                        using (var tx = new Transaction(doc, "Mark Hangers for Review"))
                         {
                             tx.Start();
 
-                            // Always wipe prior drift markers when placing fresh ones —
-                            // keeps the project from accumulating stale markers across runs
+                            // Wipe prior review markers before placing fresh ones so
+                            // re-runs don't leave stale clutter in the project
                             markersCleared = ClearPreviousDriftMarkers(doc);
 
                             ElementId materialId = GetOrCreateDriftMarkerMaterial(doc);
+
+                            // Resized hangers
+                            foreach (var location in resizedHangerLocations)
+                            {
+                                try
+                                {
+                                    XYZ markerBase = new XYZ(
+                                        location.X, location.Y, location.Z + DriftMarkerZOffset);
+                                    CreateDriftMarker(doc, markerBase, materialId);
+                                    markersPlaced++;
+                                }
+                                catch { /* non-critical */ }
+                            }
+
+                            // Drifted hangers
                             foreach (var (hanger, location) in driftedHangers)
                             {
                                 try
@@ -435,9 +462,13 @@ namespace SSG_FP_Suite.Commands.Hangers
                             tx.Commit();
                         }
 
-                        // Highlight the drifted hangers in the selection so the user can
-                        // immediately tell which ones to look at
-                        uidoc.Selection.SetElementIds(driftedHangers.Select(d => d.hanger.Id).ToList());
+                        // Highlight all review-flagged hangers in the selection so the
+                        // user can quickly tab through them
+                        var selectionIds = new List<ElementId>(resizedHangerIds);
+                        foreach (var (h, _) in driftedHangers)
+                            selectionIds.Add(h.Id);
+                        if (selectionIds.Count > 0)
+                            uidoc.Selection.SetElementIds(selectionIds);
                     }
                 }
 
@@ -467,15 +498,18 @@ namespace SSG_FP_Suite.Commands.Hangers
                     if (markersPlaced > 0)
                     {
                         if (report.Length > 0) report += "\n\n";
-                        report += $"Drift markers placed: {markersPlaced}";
+                        report += $"Review markers placed: {markersPlaced}";
+                        if (resizedHangerLocations.Count > 0 && driftedHangers.Count > 0)
+                            report += $" ({resizedHangerLocations.Count} resized + " +
+                                      $"{driftedHangers.Count} drifted)";
                         if (markersCleared > 0)
-                            report += $"  ({markersCleared} previous markers cleared)";
-                        report += "\n(Drifted hangers are highlighted in selection.)";
+                            report += $"\n({markersCleared} previous review markers cleared)";
+                        report += "\n(Flagged hangers are highlighted in selection.)";
                     }
                     else
                     {
                         if (report.Length > 0) report += "\n\n";
-                        report += $"Drifted hangers: {driftedHangers.Count} (markers not placed)";
+                        report += $"Hangers needing review: {reviewCount} (markers not placed)";
                     }
                 }
 
