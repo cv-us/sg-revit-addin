@@ -61,11 +61,11 @@ namespace SSG_FP_Suite.Commands.ModelCheck
         /// <summary>Vertical offset above the hanger location for the marker base, in feet.</summary>
         private const double MarkerZOffset = 0.5; // 6 inches
 
-        /// <summary>Marker cylinder radius, in feet (2 inches → 4-inch diameter).</summary>
-        private const double MarkerRadius = 2.0 / 12.0;
+        /// <summary>Marker cylinder radius, in feet (4 inches → 8-inch diameter).</summary>
+        private const double MarkerRadius = 4.0 / 12.0;
 
-        /// <summary>Marker cylinder height, in feet (4 inches).</summary>
-        private const double MarkerHeight = 4.0 / 12.0;
+        /// <summary>Marker cylinder height, in feet (8 inches).</summary>
+        private const double MarkerHeight = 8.0 / 12.0;
 
         /// <summary>
         /// Pipes whose direction is more vertical than this are excluded from
@@ -74,7 +74,7 @@ namespace SSG_FP_Suite.Commands.ModelCheck
         /// </summary>
         private const double MaxPipeSlopeFromHorizontal = 0.5;
 
-        /// <summary>Project material name for the red marker fill.</summary>
+        /// <summary>Project material name for the blue marker fill.</summary>
         private const string MarkerMaterialName = "SSG_HangerGapMarker";
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
@@ -215,7 +215,7 @@ namespace SSG_FP_Suite.Commands.ModelCheck
                         // Clear any previous markers (keeps re-runs clean)
                         ClearPreviousMarkers(doc);
 
-                        // Ensure the red marker material exists (idempotent — reuses
+                        // Ensure the blue marker material exists (idempotent — reuses
                         // existing one if present, creates it once otherwise)
                         markerMaterialId = GetOrCreateMarkerMaterial(doc);
 
@@ -291,7 +291,7 @@ namespace SSG_FP_Suite.Commands.ModelCheck
                         report += $"\nSkipped (no rod length):  {skippedNoRod}";
 
                     if (markersPlaced > 0)
-                        report += $"\n\nMarkers placed: {markersPlaced} (small red cylinders above hangers)";
+                        report += $"\n\nMarkers placed: {markersPlaced} (blue cylinders above hangers)";
 
                     if (worstOffenders.Count > 0)
                     {
@@ -487,7 +487,7 @@ namespace SSG_FP_Suite.Commands.ModelCheck
         /// Creates a DirectShape cylinder marker at the given base point.
         /// The cylinder is vertical, centered horizontally on the point,
         /// and extends MarkerHeight upward. Geometry is built with the
-        /// red marker material so it shows red in shaded plan and 3D.
+        /// blue marker material so it shows blue in shaded plan and 3D.
         /// Tagged with our ApplicationId/ApplicationDataId so the cleanup
         /// query can find it later. Must be called inside a transaction.
         /// </summary>
@@ -513,33 +513,46 @@ namespace SSG_FP_Suite.Commands.ModelCheck
         }
 
         /// <summary>
-        /// Returns the ElementId of a project-wide material named MarkerMaterialName,
-        /// creating it (red) if it doesn't already exist. Idempotent across runs.
+        /// Returns the ElementId of a project-wide material named MarkerMaterialName.
+        /// Creates it bright blue if missing; refreshes the color on an existing one
+        /// so projects from older versions of this command (where the material was
+        /// red) get re-colored to match the current scheme. Idempotent across runs.
         /// Must be called inside a transaction.
         /// </summary>
         private ElementId GetOrCreateMarkerMaterial(Document doc)
         {
-            // Look for an existing material with our well-known name
+            var blue = new Color(40, 130, 255); // bright sky-blue, very visible
+
             var existing = new FilteredElementCollector(doc)
                 .OfClass(typeof(Material))
                 .Cast<Material>()
                 .FirstOrDefault(m => string.Equals(m.Name, MarkerMaterialName,
                     StringComparison.OrdinalIgnoreCase));
 
-            if (existing != null) return existing.Id;
+            if (existing != null)
+            {
+                ApplyMarkerMaterialProperties(existing, blue);
+                return existing.Id;
+            }
 
-            // Create a fresh red material
             ElementId newId = Material.Create(doc, MarkerMaterialName);
             if (doc.GetElement(newId) is Material newMat)
-            {
-                var red = new Color(220, 30, 30); // bright red, easy to spot
-                newMat.Color = red;
-                newMat.SurfaceForegroundPatternColor = red;
-                newMat.CutForegroundPatternColor = red;
-                newMat.Transparency = 0;
-                newMat.Shininess = 0;
-            }
+                ApplyMarkerMaterialProperties(newMat, blue);
             return newId;
+        }
+
+        /// <summary>
+        /// Sets the color, pattern colors, transparency and shininess on the
+        /// marker material. Used both when creating the material and when
+        /// refreshing an existing one (e.g. recoloring red → blue across runs).
+        /// </summary>
+        private void ApplyMarkerMaterialProperties(Material mat, Color color)
+        {
+            mat.Color = color;
+            mat.SurfaceForegroundPatternColor = color;
+            mat.CutForegroundPatternColor = color;
+            mat.Transparency = 0;
+            mat.Shininess = 0;
         }
 
         /// <summary>

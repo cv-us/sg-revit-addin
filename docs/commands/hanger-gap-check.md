@@ -67,10 +67,15 @@ dialog already filters available codes from the selection. If a hanger has no
 
 ## Marker geometry
 
-The command places a Revit `DirectShape` at each flagged hanger — a small
-vertical cylinder (4" diameter × 4" tall, Generic Model category) created
-directly in the project, no family file required. It's visible in plan and
-3D views automatically.
+The command places a Revit `DirectShape` at each flagged hanger — a vertical
+cylinder (8" diameter × 8" tall, Generic Model category, bright sky-blue
+material) created directly in the project. No family file required, and
+visible in both plan and 3D views automatically.
+
+The first run creates a project-wide material named `SSG_HangerGapMarker`;
+subsequent runs reuse it (and refresh its color, so projects upgraded from
+older versions of this command will recolor any leftover red markers to
+blue on the next run).
 
 Markers are stamped with `ApplicationId = "SSG_FP_Suite"` and
 `ApplicationDataId = "HangerGapMarker"` so the command can find and delete
