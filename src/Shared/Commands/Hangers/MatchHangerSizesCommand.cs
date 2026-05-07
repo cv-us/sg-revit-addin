@@ -48,6 +48,16 @@ namespace SSG_FP_Suite.Commands.Hangers
         /// <summary>Tolerance when comparing pipe vs hanger diameters (feet).</summary>
         private const double DiameterMatchTolerance = 1.0 / 32.0 / 12.0; // 1/32" — well below any real size step
 
+        // ── Drift-marker constants (DirectShape cylinder placed above hangers
+        // that have no nearby pipe, so the user can find and re-attach them) ──
+
+        private const string DriftMarkerAppId = "SSG_FP_Suite";
+        private const string DriftMarkerAppDataId = "MatchSizesDriftedMarker";
+        private const string DriftMarkerMaterialName = "SSG_DriftedHangerMarker";
+        private const double DriftMarkerRadius = 2.0 / 12.0;   // 2"
+        private const double DriftMarkerHeight = 4.0 / 12.0;   // 4"
+        private const double DriftMarkerZOffset = 0.5;         // 6" above BB center
+
         /// <summary>
         /// Standard NPS nominal-to-outside-diameter lookup, both values in
         /// inches. Used to compute rod-length compensation when resizing a
@@ -119,24 +129,33 @@ namespace SSG_FP_Suite.Commands.Hangers
 
                 // ── Analyze each hanger ──
                 int alreadyMatching = 0;
-                int skippedNoPipe = 0;
                 int skippedNoDiameterParam = 0;
                 int skippedReadOnly = 0;
                 var mismatched = new List<(FamilyInstance hanger, double currentDiaFt,
                     double targetDiaFt, Parameter diaParam,
                     Parameter rodParam, double oldRodLengthFt)>();
+                // Hangers with no nearby pipe — capture location so we can mark them later
+                var driftedHangers = new List<(FamilyInstance hanger, XYZ location)>();
 
                 foreach (var hanger in hangers)
                 {
                     XYZ hangerPt = GetVisualLocation(hanger);
-                    if (hangerPt == null) { skippedNoPipe++; continue; }
+                    if (hangerPt == null) continue; // can't mark something with no geometry
 
                     var nearest = FindClosestPipe(hangerPt, pipeCurves);
-                    if (nearest == null) { skippedNoPipe++; continue; }
+                    if (nearest == null)
+                    {
+                        driftedHangers.Add((hanger, hangerPt));
+                        continue;
+                    }
 
                     var pipeDiaParam = nearest.Value.pipe.get_Parameter(
                         BuiltInParameter.RBS_PIPE_DIAMETER_PARAM);
-                    if (pipeDiaParam == null || !pipeDiaParam.HasValue) { skippedNoPipe++; continue; }
+                    if (pipeDiaParam == null || !pipeDiaParam.HasValue)
+                    {
+                        // Pipe has no diameter parameter — rare data oddity, skip silently
+                        continue;
+                    }
                     double pipeDiaFt = pipeDiaParam.AsDouble();
 
                     var hangerDiaParam = hanger.LookupParameter(NominalDiameterParam);
@@ -170,122 +189,225 @@ namespace SSG_FP_Suite.Commands.Hangers
                 }
 
                 // ── Nothing to do? ──
-                if (mismatched.Count == 0)
+                if (mismatched.Count == 0 && driftedHangers.Count == 0)
                 {
                     string msg =
-                        $"All {hangers.Count} selected hangers already match their pipe diameters.\n";
-                    if (alreadyMatching > 0) msg += $"\nMatching: {alreadyMatching}";
-                    if (skippedNoPipe > 0) msg += $"\nNo nearby pipe: {skippedNoPipe}";
+                        $"All {hangers.Count} selected hangers already match their pipe diameters.";
+                    if (alreadyMatching > 0) msg += $"\n\nMatching: {alreadyMatching}";
                     if (skippedNoDiameterParam > 0) msg += $"\nNo \"Nominal Diameter\" parameter: {skippedNoDiameterParam}";
                     if (skippedReadOnly > 0) msg += $"\nRead-only diameter: {skippedReadOnly}";
                     TaskDialog.Show("Match Hanger Sizes", msg);
                     return Result.Succeeded;
                 }
 
-                // ── Confirm ──
-                string preview = "";
-                foreach (var m in mismatched.Take(10))
-                {
-                    double comp = ComputeRodCompensationFt(m.currentDiaFt, m.targetDiaFt);
-                    string sign = comp > 0 ? "−" : "+";
-                    string rodInfo = (m.rodParam != null && m.oldRodLengthFt > 0)
-                        ? $"  (rod {sign}{InchString(Math.Abs(comp))})"
-                        : "";
-                    preview += $"\n  ID {m.hanger.Id}: " +
-                               $"{InchString(m.currentDiaFt)} → {InchString(m.targetDiaFt)}{rodInfo}";
-                }
-                if (mismatched.Count > 10)
-                    preview += $"\n  …and {mismatched.Count - 10} more";
-
-                int withRodComp = mismatched.Count(m => m.rodParam != null && m.oldRodLengthFt > 0);
-                int withoutRodComp = mismatched.Count - withRodComp;
-
-                string body =
-                    $"Hangers checked:     {hangers.Count}\n" +
-                    $"Already matching:    {alreadyMatching}\n" +
-                    $"Mismatched:          {mismatched.Count}";
-                if (skippedNoPipe > 0) body += $"\nNo nearby pipe:      {skippedNoPipe}";
-                if (skippedNoDiameterParam > 0) body += $"\nNo Nominal Diameter: {skippedNoDiameterParam}";
-                if (skippedReadOnly > 0) body += $"\nRead-only diameter:  {skippedReadOnly}";
-                body += "\n\nResizing changes the ring radius, which would normally shift the " +
-                        "pipe centerline up or down. To keep both the rod top (at structure) " +
-                        "and the pipe centerline in place, the rod length is adjusted by half " +
-                        "the OD difference: shorter on upsize, longer on downsize.";
-                body += "\n\nMismatches:" + preview;
-                if (withoutRodComp > 0)
-                    body += $"\n\nNote: {withoutRodComp} hanger(s) have no \"Rod Length\" " +
-                            "parameter and will be resized without compensation.";
-                body += "\n\nResize the mismatched hangers and adjust rod lengths?";
-
-                var confirm = TaskDialog.Show("Match Hanger Sizes", body,
-                    TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.Cancel,
-                    TaskDialogResult.Yes);
-
-                if (confirm != TaskDialogResult.Yes)
-                    return Result.Cancelled;
-
-                // ── Apply ──
+                // ── Resize phase ──
+                bool didResize = false;
                 int resized = 0;
                 int rodAdjusted = 0;
                 int rodSkippedNegative = 0;
                 int failed = 0;
                 var failedIds = new List<ElementId>();
 
-                using (var tx = new Transaction(doc, "Match Hanger Sizes"))
+                if (mismatched.Count > 0)
                 {
-                    tx.Start();
-                    foreach (var m in mismatched)
+                    string preview = "";
+                    foreach (var m in mismatched.Take(10))
                     {
-                        try
+                        double comp = ComputeRodCompensationFt(m.currentDiaFt, m.targetDiaFt);
+                        string sign = comp > 0 ? "−" : "+";
+                        string rodInfo = (m.rodParam != null && m.oldRodLengthFt > 0)
+                            ? $"  (rod {sign}{InchString(Math.Abs(comp))})"
+                            : "";
+                        preview += $"\n  ID {m.hanger.Id}: " +
+                                   $"{InchString(m.currentDiaFt)} → {InchString(m.targetDiaFt)}{rodInfo}";
+                    }
+                    if (mismatched.Count > 10)
+                        preview += $"\n  …and {mismatched.Count - 10} more";
+
+                    int withoutRodComp = mismatched.Count(m => m.rodParam == null || m.oldRodLengthFt <= 0);
+
+                    string body =
+                        $"Hangers checked:     {hangers.Count}\n" +
+                        $"Already matching:    {alreadyMatching}\n" +
+                        $"Mismatched:          {mismatched.Count}";
+                    if (driftedHangers.Count > 0) body += $"\nDrifted off pipe:    {driftedHangers.Count}";
+                    if (skippedNoDiameterParam > 0) body += $"\nNo Nominal Diameter: {skippedNoDiameterParam}";
+                    if (skippedReadOnly > 0) body += $"\nRead-only diameter:  {skippedReadOnly}";
+                    body += "\n\nResizing changes the ring radius, which would normally shift " +
+                            "the pipe centerline up or down. To keep both the rod top (at " +
+                            "structure) and the pipe centerline in place, the rod length is " +
+                            "adjusted by half the OD difference: shorter on upsize, longer on " +
+                            "downsize.";
+                    body += "\n\nMismatches:" + preview;
+                    if (withoutRodComp > 0)
+                        body += $"\n\nNote: {withoutRodComp} hanger(s) have no \"Rod Length\" " +
+                                "parameter and will be resized without compensation.";
+                    if (driftedHangers.Count > 0)
+                        body += $"\n\nAfter resizing, you'll be asked whether to mark the " +
+                                $"{driftedHangers.Count} drifted hanger(s).";
+                    body += "\n\nResize the mismatched hangers and adjust rod lengths?";
+
+                    var confirm = TaskDialog.Show("Match Hanger Sizes", body,
+                        TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No
+                          | TaskDialogCommonButtons.Cancel,
+                        TaskDialogResult.Yes);
+
+                    if (confirm == TaskDialogResult.Cancel)
+                        return Result.Cancelled;
+
+                    if (confirm == TaskDialogResult.Yes)
+                    {
+                        didResize = true;
+                        using (var tx = new Transaction(doc, "Match Hanger Sizes"))
                         {
-                            // Set the new nominal diameter first
-                            if (!m.diaParam.Set(m.targetDiaFt))
+                            tx.Start();
+                            foreach (var m in mismatched)
                             {
-                                failed++;
-                                failedIds.Add(m.hanger.Id);
-                                continue;
+                                try
+                                {
+                                    if (!m.diaParam.Set(m.targetDiaFt))
+                                    {
+                                        failed++;
+                                        failedIds.Add(m.hanger.Id);
+                                        continue;
+                                    }
+                                    resized++;
+
+                                    if (m.rodParam == null || m.rodParam.IsReadOnly
+                                        || m.oldRodLengthFt <= 0) continue;
+
+                                    double comp = ComputeRodCompensationFt(
+                                        m.currentDiaFt, m.targetDiaFt);
+                                    double newRodLengthFt = m.oldRodLengthFt - comp;
+
+                                    if (newRodLengthFt <= 0.5 / 12.0)
+                                    {
+                                        rodSkippedNegative++;
+                                        continue;
+                                    }
+                                    if (m.rodParam.Set(newRodLengthFt))
+                                        rodAdjusted++;
+                                }
+                                catch
+                                {
+                                    failed++;
+                                    failedIds.Add(m.hanger.Id);
+                                }
                             }
-                            resized++;
-
-                            // Compensate rod length so the pipe centerline stays put
-                            if (m.rodParam == null || m.rodParam.IsReadOnly || m.oldRodLengthFt <= 0)
-                                continue;
-
-                            double comp = ComputeRodCompensationFt(m.currentDiaFt, m.targetDiaFt);
-                            double newRodLengthFt = m.oldRodLengthFt - comp;
-
-                            // Refuse to drive rod length negative or absurdly small —
-                            // a hanger can't have a rod shorter than the hardware itself
-                            if (newRodLengthFt <= 0.5 / 12.0) // less than 1/2"
-                            {
-                                rodSkippedNegative++;
-                                continue;
-                            }
-
-                            if (m.rodParam.Set(newRodLengthFt))
-                                rodAdjusted++;
-                        }
-                        catch
-                        {
-                            failed++;
-                            failedIds.Add(m.hanger.Id);
+                            tx.Commit();
                         }
                     }
-                    tx.Commit();
                 }
 
-                // Highlight failures so the user can investigate
+                // ── Mark-drifted phase ──
+                int markersPlaced = 0;
+                int markersCleared = 0;
+                bool markerPromptShown = false;
+
+                if (driftedHangers.Count > 0)
+                {
+                    string markBody;
+                    if (mismatched.Count == 0)
+                    {
+                        // No resize was offered; this is the only action available
+                        markBody =
+                            $"Hangers checked:     {hangers.Count}\n" +
+                            $"Already matching:    {alreadyMatching}\n" +
+                            $"Drifted off pipe:    {driftedHangers.Count}\n\n" +
+                            $"{driftedHangers.Count} hanger" +
+                            (driftedHangers.Count != 1 ? "s have" : " has") +
+                            " no near-horizontal pipe within 6\" — they may have drifted " +
+                            "off their host pipes.\n\n" +
+                            "Place orange location markers above them so you can find and " +
+                            "re-attach them to a pipe?";
+                    }
+                    else
+                    {
+                        markBody =
+                            $"{driftedHangers.Count} hanger" +
+                            (driftedHangers.Count != 1 ? "s have" : " has") +
+                            " no near-horizontal pipe within 6\" and could not be matched. " +
+                            "They may have drifted off their host pipes.\n\n" +
+                            "Place orange location markers above them so you can find and " +
+                            "re-attach them?";
+                    }
+
+                    markerPromptShown = true;
+                    var markConfirm = TaskDialog.Show("Match Hanger Sizes", markBody,
+                        TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No,
+                        TaskDialogResult.No);
+
+                    if (markConfirm == TaskDialogResult.Yes)
+                    {
+                        using (var tx = new Transaction(doc, "Mark Drifted Hangers"))
+                        {
+                            tx.Start();
+
+                            // Always wipe prior drift markers when placing fresh ones —
+                            // keeps the project from accumulating stale markers across runs
+                            markersCleared = ClearPreviousDriftMarkers(doc);
+
+                            ElementId materialId = GetOrCreateDriftMarkerMaterial(doc);
+                            foreach (var (hanger, location) in driftedHangers)
+                            {
+                                try
+                                {
+                                    XYZ markerBase = new XYZ(
+                                        location.X, location.Y, location.Z + DriftMarkerZOffset);
+                                    CreateDriftMarker(doc, markerBase, materialId);
+                                    markersPlaced++;
+                                }
+                                catch { /* non-critical */ }
+                            }
+                            tx.Commit();
+                        }
+
+                        // Highlight the drifted hangers in the selection so the user can
+                        // immediately tell which ones to look at
+                        uidoc.Selection.SetElementIds(driftedHangers.Select(d => d.hanger.Id).ToList());
+                    }
+                }
+
+                // Highlight resize failures (overrides drift selection if both exist —
+                // failures are more urgent)
                 if (failedIds.Count > 0)
                     uidoc.Selection.SetElementIds(failedIds);
 
-                string report =
-                    $"Resized:        {resized}\n" +
-                    $"Rod adjusted:   {rodAdjusted}";
-                if (rodSkippedNegative > 0)
-                    report += $"\nRod skipped:    {rodSkippedNegative} (compensation would have made rod < 1/2\")";
+                // ── Final report ──
+                string report = "";
+                if (didResize)
+                {
+                    report += $"Resized:        {resized}\n" +
+                              $"Rod adjusted:   {rodAdjusted}";
+                    if (rodSkippedNegative > 0)
+                        report += $"\nRod skipped:    {rodSkippedNegative} (compensation would have made rod < 1/2\")";
+                    if (failed > 0)
+                        report += $"\nFailed:         {failed} (highlighted in selection)";
+                }
+                else if (mismatched.Count > 0)
+                {
+                    report += $"Resize skipped ({mismatched.Count} mismatches not addressed).";
+                }
+
+                if (markerPromptShown)
+                {
+                    if (markersPlaced > 0)
+                    {
+                        if (report.Length > 0) report += "\n\n";
+                        report += $"Drift markers placed: {markersPlaced}";
+                        if (markersCleared > 0)
+                            report += $"  ({markersCleared} previous markers cleared)";
+                        report += "\n(Drifted hangers are highlighted in selection.)";
+                    }
+                    else
+                    {
+                        if (report.Length > 0) report += "\n\n";
+                        report += $"Drifted hangers: {driftedHangers.Count} (markers not placed)";
+                    }
+                }
+
                 if (failed > 0)
                 {
-                    report += $"\nFailed:         {failed} (highlighted in selection)";
                     report += "\n\nFailures usually mean the family's diameter is a type " +
                               "parameter or otherwise locked. Switch the family type manually " +
                               "or use Sync Hangers to Pipes.";
@@ -436,6 +558,86 @@ namespace SSG_FP_Suite.Commands.Hangers
             if (Math.Abs(frac - 0.5)  < 0.05) return whole > 0 ? $"{whole}-1/2\"" : "1/2\"";
             if (Math.Abs(frac - 0.75) < 0.05) return whole > 0 ? $"{whole}-3/4\"" : "3/4\"";
             return $"{inches:F2}\"";
+        }
+
+        // ── Drift-marker helpers (DirectShape cylinder, orange) ──
+
+        /// <summary>
+        /// Creates an orange DirectShape cylinder above a drifted hanger so the
+        /// user can find and re-attach it. Tagged with our ApplicationId /
+        /// ApplicationDataId so it can be cleaned up on subsequent runs without
+        /// touching unrelated DirectShapes (including Hanger Gap Check markers,
+        /// which use a different ApplicationDataId).
+        /// Must be called inside a transaction.
+        /// </summary>
+        private void CreateDriftMarker(Document doc, XYZ basePoint, ElementId materialId)
+        {
+            var arc1 = Arc.Create(basePoint, DriftMarkerRadius, 0, Math.PI,
+                XYZ.BasisX, XYZ.BasisY);
+            var arc2 = Arc.Create(basePoint, DriftMarkerRadius, Math.PI, 2 * Math.PI,
+                XYZ.BasisX, XYZ.BasisY);
+            var profile = CurveLoop.Create(new List<Curve> { arc1, arc2 });
+
+            var solidOptions = new SolidOptions(materialId, ElementId.InvalidElementId);
+            Solid cylinder = GeometryCreationUtilities.CreateExtrusionGeometry(
+                new List<CurveLoop> { profile }, XYZ.BasisZ, DriftMarkerHeight, solidOptions);
+
+            var ds = DirectShape.CreateElement(doc,
+                new ElementId(BuiltInCategory.OST_GenericModel));
+            ds.ApplicationId = DriftMarkerAppId;
+            ds.ApplicationDataId = DriftMarkerAppDataId;
+            ds.SetShape(new GeometryObject[] { cylinder });
+        }
+
+        /// <summary>
+        /// Returns the ElementId of a project-wide material named
+        /// DriftMarkerMaterialName, creating it (orange) if it doesn't already
+        /// exist. Idempotent across runs. Must be called inside a transaction.
+        /// </summary>
+        private ElementId GetOrCreateDriftMarkerMaterial(Document doc)
+        {
+            var existing = new FilteredElementCollector(doc)
+                .OfClass(typeof(Material))
+                .Cast<Material>()
+                .FirstOrDefault(m => string.Equals(m.Name, DriftMarkerMaterialName,
+                    StringComparison.OrdinalIgnoreCase));
+
+            if (existing != null) return existing.Id;
+
+            ElementId newId = Material.Create(doc, DriftMarkerMaterialName);
+            if (doc.GetElement(newId) is Material newMat)
+            {
+                var orange = new Color(255, 140, 0); // bright orange
+                newMat.Color = orange;
+                newMat.SurfaceForegroundPatternColor = orange;
+                newMat.CutForegroundPatternColor = orange;
+                newMat.Transparency = 0;
+                newMat.Shininess = 0;
+            }
+            return newId;
+        }
+
+        /// <summary>
+        /// Deletes all existing drift-marker DirectShapes from the project.
+        /// Filters by both ApplicationId and ApplicationDataId so it only
+        /// touches markers placed by THIS command — Hanger Gap Check markers
+        /// (different ApplicationDataId) are untouched, as are any other
+        /// addins' DirectShapes. Returns count deleted.
+        /// Must be called inside a transaction.
+        /// </summary>
+        private int ClearPreviousDriftMarkers(Document doc)
+        {
+            var ids = new FilteredElementCollector(doc)
+                .OfClass(typeof(DirectShape))
+                .Cast<DirectShape>()
+                .Where(ds => ds.ApplicationId == DriftMarkerAppId
+                          && ds.ApplicationDataId == DriftMarkerAppDataId)
+                .Select(ds => ds.Id)
+                .ToList();
+
+            if (ids.Count > 0)
+                doc.Delete(ids);
+            return ids.Count;
         }
     }
 }

@@ -65,6 +65,29 @@ adjustment is skipped (the resize still happens) — that hanger's rod
 is too short to lose any more length, and you'll need to look at it
 manually.
 
+## Marking drifted hangers
+
+When a selected hanger has **no near-horizontal pipe within 6"**, the
+command can't determine what pipe it should match. These hangers are
+counted separately as "Drifted off pipe" (often actual drift — the
+hanger was disconnected or the pipe under it was deleted) and offered
+a second prompt:
+
+> *N hangers have no near-horizontal pipe within 6". Place orange
+> location markers above them so you can find and re-attach them?*
+
+If you click **Yes**, the command places an orange DirectShape cylinder
+6" above each drifted hanger's bounding-box center (visible in plan
+and 3D), and selects all the drifted hangers so you can immediately
+work through them.
+
+The orange markers use a different material and ApplicationDataId from
+the red Hanger Gap Check markers, so they won't interfere with each
+other and can be cleaned up independently. Re-running this command
+with **Yes** on the marker prompt always wipes any prior drift markers
+in the project before placing fresh ones, so they don't accumulate
+across runs.
+
 ## Sister command
 
 [Sync Hangers to Pipes](sync-hangers-to-pipes.md) does the same diameter
