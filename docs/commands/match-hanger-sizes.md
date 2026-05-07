@@ -16,129 +16,131 @@ hangers — this command catches the drift in one shot.
 2. Run **Hangers → Match Sizes**.
 3. The command analyzes each hanger:
    - Finds the closest near-horizontal pipe (XY-distance match using
-     bounding-box-center, same approach as Hanger Gap Check).
-   - Reads the pipe's nominal diameter.
-   - Reads the hanger's `Nominal Diameter` parameter.
-   - Compares them, captures the current `Rod Length` for compensation.
+     bounding-box-center).
+   - Reads the pipe's nominal diameter and the hanger's `Nominal Diameter`.
+   - Compares them.
 4. A confirmation dialog summarizes:
    - How many were already matching
-   - How many are mismatched (with a preview of the first 10:
-     `ID 12345: 1" → 1-1/4"  (rod −0.17")`)
-   - How many were skipped (no nearby pipe, no `Nominal Diameter`
+   - How many are mismatched, with a per-hanger preview of the size change
+   - How many were skipped (no nearby pipe → drifted, no `Nominal Diameter`
      parameter, or read-only diameter)
-5. Click **Yes** to apply, or **Cancel** to bail.
-6. The command sets each mismatched hanger's `Nominal Diameter` to the
-   pipe's diameter **and** adjusts the `Rod Length` to compensate (see
-   below). Reports rod adjustments separately from resizes.
+5. Click **Yes** to apply, **No** to skip resize but still mark drifted
+   hangers, or **Cancel** to bail entirely.
+6. If you confirmed, each mismatched hanger is **deleted and recreated**
+   at the same point and rotation with the new size, preserving every
+   writable instance parameter (Type Code, Rod Length, Distance off End,
+   Comments, Hydratec fields, etc.).
+7. After resize, if any drifted hangers were detected, you're prompted
+   whether to place orange location markers above them.
 
-## Rod-length compensation
+## Why delete + recreate, not parameter-set
 
-Hydratec hanger families anchor the rod top to the structure (the rod
-top stays fixed in space). When you change `Nominal Diameter`, the ring
-geometry resizes around the pipe — and depending on how the family is
-built, this typically shifts the ring center up (downsize) or down
-(upsize), so the pipe stops sitting at the visible center of the ring.
+The naive approach — set `Nominal Diameter` on the existing hanger
+instance — has a family-level bug: the ring center drifts off the host
+pipe (the ring shrinks toward its top anchor instead of staying centered).
+This happens both via our API and via Revit's native Properties palette,
+so it's not something we can work around just by being clever with the
+parameter setter.
 
-To keep BOTH the rod top AND the pipe centerline in their original
-positions, the command:
+Earlier versions of this command tried to compensate by adjusting `Rod
+Length` after the resize (using empirical bounding-box measurement to
+detect the actual ring shift). That helped but couldn't fully eliminate
+the drift on all family geometries.
 
-1. Snapshots the bottom of each hanger's bounding box (Z) **before**
-   any change.
-2. Sets the new `Nominal Diameter` for every mismatched hanger.
-3. Forces a Revit regenerate so the bounding boxes reflect the new
-   geometry.
-4. Reads each hanger's new bounding-box bottom and computes the actual
-   centerline shift:
-   ```
-   bb_shift = bb_min_after − bb_min_before
-   ring_radius_change = (new_OD − old_OD) / 2
-   centerline_shift = bb_shift + ring_radius_change
-   ```
-   (`ring_radius_change` is the predictable geometric component;
-   anything left over is the actual displacement to undo.)
-5. Adjusts rod length by exactly `centerline_shift` to bring the ring
-   center back to the pipe's centerline:
-   ```
-   new_rod_length = old_rod_length + centerline_shift
-   ```
+The current approach sidesteps the bug entirely: a freshly placed
+hanger has no prior parametric state, so the family draws its geometry
+correctly for the target size with the ring properly centered on the
+pipe. We use the same pattern as `SwapHydraCADHangersCommand` — capture
+parameters, place a new instance via `doc.Create.NewFamilyInstance`,
+restore the parameters.
 
-The empirical measurement makes the compensation robust against
-family-specific geometry quirks — fixed offsets, strap thicknesses,
-non-standard ring sizing, etc. all wash out automatically because we
-read the actual after-resize bounding box rather than calculating a
-predicted one.
+## Trade-off: ElementId changes
 
-Outside-diameter values for the `ring_radius_change` term come from
-the standard NPS Schedule 40 table built into the command (covers
-1/2" through 12"). For non-NPS content, the math falls back to
-nominal=OD, which biases the compensation slightly but still reduces
-displacement.
+Each recreated hanger gets a **new ElementId**. Implications:
 
-The preview shows estimated rod adjustments (e.g. `rod ~−0.17"`); the
-actual amount applied is whatever the empirical measurement reads,
-which may differ a bit if the family has any internal offset.
+- **In-project references survive**: schedules, view filters, tags,
+  3D-view filters all use category and parameter rules, not specific
+  IDs.
+- **External references break**: anything outside the project that
+  references the old hanger IDs (saved Trimble exports, manually
+  recorded clash reports, etc.) will not find them after recreation.
+- **`Additional Stocklist Information (Hydratec)` survives** because it
+  contains the *pipe* ID, not the hanger ID — the value is captured and
+  restored verbatim.
 
-If a hanger has no `Rod Length` parameter, the resize still happens but
-the centerline will shift visibly. Affected hangers are noted in the
-confirmation dialog and the report.
+For the workflow this command targets — hangers got out of sync with
+pipes — losing the old hanger IDs is almost always fine.
 
-If the compensation would drive the rod shorter than 1/2", the rod
-adjustment is skipped (the resize still happens) — that hanger's rod
-is too short to lose any more length, and you'll need to look at it
-manually.
+## Parameters preserved on recreation
 
-## Review markers (resized + drifted hangers)
+The command copies every **writable instance parameter** from the old
+hanger to the new one, except a small set of Revit-managed built-ins
+(Family, Type, Host Id, Phase, Level, IfcGUID, etc.) that Revit sets
+automatically based on the new instance's identity.
 
-After the resize phase, the command offers to place orange review
-markers above two categories of hangers:
+For typical Hydratec / SSG hangers this includes:
 
-| Category | Why it needs review |
-|---|---|
-| **Resized** | The empirical rod compensation isn't perfect for every family geometry — even after the auto-adjustment, the centerline may still need a small manual nudge in section view. Marking every resized hanger lets you tab through them and verify. |
-| **Drifted** | Hanger has no near-horizontal pipe within 6", so it likely became disconnected or its host pipe was deleted. Needs to be re-attached to a pipe. |
+- `Rod Length`, `Distance off End`, `Rod Tilt`
+- `Type Code (Hydratec)`, `Type Code Description (Hydratec)`
+- `Comments`, `Mark`
+- `Additional Stocklist Information (Hydratec)`, `HCAD-System`,
+  `Hydraulic Group`, `PipeElevationAFF`, `PipeElevationTOS`,
+  `Section_ID (Hydratec)`, `Section_ID_Override (Hydratec)`,
+  `SubSystem`, `Material Group`, `Install Room`, `Takeout`, …
+- Any other writable instance param the user has set
 
-A single prompt covers both:
+Duplicate parameter names (some Hydratec families have a built-in *and*
+a shared parameter with the same name, e.g. two `Rod Length` entries)
+are handled — the captured value is restored to **all** writable
+parameters with that name on the new instance.
 
-> *N hangers need review:*
-> *  • X resized — centerline may need manual adjustment after Revit re-renders*
-> *  • Y drifted — no nearby pipe found, may need re-attaching*
+`Nominal Diameter` itself is set explicitly to the pipe's diameter
+during recreation; it is *not* restored from the captured (old) value.
+
+## Marking drifted hangers
+
+If any selected hangers have **no near-horizontal pipe within 6"**,
+they're tracked separately as "drifted" and offered an optional
+location marker:
+
+> *N hangers have no near-horizontal pipe within 6" — they may have
+> drifted off their host pipes and could not be matched to a pipe
+> diameter.*
 >
-> *Place orange location markers above them so you can find and fix them in section views?*
+> *Place orange location markers above them so you can find and
+> re-attach them?*
 
 If you click **Yes**, the command places an orange DirectShape cylinder
-6" above each flagged hanger's bounding-box center (visible in plan
-and 3D) and selects all flagged hangers so you can immediately tab
-through them.
+6" above each drifted hanger's bounding-box center (visible in plan
+and 3D) and selects all drifted hangers so you can tab through them.
 
-The orange markers use a different material and ApplicationDataId from
-the red Hanger Gap Check markers, so they won't interfere with each
-other and can be cleaned up independently. Re-running this command
-with **Yes** on the marker prompt always wipes any prior review
-markers in the project before placing fresh ones, so they don't
-accumulate across runs.
+Re-running with **Yes** on the marker prompt wipes any prior drift
+markers before placing fresh ones, so they don't accumulate across
+runs. Drift markers use a distinct ApplicationDataId from the blue
+Hanger Gap Check markers, so the two commands' markers can be cleaned
+up independently.
 
 ## Sister command
 
 [Sync Hangers to Pipes](sync-hangers-to-pipes.md) does the same diameter
 sync **plus** moves the hanger to the closest pipe and rotates it to
-match the pipe direction. Use that command for fresh placement; use
-**Match Sizes** when the hangers are already correctly placed and you
-just need to fix size drift after a pipe resize.
+match the pipe direction. Use that command when hangers need full
+re-alignment to their pipes; use **Match Sizes** when the hangers are
+already correctly positioned and you just need diameter to match after
+a pipe resize.
 
 ## Required parameters
 
 | Where | Parameter | Used for |
 |---|---|---|
-| Hanger family | `Nominal Diameter` (Length, instance, writable) | The value the command sets |
-| Hanger family | `Rod Length` (Length, instance, writable) | Adjusted to compensate for centerline shift |
+| Hanger family | `Nominal Diameter` (Length, instance, writable) | Set to the pipe's diameter on the new instance |
 | Pipe | Built-in `RBS_PIPE_DIAMETER_PARAM` | The target diameter |
 
 If a hanger family encodes diameter as a **type parameter** (different
-family types per size, e.g. one type for 1", one for 1-1/4"), the
-command can't resize it via the instance parameter — it'll be reported
-under "Failed" with an explanation. In that case either switch the
-family type manually, or use Sync Hangers to Pipes (which handles type
-swaps in some cases).
+family types per size), `Nominal Diameter` won't be writable on the
+instance. The recreate will still happen, but the new instance's size
+will be whatever the FamilySymbol's default is — you may need to switch
+the family type manually after.
 
 ## Limitations
 
@@ -149,16 +151,21 @@ swaps in some cases).
 - Pipes are matched purely by XY proximity to the hanger's bounding-box
   center; if a hanger is somehow midway between two pipes in plan, the
   closer one wins.
+- Hangers without a `LocationPoint`, without a resolvable level, or
+  whose family symbol can't be activated will be reported as failures.
 
 ## Re-running
 
-Idempotent — running again on already-matched hangers reports
-`Already matching: N` and exits with no changes.
+Idempotent on already-matched hangers — they report `Already matching:
+N` and aren't touched.
 
 ## See also
 
 - [Sync Hangers to Pipes](sync-hangers-to-pipes.md) — full sync (move +
-  rotate + resize) for fresh placement
+  rotate + resize) for fresh placement; uses the same delete+recreate
+  pattern internally for diameter changes
 - [Hanger Gap Check](hanger-gap-check.md) — flags hangers whose
-  top-of-pipe to structure gap exceeds a threshold; uses the same
-  pipe-finding logic
+  top-of-pipe to structure gap exceeds a threshold
+- [Inspect Element Parameters](#) — diagnostic command in the same
+  ribbon stack; dumps every parameter on a selected element to help
+  debug family behavior

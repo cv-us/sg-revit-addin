@@ -13,27 +13,49 @@ namespace SSG_FP_Suite.Commands.Hangers
     /// does not automatically propagate diameter changes to connected
     /// pipe-accessory hangers.
     ///
+    /// IMPLEMENTATION NOTE — delete + recreate, not parameter set:
+    /// Setting "Nominal Diameter" on an existing hanger instance causes its
+    /// ring center to drift off the pipe (a family-level behavior; happens
+    /// even via the Properties palette, not just the API). Rod-length
+    /// compensation can't fully cancel the drift because the ring's
+    /// position-relative-to-host is computed inside the family.
+    ///
+    /// To avoid the drift entirely the command instead deletes each
+    /// mismatched hanger and creates a fresh instance at the same point /
+    /// rotation, with all writable parameters captured and restored. The new
+    /// instance's geometry is built from scratch for the target size — no
+    /// prior parametric state, no drift. This is the same pattern used by
+    /// SwapHydraCADHangersCommand for HydraCAD-to-SSG family swaps.
+    ///
     /// WORKFLOW:
     ///   1. User pre-selects hangers
     ///   2. Command finds the closest near-horizontal pipe to each hanger
-    ///      (using bounding-box-center XY matching, same approach as
-    ///      HangerGapCheck — robust against connector-hosted families
-    ///      where LocationPoint sits at a pipe endpoint)
+    ///      (BB-center XY matching, same approach as HangerGapCheck)
     ///   3. Compares hanger "Nominal Diameter" to pipe diameter
     ///   4. Reports mismatches with a preview, asks the user to confirm
-    ///   5. On confirm, sets each mismatched hanger's "Nominal Diameter"
-    ///      parameter to the matched pipe's diameter
+    ///   5. On confirm, for each mismatched hanger:
+    ///        a. Capture LocationPoint, rotation, and every writable
+    ///           instance parameter that has a value
+    ///        b. Delete the old instance
+    ///        c. Create a fresh instance at the same point with the same
+    ///           FamilySymbol via doc.Create.NewFamilyInstance
+    ///        d. Set Nominal Diameter to the target (pipe's) value
+    ///        e. Restore all other captured parameters
+    ///        f. Apply rotation via ElementTransformUtils.RotateElement
+    ///
+    /// Drifted hangers (no near-horizontal pipe within 6") still get the
+    /// optional orange-marker treatment so the user can find and re-attach
+    /// them manually.
     ///
     /// Sister to SyncHangersToPipesCommand — that command also moves and
-    /// rotates hangers, this one only resizes (lighter / safer for
-    /// already-placed hangers).
+    /// rotates as part of a full sync. This command stays at the same point
+    /// and rotation, only swaps the size.
     /// </summary>
     [Transaction(TransactionMode.Manual)]
     [Regeneration(RegenerationOption.Manual)]
     public class MatchHangerSizesCommand : IExternalCommand
     {
         private const string NominalDiameterParam = "Nominal Diameter";
-        private const string RodLengthParam = "Rod Length";
 
         /// <summary>
         /// Pipes whose direction is more vertical than this are excluded
@@ -59,34 +81,28 @@ namespace SSG_FP_Suite.Commands.Hangers
         private const double DriftMarkerZOffset = 0.5;         // 6" above BB center
 
         /// <summary>
-        /// Standard NPS nominal-to-outside-diameter lookup, both values in
-        /// inches. Used to compute rod-length compensation when resizing a
-        /// hanger: the visible ring is sized to fit the pipe OD, so when
-        /// nominal changes the centerline shifts by half the OD delta. We
-        /// counter that shift with an opposite change to Rod Length so both
-        /// the rod-top (at structure) and the pipe centerline stay put.
-        ///
-        /// Covers all common fire protection sizes (1/2" through 12"). Sizes
-        /// outside this table fall back to nominal=OD which is good enough
-        /// to flag the case but won't compensate accurately.
+        /// Built-in parameter ids that we never copy from old → new during
+        /// the delete+recreate. Setting these is either rejected by Revit or
+        /// would corrupt the new instance's identity (Family, Type, Host id,
+        /// etc. — Revit manages them).
         /// </summary>
-        private static readonly (double nominalIn, double odIn)[] NpsTable = new[]
+        private static readonly HashSet<int> SkipBuiltInIds = new HashSet<int>
         {
-            (0.50,  0.840),  //   1/2"
-            (0.75,  1.050),  //   3/4"
-            (1.00,  1.315),  //   1"
-            (1.25,  1.660),  // 1-1/4"
-            (1.50,  1.900),  // 1-1/2"
-            (2.00,  2.375),  //   2"
-            (2.50,  2.875),  // 2-1/2"
-            (3.00,  3.500),  //   3"
-            (3.50,  4.000),  // 3-1/2"
-            (4.00,  4.500),  //   4"
-            (5.00,  5.563),  //   5"
-            (6.00,  6.625),  //   6"
-            (8.00,  8.625),  //   8"
-            (10.00,10.750),  //  10"
-            (12.00,12.750),  //  12"
+            (int)BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM,
+            (int)BuiltInParameter.SYMBOL_NAME_PARAM,
+            (int)BuiltInParameter.ELEM_TYPE_PARAM,
+            (int)BuiltInParameter.ALL_MODEL_TYPE_NAME,
+            (int)BuiltInParameter.ALL_MODEL_FAMILY_NAME,
+            (int)BuiltInParameter.HOST_ID_PARAM,
+            (int)BuiltInParameter.ID_PARAM,
+            (int)BuiltInParameter.IFC_GUID,
+            (int)BuiltInParameter.PHASE_CREATED,
+            (int)BuiltInParameter.PHASE_DEMOLISHED,
+            (int)BuiltInParameter.LEVEL_PARAM,
+            (int)BuiltInParameter.SCHEDULE_LEVEL_PARAM,
+            (int)BuiltInParameter.RBS_SYSTEM_NAME_PARAM,
+            (int)BuiltInParameter.RBS_SYSTEM_CLASSIFICATION_PARAM,
+            (int)BuiltInParameter.RBS_SYSTEM_ABBREVIATION_PARAM,
         };
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
@@ -132,8 +148,7 @@ namespace SSG_FP_Suite.Commands.Hangers
                 int skippedNoDiameterParam = 0;
                 int skippedReadOnly = 0;
                 var mismatched = new List<(FamilyInstance hanger, double currentDiaFt,
-                    double targetDiaFt, Parameter diaParam,
-                    Parameter rodParam, double oldRodLengthFt)>();
+                    double targetDiaFt)>();
                 // Hangers with no nearby pipe — capture location so we can mark them later
                 var driftedHangers = new List<(FamilyInstance hanger, XYZ location)>();
 
@@ -172,20 +187,9 @@ namespace SSG_FP_Suite.Commands.Hangers
 
                     double hangerDiaFt = hangerDiaParam.AsDouble();
                     if (Math.Abs(pipeDiaFt - hangerDiaFt) <= DiameterMatchTolerance)
-                    {
                         alreadyMatching++;
-                    }
                     else
-                    {
-                        // Capture the rod length BEFORE any change so we can
-                        // compute the compensated value during the apply step.
-                        var rodParam = hanger.LookupParameter(RodLengthParam);
-                        double oldRodLengthFt = (rodParam != null && rodParam.HasValue)
-                            ? rodParam.AsDouble() : 0.0;
-
-                        mismatched.Add((hanger, hangerDiaFt, pipeDiaFt,
-                            hangerDiaParam, rodParam, oldRodLengthFt));
-                    }
+                        mismatched.Add((hanger, hangerDiaFt, pipeDiaFt));
                 }
 
                 // ── Nothing to do? ──
@@ -200,38 +204,23 @@ namespace SSG_FP_Suite.Commands.Hangers
                     return Result.Succeeded;
                 }
 
-                // ── Resize phase ──
+                // ── Resize phase (delete + recreate) ──
                 bool didResize = false;
-                int resized = 0;
-                int rodAdjusted = 0;
-                int rodSkippedNegative = 0;
+                int recreated = 0;
                 int failed = 0;
-                var failedIds = new List<ElementId>();
-                // Successfully resized hangers — captured pre-resize so the marker
-                // placement uses original geometry. The user wants these marked
-                // because the empirical rod compensation isn't yet perfect for
-                // every family design, so the centerline often still needs a
-                // manual nudge after the auto-adjustment.
-                var resizedHangerLocations = new List<XYZ>();
-                var resizedHangerIds = new List<ElementId>();
+                var failedOldIds = new List<ElementId>(); // for reporting
+                var newHangerIds = new List<ElementId>();  // for selection / drift markers (we only mark drift now)
 
                 if (mismatched.Count > 0)
                 {
                     string preview = "";
                     foreach (var m in mismatched.Take(10))
                     {
-                        double comp = ComputeRodCompensationFt(m.currentDiaFt, m.targetDiaFt);
-                        string sign = comp > 0 ? "−" : "+";
-                        string rodInfo = (m.rodParam != null && m.oldRodLengthFt > 0)
-                            ? $"  (rod ~{sign}{InchString(Math.Abs(comp))})"
-                            : "";
                         preview += $"\n  ID {m.hanger.Id}: " +
-                                   $"{InchString(m.currentDiaFt)} → {InchString(m.targetDiaFt)}{rodInfo}";
+                                   $"{InchString(m.currentDiaFt)} → {InchString(m.targetDiaFt)}";
                     }
                     if (mismatched.Count > 10)
                         preview += $"\n  …and {mismatched.Count - 10} more";
-
-                    int withoutRodComp = mismatched.Count(m => m.rodParam == null || m.oldRodLengthFt <= 0);
 
                     string body =
                         $"Hangers checked:     {hangers.Count}\n" +
@@ -240,22 +229,21 @@ namespace SSG_FP_Suite.Commands.Hangers
                     if (driftedHangers.Count > 0) body += $"\nDrifted off pipe:    {driftedHangers.Count}";
                     if (skippedNoDiameterParam > 0) body += $"\nNo Nominal Diameter: {skippedNoDiameterParam}";
                     if (skippedReadOnly > 0) body += $"\nRead-only diameter:  {skippedReadOnly}";
-                    body += "\n\nResizing changes the ring radius, which would shift the pipe " +
-                            "centerline up (downsize) or down (upsize). To minimize this, the " +
-                            "command measures each ring's bounding box before and after the " +
-                            "resize and adjusts rod length to undo the observed shift. " +
-                            "Compensation isn't perfect for every family — see below.";
-                    body += "\n\nMismatches (~rod values are first-pass estimates; the actual " +
-                            "applied value is whatever the post-resize measurement reads):" + preview;
-                    if (withoutRodComp > 0)
-                        body += $"\n\nNote: {withoutRodComp} hanger(s) have no \"Rod Length\" " +
-                                "parameter and will be resized without compensation.";
-                    body += "\n\nAfter resizing, you'll be asked whether to place orange " +
-                            "review markers above all resized";
+                    body += "\n\nApproach: each mismatched hanger is DELETED and RECREATED at the " +
+                            "same point and rotation with the new size. All writable parameters " +
+                            "(Type Code, Rod Length, Distance off End, Comments, Hydratec fields, " +
+                            "etc.) are captured before delete and restored on the new instance. " +
+                            "This avoids a family-level bug where setting Nominal Diameter on an " +
+                            "existing instance shifts the ring off the pipe.";
+                    body += "\n\nNote: each hanger gets a NEW ElementId. Anything outside the " +
+                            "project that references the old IDs (saved Trimble exports, external " +
+                            "clash reports, etc.) won't carry over. In-project schedules, filters, " +
+                            "and tags are unaffected.";
+                    body += "\n\nMismatches:" + preview;
                     if (driftedHangers.Count > 0)
-                        body += $" and {driftedHangers.Count} drifted";
-                    body += " hangers so you can find and adjust them in section views.";
-                    body += "\n\nResize the mismatched hangers and adjust rod lengths?";
+                        body += $"\n\nAfter recreation you'll be asked whether to mark the " +
+                                $"{driftedHangers.Count} drifted hanger(s).";
+                    body += "\n\nProceed?";
 
                     var confirm = TaskDialog.Show("Match Hanger Sizes", body,
                         TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No
@@ -272,116 +260,18 @@ namespace SSG_FP_Suite.Commands.Hangers
                         {
                             tx.Start();
 
-                            // Phase 1: snapshot each hanger's bottom-of-bounding-box Z
-                            // AND its visual location BEFORE any change. The Z is for
-                            // the empirical rod compensation; the visual location is
-                            // for marker placement after the resize.
-                            var bbMinZBefore = new Dictionary<ElementId, double>();
-                            var preResizeLocations = new Dictionary<ElementId, XYZ>();
                             foreach (var m in mismatched)
                             {
-                                var bb = m.hanger.get_BoundingBox(null);
-                                if (bb != null)
-                                    bbMinZBefore[m.hanger.Id] = bb.Min.Z;
-
-                                var loc = GetVisualLocation(m.hanger);
-                                if (loc != null)
-                                    preResizeLocations[m.hanger.Id] = loc;
-                            }
-
-                            // Phase 2: set Nominal Diameter on every mismatched hanger
-                            var resizedSuccessIdx = new List<int>();
-                            for (int i = 0; i < mismatched.Count; i++)
-                            {
-                                var m = mismatched[i];
-                                try
+                                ElementId newId = TryRecreate(doc, m.hanger, m.targetDiaFt);
+                                if (newId != null && newId != ElementId.InvalidElementId)
                                 {
-                                    if (m.diaParam.Set(m.targetDiaFt))
-                                    {
-                                        resized++;
-                                        resizedSuccessIdx.Add(i);
-                                        resizedHangerIds.Add(m.hanger.Id);
-                                        if (preResizeLocations.TryGetValue(
-                                                m.hanger.Id, out var loc))
-                                            resizedHangerLocations.Add(loc);
-                                    }
-                                    else
-                                    {
-                                        failed++;
-                                        failedIds.Add(m.hanger.Id);
-                                    }
+                                    recreated++;
+                                    newHangerIds.Add(newId);
                                 }
-                                catch
+                                else
                                 {
                                     failed++;
-                                    failedIds.Add(m.hanger.Id);
-                                }
-                            }
-
-                            // Phase 3: force regen so the geometry — and thus the
-                            // bounding boxes — reflect the new diameters
-                            doc.Regenerate();
-
-                            // Phase 4: for each successfully resized hanger, measure
-                            // how far the ring center moved and counter that with rod
-                            // length. The math:
-                            //   bbShift = (BB-min after) − (BB-min before)
-                            //   ringRadiusChange = (newOD − oldOD) / 2     ← geometry
-                            //   centerlineShift = bbShift + ringRadiusChange
-                            //   new_rod_length = old_rod_length + centerlineShift
-                            // (positive centerlineShift = ring went UP relative to
-                            // pipe = lengthen rod to bring it back down)
-                            foreach (int idx in resizedSuccessIdx)
-                            {
-                                var m = mismatched[idx];
-
-                                if (m.rodParam == null || m.rodParam.IsReadOnly
-                                    || m.oldRodLengthFt <= 0)
-                                    continue;
-
-                                try
-                                {
-                                    double newRodLengthFt;
-
-                                    if (bbMinZBefore.TryGetValue(m.hanger.Id, out double bbBefore))
-                                    {
-                                        var bbAfter = m.hanger.get_BoundingBox(null);
-                                        if (bbAfter == null)
-                                        {
-                                            // Couldn't measure after — fall back to OD formula
-                                            double comp = ComputeRodCompensationFt(
-                                                m.currentDiaFt, m.targetDiaFt);
-                                            newRodLengthFt = m.oldRodLengthFt - comp;
-                                        }
-                                        else
-                                        {
-                                            double bbShift = bbAfter.Min.Z - bbBefore;
-                                            double oldOd = LookupOdFt(m.currentDiaFt);
-                                            double newOd = LookupOdFt(m.targetDiaFt);
-                                            double ringRadiusChange = (newOd - oldOd) / 2.0;
-                                            double centerlineShift = bbShift + ringRadiusChange;
-                                            newRodLengthFt = m.oldRodLengthFt + centerlineShift;
-                                        }
-                                    }
-                                    else
-                                    {
-                                        // No before-measurement available — fall back
-                                        double comp = ComputeRodCompensationFt(
-                                            m.currentDiaFt, m.targetDiaFt);
-                                        newRodLengthFt = m.oldRodLengthFt - comp;
-                                    }
-
-                                    if (newRodLengthFt <= 0.5 / 12.0)
-                                    {
-                                        rodSkippedNegative++;
-                                        continue;
-                                    }
-                                    if (m.rodParam.Set(newRodLengthFt))
-                                        rodAdjusted++;
-                                }
-                                catch
-                                {
-                                    // non-critical — hanger is resized, no compensation
+                                    failedOldIds.Add(m.hanger.Id);
                                 }
                             }
 
@@ -390,32 +280,24 @@ namespace SSG_FP_Suite.Commands.Hangers
                     }
                 }
 
-                // ── Mark-for-review phase ──
-                // Combines both "drifted" hangers (no nearby pipe) and successfully
-                // resized hangers (which may need centerline review since the rod
-                // compensation isn't yet perfect for every family). Single prompt,
-                // single transaction, single set of orange markers.
+                // ── Mark-drifted phase ──
+                // Recreated hangers no longer need markers (delete+recreate avoids
+                // the centerline drift issue entirely), so this only handles
+                // drifted hangers — those with no near-horizontal pipe within 6".
                 int markersPlaced = 0;
                 int markersCleared = 0;
                 bool markerPromptShown = false;
 
-                int reviewCount = resizedHangerLocations.Count + driftedHangers.Count;
-                if (reviewCount > 0)
+                if (driftedHangers.Count > 0)
                 {
-                    var lines = new List<string>();
-                    if (resizedHangerLocations.Count > 0)
-                        lines.Add($"  • {resizedHangerLocations.Count} resized — centerline " +
-                                  "may need manual adjustment after Revit re-renders");
-                    if (driftedHangers.Count > 0)
-                        lines.Add($"  • {driftedHangers.Count} drifted — no nearby pipe " +
-                                  "found, may need re-attaching");
-
                     string markBody =
-                        $"{reviewCount} hanger{(reviewCount != 1 ? "s" : "")} " +
-                        $"need{(reviewCount == 1 ? "s" : "")} review:\n\n" +
-                        string.Join("\n", lines) + "\n\n" +
-                        "Place orange location markers above them so you can find and fix " +
-                        "them in section views?";
+                        $"{driftedHangers.Count} hanger" +
+                        (driftedHangers.Count != 1 ? "s have" : " has") +
+                        " no near-horizontal pipe within 6\" — they may have drifted " +
+                        "off their host pipes and could not be matched to a pipe " +
+                        "diameter.\n\n" +
+                        "Place orange location markers above them so you can find and " +
+                        "re-attach them?";
 
                     markerPromptShown = true;
                     var markConfirm = TaskDialog.Show("Match Hanger Sizes", markBody,
@@ -424,30 +306,13 @@ namespace SSG_FP_Suite.Commands.Hangers
 
                     if (markConfirm == TaskDialogResult.Yes)
                     {
-                        using (var tx = new Transaction(doc, "Mark Hangers for Review"))
+                        using (var tx = new Transaction(doc, "Mark Drifted Hangers"))
                         {
                             tx.Start();
 
-                            // Wipe prior review markers before placing fresh ones so
-                            // re-runs don't leave stale clutter in the project
                             markersCleared = ClearPreviousDriftMarkers(doc);
-
                             ElementId materialId = GetOrCreateDriftMarkerMaterial(doc);
 
-                            // Resized hangers
-                            foreach (var location in resizedHangerLocations)
-                            {
-                                try
-                                {
-                                    XYZ markerBase = new XYZ(
-                                        location.X, location.Y, location.Z + DriftMarkerZOffset);
-                                    CreateDriftMarker(doc, markerBase, materialId);
-                                    markersPlaced++;
-                                }
-                                catch { /* non-critical */ }
-                            }
-
-                            // Drifted hangers
                             foreach (var (hanger, location) in driftedHangers)
                             {
                                 try
@@ -462,31 +327,29 @@ namespace SSG_FP_Suite.Commands.Hangers
                             tx.Commit();
                         }
 
-                        // Highlight all review-flagged hangers in the selection so the
-                        // user can quickly tab through them
-                        var selectionIds = new List<ElementId>(resizedHangerIds);
-                        foreach (var (h, _) in driftedHangers)
-                            selectionIds.Add(h.Id);
-                        if (selectionIds.Count > 0)
-                            uidoc.Selection.SetElementIds(selectionIds);
+                        // Highlight drifted hangers so the user can tab through them
+                        uidoc.Selection.SetElementIds(
+                            driftedHangers.Select(d => d.hanger.Id).ToList());
                     }
                 }
 
-                // Highlight resize failures (overrides drift selection if both exist —
-                // failures are more urgent)
-                if (failedIds.Count > 0)
-                    uidoc.Selection.SetElementIds(failedIds);
+                // If we recreated hangers but the user didn't engage with the marker
+                // prompt, leave the new hangers selected so the user can verify them
+                if (newHangerIds.Count > 0 &&
+                    (!markerPromptShown || markersPlaced == 0))
+                {
+                    uidoc.Selection.SetElementIds(newHangerIds);
+                }
 
                 // ── Final report ──
                 string report = "";
                 if (didResize)
                 {
-                    report += $"Resized:        {resized}\n" +
-                              $"Rod adjusted:   {rodAdjusted}";
-                    if (rodSkippedNegative > 0)
-                        report += $"\nRod skipped:    {rodSkippedNegative} (compensation would have made rod < 1/2\")";
+                    report += $"Recreated:  {recreated}";
                     if (failed > 0)
-                        report += $"\nFailed:         {failed} (highlighted in selection)";
+                        report += $"\nFailed:     {failed}";
+                    report += "\n\nNew hangers were placed at the same location and rotation, " +
+                              "with all writable parameters preserved. Each got a new ElementId.";
                 }
                 else if (mismatched.Count > 0)
                 {
@@ -498,26 +361,23 @@ namespace SSG_FP_Suite.Commands.Hangers
                     if (markersPlaced > 0)
                     {
                         if (report.Length > 0) report += "\n\n";
-                        report += $"Review markers placed: {markersPlaced}";
-                        if (resizedHangerLocations.Count > 0 && driftedHangers.Count > 0)
-                            report += $" ({resizedHangerLocations.Count} resized + " +
-                                      $"{driftedHangers.Count} drifted)";
+                        report += $"Drift markers placed: {markersPlaced}";
                         if (markersCleared > 0)
-                            report += $"\n({markersCleared} previous review markers cleared)";
-                        report += "\n(Flagged hangers are highlighted in selection.)";
+                            report += $"\n({markersCleared} previous markers cleared)";
+                        report += "\n(Drifted hangers are highlighted in selection.)";
                     }
                     else
                     {
                         if (report.Length > 0) report += "\n\n";
-                        report += $"Hangers needing review: {reviewCount} (markers not placed)";
+                        report += $"Drifted hangers: {driftedHangers.Count} (markers not placed)";
                     }
                 }
 
                 if (failed > 0)
                 {
-                    report += "\n\nFailures usually mean the family's diameter is a type " +
-                              "parameter or otherwise locked. Switch the family type manually " +
-                              "or use Sync Hangers to Pipes.";
+                    report += "\n\nFailures may mean the host pipe couldn't be resolved or the " +
+                              "family symbol couldn't be activated. Check the failed hangers " +
+                              "manually.";
                 }
                 TaskDialog.Show("Match Hanger Sizes", report);
 
@@ -610,44 +470,195 @@ namespace SSG_FP_Suite.Commands.Hangers
             return (bestPipe, bestPoint, bestCurve);
         }
 
+        // ── Delete + recreate ──
+
         /// <summary>
-        /// Returns the standard NPS outside diameter (in feet) for a given
-        /// nominal diameter (in feet). Snaps to the nearest known nominal
-        /// in NpsTable. Falls back to nominal=OD if the size isn't in the
-        /// table — non-ideal but at least keeps the math going.
+        /// Captured snapshot of a single instance parameter — used to copy
+        /// values from the old hanger to the freshly placed new instance.
+        /// Tracks the storage type so we restore via the right setter.
         /// </summary>
-        private double LookupOdFt(double nominalFt)
+        private class ParameterSnapshot
         {
-            double nominalIn = nominalFt * 12.0;
-            double bestOd = nominalIn;
-            double bestDiff = double.MaxValue;
-            foreach (var (n, od) in NpsTable)
-            {
-                double diff = Math.Abs(n - nominalIn);
-                if (diff < bestDiff)
-                {
-                    bestDiff = diff;
-                    bestOd = od;
-                }
-            }
-            // Only trust the table if we're within 1/16" of a known nominal
-            if (bestDiff <= 0.0625) return bestOd / 12.0;
-            return nominalFt; // fallback
+            public StorageType StorageType;
+            public double DoubleValue;
+            public int IntValue;
+            public string StringValue;
+            public ElementId IdValue;
         }
 
         /// <summary>
-        /// Computes the rod-length compensation in feet. Positive value means
-        /// the rod must SHORTEN (upsize: ring grew, centerline would have
-        /// dropped). Negative means the rod must LENGTHEN (downsize).
-        ///
-        /// Formula: half the OD delta — ring radius is half of OD, and that's
-        /// the amount the centerline shifts when rod top is anchored.
+        /// Captures a snapshot of every writable instance parameter on the
+        /// element that has a value. Skips read-only parameters and a list
+        /// of built-ins that Revit manages (Family, Type, Host Id, etc.).
+        /// Keyed by parameter name. If the family has duplicate parameter
+        /// names (e.g. shared + built-in "Rod Length"), the last writable
+        /// occurrence with a value wins.
         /// </summary>
-        private double ComputeRodCompensationFt(double oldNominalFt, double newNominalFt)
+        private Dictionary<string, ParameterSnapshot> CaptureWritableParameters(Element element)
         {
-            double oldOd = LookupOdFt(oldNominalFt);
-            double newOd = LookupOdFt(newNominalFt);
-            return (newOd - oldOd) / 2.0;
+            var captured = new Dictionary<string, ParameterSnapshot>(
+                StringComparer.OrdinalIgnoreCase);
+
+            foreach (Parameter p in element.Parameters)
+            {
+                if (p == null || p.Definition == null) continue;
+                if (p.IsReadOnly) continue;
+                if (!p.HasValue) continue;
+                if (SkipBuiltInIds.Contains(p.Id.IntegerValue)) continue;
+
+                string name = p.Definition.Name;
+                if (string.IsNullOrEmpty(name)) continue;
+
+                var snap = new ParameterSnapshot { StorageType = p.StorageType };
+                try
+                {
+                    switch (p.StorageType)
+                    {
+                        case StorageType.Double:
+                            snap.DoubleValue = p.AsDouble();
+                            break;
+                        case StorageType.Integer:
+                            snap.IntValue = p.AsInteger();
+                            break;
+                        case StorageType.String:
+                            snap.StringValue = p.AsString() ?? "";
+                            break;
+                        case StorageType.ElementId:
+                            snap.IdValue = p.AsElementId();
+                            break;
+                        default:
+                            continue;
+                    }
+                }
+                catch
+                {
+                    continue;
+                }
+
+                captured[name] = snap;
+            }
+
+            return captured;
+        }
+
+        /// <summary>
+        /// Sets every writable parameter on the new instance whose name
+        /// matches a captured value. Sets ALL occurrences with the same name
+        /// (handles duplicates: shared + built-in pairs that show up
+        /// twice in some families). Silently skips ones that reject the set.
+        /// </summary>
+        private void RestoreCapturedParameters(FamilyInstance newHanger,
+            Dictionary<string, ParameterSnapshot> snapshots, string skipName = null)
+        {
+            foreach (Parameter p in newHanger.Parameters)
+            {
+                if (p == null || p.Definition == null) continue;
+                if (p.IsReadOnly) continue;
+
+                string name = p.Definition.Name;
+                if (string.IsNullOrEmpty(name)) continue;
+                if (skipName != null &&
+                    string.Equals(name, skipName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (SkipBuiltInIds.Contains(p.Id.IntegerValue)) continue;
+
+                if (!snapshots.TryGetValue(name, out var snap)) continue;
+                if (p.StorageType != snap.StorageType) continue;
+
+                try
+                {
+                    switch (p.StorageType)
+                    {
+                        case StorageType.Double:    p.Set(snap.DoubleValue); break;
+                        case StorageType.Integer:   p.Set(snap.IntValue); break;
+                        case StorageType.String:    p.Set(snap.StringValue ?? ""); break;
+                        case StorageType.ElementId: p.Set(snap.IdValue ?? ElementId.InvalidElementId); break;
+                    }
+                }
+                catch
+                {
+                    // Some params reject sets at certain times; not critical
+                }
+            }
+        }
+
+        /// <summary>
+        /// Deletes the old hanger and creates a fresh instance at the same
+        /// location, rotation, and FamilySymbol with the new Nominal
+        /// Diameter. Preserves all writable instance parameters.
+        ///
+        /// Returns the new ElementId on success, or null on failure.
+        /// Must be called inside a transaction.
+        /// </summary>
+        private ElementId TryRecreate(Document doc, FamilyInstance oldHanger, double targetDiaFt)
+        {
+            try
+            {
+                // Capture state from the old instance
+                var locPt = oldHanger.Location as LocationPoint;
+                if (locPt == null) return null;
+                XYZ originalPt = locPt.Point;
+                double originalRotation = locPt.Rotation;
+
+                FamilySymbol symbol = oldHanger.Symbol;
+                if (symbol == null) return null;
+
+                // Resolve a level — prefer the hanger's own LevelId; fall back
+                // to the host pipe's "Reference Level" if needed.
+                Level level = null;
+                if (oldHanger.LevelId != null && oldHanger.LevelId != ElementId.InvalidElementId)
+                    level = doc.GetElement(oldHanger.LevelId) as Level;
+                if (level == null && oldHanger.Host != null)
+                {
+                    var hostLvlParam = oldHanger.Host.LookupParameter("Reference Level");
+                    if (hostLvlParam != null && hostLvlParam.HasValue)
+                        level = doc.GetElement(hostLvlParam.AsElementId()) as Level;
+                }
+                if (level == null) return null;
+
+                var snapshots = CaptureWritableParameters(oldHanger);
+
+                // Delete old, then create new at the same point
+                doc.Delete(oldHanger.Id);
+
+                if (!symbol.IsActive) symbol.Activate();
+                FamilyInstance newHanger = doc.Create.NewFamilyInstance(
+                    originalPt, symbol, level,
+                    Autodesk.Revit.DB.Structure.StructuralType.NonStructural);
+                if (newHanger == null) return null;
+
+                // Apply rotation around the vertical axis through the placement point
+                if (Math.Abs(originalRotation) > 1e-9)
+                {
+                    Line zAxis = Line.CreateBound(
+                        originalPt, originalPt + XYZ.BasisZ);
+                    ElementTransformUtils.RotateElement(
+                        doc, newHanger.Id, zAxis, originalRotation);
+                }
+
+                // Set Nominal Diameter to the TARGET (not the captured value).
+                // Set ALL parameters named "Nominal Diameter" since some families
+                // have a shared and a built-in copy.
+                foreach (Parameter p in newHanger.Parameters)
+                {
+                    if (p == null || p.Definition == null || p.IsReadOnly) continue;
+                    if (string.Equals(p.Definition.Name, NominalDiameterParam,
+                        StringComparison.OrdinalIgnoreCase) &&
+                        p.StorageType == StorageType.Double)
+                    {
+                        try { p.Set(targetDiaFt); } catch { }
+                    }
+                }
+
+                // Restore everything else (skipping Nominal Diameter — already set)
+                RestoreCapturedParameters(newHanger, snapshots, skipName: NominalDiameterParam);
+
+                return newHanger.Id;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         /// <summary>
