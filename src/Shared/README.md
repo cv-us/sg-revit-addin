@@ -1,6 +1,6 @@
 # Shared/ — Your Main Working Directory
 
-This is where virtually all your code lives. Everything here is compiled into BOTH SSG24.dll and SSG25.dll automatically.
+This is where virtually all your code lives. Everything here is compiled into BOTH SgRevit24.dll and SgRevit25.dll automatically.
 
 ## Subfolders
 
@@ -12,7 +12,7 @@ Utility classes that multiple commands share. Things like "get all pipes in a vi
 
 ### `Config/` — Plugin Settings
 - `PluginSettings.cs` — A plain C# class with all the settings (company name, default spacing, export paths, etc.)
-- `SettingsManager.cs` — Loads and saves settings to a JSON file in `%AppData%\SSG_FP_Suite\`
+- `SettingsManager.cs` — Loads and saves settings to a JSON file in `%AppData%\SgRevitAddin\`
 - `defaults.json` — The factory defaults that ship with the plugin
 
 **How settings work:** On first run, the plugin uses `defaults.json`. When the user changes settings, `SettingsManager` saves them to their AppData folder. Next time Revit loads, it reads the user's saved settings.
@@ -37,11 +37,11 @@ Just create a `.cs` file anywhere under `Shared/`. It's automatically compiled i
 
 ## Namespace Convention
 
-All code under Shared uses the `SSG_FP_Suite` root namespace:
+All code under Shared uses the `SgRevitAddin` root namespace:
 
 ```
-SSG_FP_Suite.Commands.{Domain}.{CommandName}    ← Commands
-SSG_FP_Suite.Utils                               ← Utilities
-SSG_FP_Suite.Config                              ← Settings
-SSG_FP_Suite.Models                              ← Data classes
+SgRevitAddin.Commands.{Domain}.{CommandName}    ← Commands
+SgRevitAddin.Utils                               ← Utilities
+SgRevitAddin.Config                              ← Settings
+SgRevitAddin.Models                              ← Data classes
 ```

@@ -1,4 +1,4 @@
-namespace SSG_FP_Suite.Models
+namespace SgRevitAddin.Models
 {
     /// <summary>
     /// A single line item on a fabrication list, cut list, or BOM.

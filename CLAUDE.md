@@ -1,10 +1,10 @@
-# SSG FP Suite - Claude Code Conventions
+# SG Revit Addin - Claude Code Conventions
 
 ## Project Structure
-- **Dual-project**: SSG24 (.NET 4.8, Revit 2022-2024) and SSG25 (.NET 8, Revit 2025+)
+- **Dual-project**: SgRevit24 (.NET 4.8, Revit 2022-2024) and SgRevit25 (.NET 8, Revit 2025+)
 - **Shared code** lives in `src/Shared/` and is linked into both projects via .csproj glob includes
-- **Namespace**: `SSG_FP_Suite` for all shared code, commands, utils, models, config
-- **Commands** use namespace `SSG_FP_Suite.Commands.{Domain}.{CommandName}`
+- **Namespace**: `SgRevitAddin` for all shared code, commands, utils, models, config
+- **Commands** use namespace `SgRevitAddin.Commands.{Domain}.{CommandName}`
 
 ## Code Conventions
 - Every command class implements `IExternalCommand` with `[Transaction(TransactionMode.Manual)]`
@@ -17,13 +17,13 @@
 
 ## Version-Specific Code
 - Use `#if REVIT2024` / `#if REVIT2025` preprocessor directives for API differences
-- Version-specific `App.cs` files live in `src/SSG24/` and `src/SSG25/` respectively
+- Version-specific `App.cs` files live in `src/SgRevit24/` and `src/SgRevit25/` respectively
 
 ## Adding a New Command
 1. Create `src/Shared/Commands/{Domain}/{CommandName}Command.cs`
 2. If it needs a dialog, create `src/Shared/Commands/{Domain}/{CommandName}Dialog.cs`
-3. Register ribbon button in both `src/SSG24/App.cs` and `src/SSG25/App.cs`
-4. Build: `dotnet build src/SSG24/SSG24.csproj -c Release` and `dotnet build src/SSG25/SSG25.csproj -c Release`
+3. Register ribbon button in both `src/SgRevit24/App.cs` and `src/SgRevit25/App.cs`
+4. Build: `dotnet build src/SgRevit24/SgRevit24.csproj -c Release` and `dotnet build src/SgRevit25/SgRevit25.csproj -c Release`
 5. Deploy: `powershell -File tools/deploy-addin.ps1 -RevitVersion {2023|2024|2025|2026}` (all 4)
 6. Write docs: `docs/commands/{command-name}.md`
 7. Update `docs/command-catalog.md`
@@ -51,7 +51,7 @@
 | ModelCheck | Model Check | QA/QC validation |
 
 ## Build & Deploy
-- `dotnet build src/SSG24/SSG24.csproj -c Release` and `dotnet build src/SSG25/SSG25.csproj -c Release`
+- `dotnet build src/SgRevit24/SgRevit24.csproj -c Release` and `dotnet build src/SgRevit25/SgRevit25.csproj -c Release`
 - Deploy: `powershell -File tools/deploy-addin.ps1 -RevitVersion {2023|2024|2025|2026}`
 
 ## Sandbox

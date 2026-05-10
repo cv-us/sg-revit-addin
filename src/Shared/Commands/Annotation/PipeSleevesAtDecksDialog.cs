@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
 
-namespace SSG_FP_Suite.Commands.Annotation
+namespace SgRevitAddin.Commands.Annotation
 {
     /// <summary>
     /// Dialog for the Insert Pipe Sleeves at Intersecting Decks command.

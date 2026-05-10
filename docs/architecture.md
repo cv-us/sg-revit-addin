@@ -1,6 +1,6 @@
 # Architecture Overview
 
-How the SSG FP Suite plugin is structured and why.
+How the SG Revit Addin plugin is structured and why.
 
 ## The Big Picture
 
@@ -9,7 +9,7 @@ How the SSG FP Suite plugin is structured and why.
                     │          Revit Application         │
                     │                                    │
                     │  ┌───────────┐    ┌───────────┐   │
-                    │  │ SSG24.dll │    │ SSG25.dll │   │
+                    │  │ SgRevit24.dll │    │ SgRevit25.dll │   │
                     │  │ (.NET 4.8)│    │ (.NET 8)  │   │
                     │  └─────┬─────┘    └─────┬─────┘   │
                     │        │                │          │
@@ -22,7 +22,7 @@ How the SSG FP Suite plugin is structured and why.
                     └──────────────────────────────────┘
 ```
 
-Only ONE DLL loads per Revit version. Revit 2023/2024 loads `SSG24.dll`. Revit 2025/2026 loads `SSG25.dll`. Both contain the same shared code.
+Only ONE DLL loads per Revit version. Revit 2023/2024 loads `SgRevit24.dll`. Revit 2025/2026 loads `SgRevit25.dll`. Both contain the same shared code.
 
 ## Why One DLL, Not One Per Tool?
 
@@ -43,12 +43,12 @@ One DLL keeps everything simple. One build, one deploy, one ribbon tab.
 
 ```
 1. You write:     src/Shared/Commands/Hangers/HangAtCADLinesCommand.cs
-                  (class SSG_FP_Suite.Commands.Hangers.HangAtCADLinesCommand)
+                  (class SgRevitAddin.Commands.Hangers.HangAtCADLinesCommand)
 
-2. You register:  src/SSG24/SSG24.addin
-                  <FullClassName>SSG_FP_Suite.Commands.Hangers.HangAtCADLinesCommand</FullClassName>
+2. You register:  src/SgRevit24/SgRevit24.addin
+                  <FullClassName>SgRevitAddin.Commands.Hangers.HangAtCADLinesCommand</FullClassName>
 
-3. You add UI:    src/SSG24/App.cs
+3. You add UI:    src/SgRevit24/App.cs
                   (create a PushButton pointing to the same class name)
 
 4. You build:     .\tools\build.ps1

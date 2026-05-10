@@ -1,16 +1,16 @@
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using SSG_FP_Suite.Utils;
+using SgRevitAddin.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SSG_FP_Suite.Commands.Setup
+namespace SgRevitAddin.Commands.Setup
 {
     /// <summary>
     /// Creates and initializes the full set of "Dynamo Setting - " global parameters
-    /// used as a configuration store by the SSG FP Suite commands. Parameters that
+    /// used as a configuration store by the SG Revit Addin commands. Parameters that
     /// already exist are left untouched; only missing ones are created with their
     /// default values.
     ///

@@ -2,7 +2,7 @@
 
 **Command:** `PipeSleevesAtBeamsCommand`
 **Domain:** Annotation
-**Ribbon:** SSG FP Suite > Annotation > Sleeves at Beams
+**Ribbon:** SG Revit Addin > Annotation > Sleeves at Beams
 
 ## Purpose
 

@@ -2,7 +2,7 @@
 
 **Command:** `ImportASSprinklersCommand`
 **Domain:** Export
-**Ribbon:** SSG FP Suite > Export > Import AS Sprinklers
+**Ribbon:** SG Revit Addin > Export > Import AS Sprinklers
 
 ## Purpose
 

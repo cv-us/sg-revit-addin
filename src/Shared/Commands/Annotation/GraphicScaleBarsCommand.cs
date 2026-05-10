@@ -1,12 +1,12 @@
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using SSG_FP_Suite.Utils;
+using SgRevitAddin.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SSG_FP_Suite.Commands.Annotation
+namespace SgRevitAddin.Commands.Annotation
 {
     /// <summary>
     /// Automatically inserts graphic scale bar annotations on sheets based on

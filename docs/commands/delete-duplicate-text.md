@@ -2,7 +2,7 @@
 
 **Command:** `DeleteDuplicateTextCommand`
 **Domain:** Annotation
-**Ribbon:** SSG FP Suite > Annotation > Delete Duplicate Text
+**Ribbon:** SG Revit Addin > Annotation > Delete Duplicate Text
 
 ## Purpose
 

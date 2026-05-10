@@ -1,7 +1,7 @@
 # AutoInsert — Hanger Section IDs
 
-**Ribbon location:** SSG FP Suite tab > Hangers panel > "Section IDs"
-**Command class:** `SSG_FP_Suite.Commands.Hangers.HangerSectionIDsCommand`
+**Ribbon location:** SG Revit Addin tab > Hangers panel > "Section IDs"
+**Command class:** `SgRevitAddin.Commands.Hangers.HangerSectionIDsCommand`
 
 ## What It Does
 

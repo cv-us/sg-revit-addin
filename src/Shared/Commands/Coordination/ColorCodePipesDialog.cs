@@ -1,7 +1,7 @@
 using System.Drawing;
 using System.Windows.Forms;
 
-namespace SSG_FP_Suite.Commands.Coordination
+namespace SgRevitAddin.Commands.Coordination
 {
     /// <summary>
     /// Dialog for the Color Code Pipes command.

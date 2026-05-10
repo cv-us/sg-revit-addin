@@ -1,7 +1,7 @@
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 
-namespace SSG_FP_Suite.Utils
+namespace SgRevitAddin.Utils
 {
     /// <summary>
     /// General-purpose shortcuts for common Revit API access patterns.

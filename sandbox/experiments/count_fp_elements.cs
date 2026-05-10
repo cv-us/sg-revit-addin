@@ -89,6 +89,6 @@ public partial class ThisApplication
             + pipeSizeSummary
             + headSummary;
 
-        TaskDialog.Show("SSG FP Suite — Element Count", message);
+        TaskDialog.Show("SG Revit Addin — Element Count", message);
     }
 }

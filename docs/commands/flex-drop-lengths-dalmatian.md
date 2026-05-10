@@ -2,7 +2,7 @@
 
 **Command:** `FlexDropLengthsDalmatianCommand`
 **Domain:** Annotation
-**Ribbon:** SSG FP Suite > Annotation > Flex Drop Dalmatian
+**Ribbon:** SG Revit Addin > Annotation > Flex Drop Dalmatian
 
 ## Purpose
 

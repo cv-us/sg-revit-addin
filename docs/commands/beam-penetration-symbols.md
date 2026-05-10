@@ -2,7 +2,7 @@
 
 **Command:** `BeamPenetrationSymbolsCommand`
 **Domain:** Annotation
-**Ribbon:** SSG FP Suite > Annotation > Beam Penetrations
+**Ribbon:** SG Revit Addin > Annotation > Beam Penetrations
 
 ## Purpose
 

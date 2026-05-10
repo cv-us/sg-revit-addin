@@ -3,7 +3,7 @@ using System.IO;
 using System.Reflection;
 using System.Windows.Media.Imaging;
 
-namespace SSG_FP_Suite.Utils
+namespace SgRevitAddin.Utils
 {
     /// <summary>
     /// Loads embedded PNG icons from the DLL's resources for ribbon buttons.

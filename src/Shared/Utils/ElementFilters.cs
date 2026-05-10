@@ -3,7 +3,7 @@ using Autodesk.Revit.DB.Plumbing;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SSG_FP_Suite.Utils
+namespace SgRevitAddin.Utils
 {
     /// <summary>
     /// Pre-built element queries using Revit's FilteredElementCollector.

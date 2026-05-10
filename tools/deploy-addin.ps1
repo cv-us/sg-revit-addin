@@ -1,8 +1,8 @@
-# SSG FP Suite - Deploy Add-in Script
+# SG Revit Addin - Deploy Add-in Script
 # Usage: .\tools\deploy-addin.ps1 -RevitVersion 2023|2024|2025|2026 [-Configuration Debug|Release]
 #
-# SSG24.dll works in Revit 2023 and 2024 (both use .NET Framework 4.8)
-# SSG25.dll works in Revit 2025 and 2026 (both use .NET 8)
+# SgRevit24.dll works in Revit 2023 and 2024 (both use .NET Framework 4.8)
+# SgRevit25.dll works in Revit 2025 and 2026 (both use .NET 8)
 
 param(
     [Parameter(Mandatory)]
@@ -17,13 +17,13 @@ $ErrorActionPreference = "Stop"
 $SolutionRoot = Split-Path -Parent $PSScriptRoot
 
 # Map Revit version to project
-# Revit 2023 and 2024 → SSG24 (.NET Framework 4.8)
-# Revit 2025 and 2026 → SSG25 (.NET 8)
+# Revit 2023 and 2024 → SgRevit24 (.NET Framework 4.8)
+# Revit 2025 and 2026 → SgRevit25 (.NET 8)
 $ProjectMap = @{
-    "2023" = @{ Name = "SSG24" }
-    "2024" = @{ Name = "SSG24" }
-    "2025" = @{ Name = "SSG25" }
-    "2026" = @{ Name = "SSG25" }
+    "2023" = @{ Name = "SgRevit24" }
+    "2024" = @{ Name = "SgRevit24" }
+    "2025" = @{ Name = "SgRevit25" }
+    "2026" = @{ Name = "SgRevit25" }
 }
 
 $project = $ProjectMap[$RevitVersion]
@@ -50,14 +50,14 @@ if (-not (Test-Path $dllSource)) {
 Copy-Item $dllSource $revitAddinsFolder -Force
 Write-Host "  Copied $projectName.dll" -ForegroundColor Gray
 
-# Copy dependency DLLs (SSG24 needs System.Text.Json and transitive deps)
+# Copy dependency DLLs (SgRevit24 needs System.Text.Json and transitive deps)
 $depDlls = Get-ChildItem "$buildOutput\*.dll" -Exclude "$projectName.dll"
 foreach ($dep in $depDlls) {
     Copy-Item $dep.FullName $revitAddinsFolder -Force
     Write-Host "  Copied $($dep.Name)" -ForegroundColor Gray
 }
 
-# Copy .deps.json if present (SSG25 needs this)
+# Copy .deps.json if present (SgRevit25 needs this)
 $depsJson = "$buildOutput\$projectName.deps.json"
 if (Test-Path $depsJson) {
     Copy-Item $depsJson $revitAddinsFolder -Force

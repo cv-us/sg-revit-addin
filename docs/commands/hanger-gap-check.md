@@ -1,7 +1,7 @@
 # Hanger Gap Check
 
 **Ribbon:** SG → Seismic → Hanger Gap Check
-**Class:** `SSG_FP_Suite.Commands.ModelCheck.HangerGapCheckCommand`
+**Class:** `SgRevitAddin.Commands.ModelCheck.HangerGapCheckCommand`
 
 ## Purpose
 
@@ -83,7 +83,7 @@ subsequent runs reuse it (and refresh its color, so projects upgraded from
 older versions of this command will recolor any leftover red markers to
 blue on the next run).
 
-Markers are stamped with `ApplicationId = "SSG_FP_Suite"` and
+Markers are stamped with `ApplicationId = "SgRevitAddin"` and
 `ApplicationDataId = "HangerGapMarker"` so the command can find and delete
 its own markers without touching unrelated DirectShape elements created by
 other tools or addins.

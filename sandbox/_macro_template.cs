@@ -1,6 +1,6 @@
 /*
  * ═══════════════════════════════════════════════════════════════════
- * SSG FP Suite - Macro Template
+ * SG Revit Addin - Macro Template
  * ═══════════════════════════════════════════════════════════════════
  *
  * HOW TO USE THIS TEMPLATE:
@@ -89,6 +89,6 @@ public partial class ThisApplication
         // END MACRO LOGIC
         // ════════════════════════════════════════
 
-        TaskDialog.Show("SSG FP Suite", "Macro complete.");
+        TaskDialog.Show("SG Revit Addin", "Macro complete.");
     }
 }

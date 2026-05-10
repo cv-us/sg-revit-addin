@@ -111,7 +111,7 @@ using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 
-namespace SSG_FP_Suite.Commands.Hangers  // ← domain name
+namespace SgRevitAddin.Commands.Hangers  // ← domain name
 {
     [Transaction(TransactionMode.Manual)]           // ← Manual for model changes, ReadOnly for checks
     [Regeneration(RegenerationOption.Manual)]
@@ -141,6 +141,6 @@ namespace SSG_FP_Suite.Commands.Hangers  // ← domain name
 2. Create `YourCommandNameCommand.cs`
 3. Copy the pattern above, change the namespace and class name
 4. Write your logic inside `Execute()`
-5. Register in `src/SSG24/SSG24.addin` AND `src/SSG25/SSG25.addin`
+5. Register in `src/SgRevit24/SgRevit24.addin` AND `src/SgRevit25/SgRevit25.addin`
 6. Add a ribbon button in both `App.cs` files (optional — can also run from Add-Ins tab)
 7. Update `docs/command-catalog.md`

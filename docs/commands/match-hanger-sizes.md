@@ -1,7 +1,7 @@
 # Match Hanger Sizes
 
 **Ribbon:** SG → Hangers → Match Sizes
-**Class:** `SSG_FP_Suite.Commands.Hangers.MatchHangerSizesCommand`
+**Class:** `SgRevitAddin.Commands.Hangers.MatchHangerSizesCommand`
 
 > **See also:** [Replace Hanger Sizes](replace-hanger-sizes.md) is the
 > sibling command that solves the same problem by deleting and

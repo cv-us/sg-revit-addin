@@ -1,7 +1,7 @@
 # Auto Hang at Structural Framing
 
-**Ribbon location:** SSG FP Suite tab > Hangers panel > "Hang at Structural"
-**Command class:** `SSG_FP_Suite.Commands.Hangers.HangAtStructuralCommand`
+**Ribbon location:** SG Revit Addin tab > Hangers panel > "Hang at Structural"
+**Command class:** `SgRevitAddin.Commands.Hangers.HangAtStructuralCommand`
 
 ## What It Does
 

@@ -1,7 +1,7 @@
 using Autodesk.Revit.DB;
 using System;
 
-namespace SSG_FP_Suite.Utils
+namespace SgRevitAddin.Utils
 {
     /// <summary>
     /// Geometry and math helpers for working with Revit's XYZ coordinates.

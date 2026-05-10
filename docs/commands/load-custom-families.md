@@ -2,7 +2,7 @@
 
 **Command:** `LoadFamiliesCommand`
 **Domain:** Setup
-**Ribbon:** SSG FP Suite > Setup > Load Families
+**Ribbon:** SG Revit Addin > Setup > Load Families
 
 ## Purpose
 

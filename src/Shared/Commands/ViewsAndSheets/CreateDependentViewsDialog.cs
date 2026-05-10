@@ -4,7 +4,7 @@ using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 
-namespace SSG_FP_Suite.Commands.ViewsAndSheets
+namespace SgRevitAddin.Commands.ViewsAndSheets
 {
     /// <summary>
     /// Dialog for the Create Dependent Views command.

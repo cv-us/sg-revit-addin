@@ -3,12 +3,12 @@ using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Plumbing;
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Selection;
-using SSG_FP_Suite.Utils;
+using SgRevitAddin.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SSG_FP_Suite.Commands.PipeRouting
+namespace SgRevitAddin.Commands.PipeRouting
 {
     /// <summary>
     /// Replaces selected flex pipes with new shortest-length flex pipes between

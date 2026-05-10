@@ -1,14 +1,14 @@
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using SSG_FP_Suite.Utils;
+using SgRevitAddin.Utils;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 
-namespace SSG_FP_Suite.Commands.Export
+namespace SgRevitAddin.Commands.Export
 {
     /// <summary>
     /// Imports sprinkler head locations from an AutoSPRINK CSV export and places

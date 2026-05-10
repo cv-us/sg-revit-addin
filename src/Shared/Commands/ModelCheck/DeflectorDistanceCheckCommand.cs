@@ -5,7 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SSG_FP_Suite.Commands.ModelCheck
+namespace SgRevitAddin.Commands.ModelCheck
 {
     /// <summary>
     /// Measures the distance from upright sprinkler deflectors to the structural

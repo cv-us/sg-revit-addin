@@ -2,11 +2,11 @@
 
 **Command:** `SetupGlobalParamsCommand`
 **Domain:** Setup
-**Ribbon:** SSG FP Suite > Setup > Setup Global Parameters
+**Ribbon:** SG Revit Addin > Setup > Setup Global Parameters
 
 ## Purpose
 
-Creates and initializes the full set of 86 "Dynamo Setting - " global parameters used as a configuration store by all SSG FP Suite commands (and other SSG FP Suite commands). Parameters that already exist are left untouched; only missing ones are created with their default values. This is a one-time (or run-anytime-safe) project setup step.
+Creates and initializes the full set of 86 "Dynamo Setting - " global parameters used as a configuration store by all SG Revit Addin commands (and other SG Revit Addin commands). Parameters that already exist are left untouched; only missing ones are created with their default values. This is a one-time (or run-anytime-safe) project setup step.
 
 ## Workflow
 

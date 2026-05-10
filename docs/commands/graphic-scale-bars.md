@@ -1,7 +1,7 @@
 # AutoInsert — Graphic Scale Bars To Sheets
 
-**Ribbon location:** SSG FP Suite tab > Annotation panel > "Scale Bars"
-**Command class:** `SSG_FP_Suite.Commands.Annotation.GraphicScaleBarsCommand`
+**Ribbon location:** SG Revit Addin tab > Annotation panel > "Scale Bars"
+**Command class:** `SgRevitAddin.Commands.Annotation.GraphicScaleBarsCommand`
 
 ## What It Does
 

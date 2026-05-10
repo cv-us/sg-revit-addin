@@ -1,7 +1,7 @@
 # Auto Hang — User Locations (Underside of Structural — Raybounce)
 
-**Ribbon location:** SSG FP Suite tab > Hangers panel > "Hang User Loc"
-**Command class:** `SSG_FP_Suite.Commands.Hangers.HangUserLocationsCommand`
+**Ribbon location:** SG Revit Addin tab > Hangers panel > "Hang User Loc"
+**Command class:** `SgRevitAddin.Commands.Hangers.HangUserLocationsCommand`
 
 ## What It Does
 

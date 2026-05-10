@@ -1,4 +1,4 @@
-# SSG FP Suite — Future Command Ideas & Enhancements
+# SG Revit Addin — Future Command Ideas & Enhancements
 
 Track ideas for new commands, enhancements to existing commands, and general improvements here.
 Anyone on the team can add to this list.

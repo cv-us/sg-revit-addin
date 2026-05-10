@@ -2,7 +2,7 @@
 
 **Command:** `RemoveScopeBoxesCommand`
 **Domain:** ViewsAndSheets
-**Ribbon:** SSG FP Suite > Views & Sheets > Remove Scope Boxes
+**Ribbon:** SG Revit Addin > Views & Sheets > Remove Scope Boxes
 
 ## Purpose
 

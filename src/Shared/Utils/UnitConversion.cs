@@ -1,6 +1,6 @@
 using System;
 
-namespace SSG_FP_Suite.Utils
+namespace SgRevitAddin.Utils
 {
     /// <summary>
     /// Unit conversion helpers for Revit's internal unit system.

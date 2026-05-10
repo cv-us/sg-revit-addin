@@ -2,7 +2,7 @@
 
 **Command:** `CreatePlanViewsCommand`
 **Domain:** ViewsAndSheets
-**Ribbon:** SSG FP Suite > Views & Sheets > Create Plan Views
+**Ribbon:** SG Revit Addin > Views & Sheets > Create Plan Views
 
 ## Purpose
 

@@ -6,7 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SSG_FP_Suite.Commands.Export
+namespace SgRevitAddin.Commands.Export
 {
     /// <summary>
     /// Places Trimble field point marker families at hanger and seismic brace locations

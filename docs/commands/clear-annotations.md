@@ -2,7 +2,7 @@
 
 **Command:** `ClearAnnotationsCommand`
 **Domain:** Annotation
-**Ribbon:** SSG FP Suite > Annotation > Clear Annotations
+**Ribbon:** SG Revit Addin > Annotation > Clear Annotations
 
 ## Purpose
 

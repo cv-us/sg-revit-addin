@@ -51,7 +51,7 @@ string systemName = ParameterHelpers.GetParamValueAsString(pipe, "System Type");
 string pipeDia = ParameterHelpers.GetParamValueAsString(pipe, "Diameter");
 
 // Write parameters
-ParameterHelpers.SetParamValue(element, "Comments", "Placed by SSG FP Suite");
+ParameterHelpers.SetParamValue(element, "Comments", "Placed by SG Revit Addin");
 ParameterHelpers.SetParamValue(element, "Offset", 10.5);
 ```
 
@@ -134,6 +134,6 @@ View activeView = RevitApiHelpers.GetActiveView(doc);
 
 1. If it fits in an existing file, add the method there
 2. If it's a new category of helper, create a new `.cs` file here
-3. Use the namespace `SSG_FP_Suite.Utils`
+3. Use the namespace `SgRevitAddin.Utils`
 4. Make methods `public static` so any command can call them
 5. Add a doc comment explaining what it does and a usage example

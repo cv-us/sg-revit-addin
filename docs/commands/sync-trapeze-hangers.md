@@ -2,7 +2,7 @@
 
 **Command:** `SyncTrapezeHangersCommand`
 **Domain:** Hangers
-**Ribbon:** SSG FP Suite > Hangers > Sync Trapeze
+**Ribbon:** SG Revit Addin > Hangers > Sync Trapeze
 
 ## Purpose
 

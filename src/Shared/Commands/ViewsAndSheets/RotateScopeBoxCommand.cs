@@ -2,12 +2,12 @@ using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Selection;
-using SSG_FP_Suite.Utils;
+using SgRevitAddin.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SSG_FP_Suite.Commands.ViewsAndSheets
+namespace SgRevitAddin.Commands.ViewsAndSheets
 {
     /// <summary>
     /// Rotates a scope box to match the angle of a grid line.

@@ -2,7 +2,7 @@ using Autodesk.Revit.DB;
 using System;
 using System.Collections.Generic;
 
-namespace SSG_FP_Suite.Utils
+namespace SgRevitAddin.Utils
 {
     /// <summary>
     /// Analytical 2D line-line intersection math.

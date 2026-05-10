@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
-    <RootNamespace>SSG_FP_Suite.Tests</RootNamespace>
+    <RootNamespace>SgRevitAddin.Tests</RootNamespace>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\SSG24\SSG24.csproj" />
+    <ProjectReference Include="..\..\src\SgRevit24\SgRevit24.csproj" />
   </ItemGroup>
 
 </Project>

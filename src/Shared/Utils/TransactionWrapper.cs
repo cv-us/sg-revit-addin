@@ -1,7 +1,7 @@
 using Autodesk.Revit.DB;
 using System;
 
-namespace SSG_FP_Suite.Utils
+namespace SgRevitAddin.Utils
 {
     /// <summary>
     /// Wraps a Revit Transaction in a safe, disposable pattern.

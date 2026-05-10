@@ -1,6 +1,6 @@
 using Autodesk.Revit.DB;
 
-namespace SSG_FP_Suite.Models
+namespace SgRevitAddin.Models
 {
     /// <summary>
     /// Data transfer object (DTO) representing a sprinkler head.

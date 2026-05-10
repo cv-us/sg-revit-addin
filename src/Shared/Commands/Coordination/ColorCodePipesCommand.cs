@@ -5,7 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SSG_FP_Suite.Commands.Coordination
+namespace SgRevitAddin.Commands.Coordination
 {
     /// <summary>
     /// Applies color overrides to pipes in the active view for visual coordination.

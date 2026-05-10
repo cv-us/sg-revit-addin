@@ -1,4 +1,4 @@
-# SSG FP Suite
+# SG Revit Addin
 
 A Revit plugin suite that automates fire protection / fire sprinkler design workflows. Built by and for fire sprinkler designers who do layout, hydraulic calcs, coordination, fabrication lists, and plan detailing every day.
 
@@ -21,7 +21,7 @@ You don't need to understand all of this up front. The project is designed so yo
 ```
 C:\dev\ssg\
 │
-├── SSG_FP_Suite.sln          ← Open this in Visual Studio
+├── SgRevitAddin.sln          ← Open this in Visual Studio
 ├── CLAUDE.md                  ← Rules for Claude Code to follow when editing this project
 ├── .gitignore                 ← Keeps build junk out of git
 │
@@ -32,8 +32,8 @@ C:\dev\ssg\
 │   │   ├── Config/            ← Plugin settings (defaults, user prefs)
 │   │   ├── Models/            ← Data classes (sprinkler info, pipe info, etc.)
 │   │   └── UI/                ← Dialogs and ribbon icons
-│   ├── SSG24/                 ← Revit 2022-2024 build config (you rarely touch this)
-│   └── SSG25/                 ← Revit 2025-2026 build config (you rarely touch this)
+│   ├── SgRevit24/                 ← Revit 2022-2024 build config (you rarely touch this)
+│   └── SgRevit25/                 ← Revit 2025-2026 build config (you rarely touch this)
 │
 ├── sandbox/                   ← MACRO PLAYGROUND — start here when prototyping
 │   ├── _macro_template.cs     ← Copy this to start a new macro
@@ -74,16 +74,16 @@ See `docs/macro-to-command-workflow.md` for the step-by-step process.
 
 ---
 
-## The Two Projects — SSG24 vs SSG25
+## The Two Projects — SgRevit24 vs SgRevit25
 
 Autodesk changed the underlying technology between Revit 2024 and 2025:
 
 | Project | .NET Version | Revit Versions | DLL Output |
 |---------|-------------|----------------|------------|
-| **SSG24** | .NET Framework 4.8 | 2023, 2024 | `SSG24.dll` |
-| **SSG25** | .NET 8 | 2025, 2026 | `SSG25.dll` |
+| **SgRevit24** | .NET Framework 4.8 | 2023, 2024 | `SgRevit24.dll` |
+| **SgRevit25** | .NET 8 | 2025, 2026 | `SgRevit25.dll` |
 
-**You almost never need to think about this.** All your command code goes in `src/Shared/`, and both projects automatically include it. The only time you'll touch `src/SSG24/` or `src/SSG25/` is if Revit's API changed between versions and you need version-specific code.
+**You almost never need to think about this.** All your command code goes in `src/Shared/`, and both projects automatically include it. The only time you'll touch `src/SgRevit24/` or `src/SgRevit25/` is if Revit's API changed between versions and you need version-specific code.
 
 ---
 
@@ -114,8 +114,8 @@ When you create a new command, just pick the folder that fits. If none fit, we c
 
 - **Visual Studio 2022+** (Community edition is fine) or just the `dotnet` CLI
 - **Revit installed** — the build needs the API DLLs from your Revit installation
-  - SSG24 references: `C:\Program Files\Autodesk\Revit 2024\RevitAPI.dll`
-  - SSG25 references: `C:\Program Files\Autodesk\Revit 2025\RevitAPI.dll`
+  - SgRevit24 references: `C:\Program Files\Autodesk\Revit 2024\RevitAPI.dll`
+  - SgRevit25 references: `C:\Program Files\Autodesk\Revit 2025\RevitAPI.dll`
 
 ### Build
 
@@ -124,8 +124,8 @@ When you create a new command, just pick the folder that fits. If none fit, we c
 .\tools\build.ps1
 
 # Build just one version
-.\tools\build.ps1 -Project SSG24
-.\tools\build.ps1 -Project SSG25
+.\tools\build.ps1 -Project SgRevit24
+.\tools\build.ps1 -Project SgRevit25
 
 # Release build
 .\tools\build.ps1 -Configuration Release
@@ -159,12 +159,12 @@ This copies the DLL and `.addin` manifest to Revit's add-ins folder. Restart Rev
 
 | File | What It Does |
 |------|-------------|
-| `SSG_FP_Suite.sln` | Open this in Visual Studio to see everything |
+| `SgRevitAddin.sln` | Open this in Visual Studio to see everything |
 | `src/Shared/Utils/TransactionWrapper.cs` | Wraps Revit transactions safely — use this in every command that modifies the model |
 | `src/Shared/Utils/ElementFilters.cs` | Pre-built queries for pipes, sprinklers, fittings — saves you writing FilteredElementCollector every time |
 | `src/Shared/Utils/ParameterHelpers.cs` | Read/write element parameters without boilerplate |
 | `src/Shared/Utils/UnitConversion.cs` | Convert Revit's internal feet to inches/meters for display |
-| `src/SSG24/SSG24.addin` | Tells Revit 2023-2024 which commands exist — you add entries here when graduating a command |
-| `src/SSG25/SSG25.addin` | Same thing for Revit 2025-2026 |
+| `src/SgRevit24/SgRevit24.addin` | Tells Revit 2023-2024 which commands exist — you add entries here when graduating a command |
+| `src/SgRevit25/SgRevit25.addin` | Same thing for Revit 2025-2026 |
 | `sandbox/_macro_template.cs` | Starting point for every new macro experiment |
 | `docs/command-catalog.md` | Master checklist of all commands and their status |

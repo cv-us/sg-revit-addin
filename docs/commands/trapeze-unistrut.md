@@ -1,7 +1,7 @@
 # Auto Trapeze Hang — Unistrut — Auto Spaced
 
-**Ribbon location:** SSG FP Suite tab > Hangers panel > "Unistrut Trapeze"
-**Command class:** `SSG_FP_Suite.Commands.Hangers.TrapezeUnistrutCommand`
+**Ribbon location:** SG Revit Addin tab > Hangers panel > "Unistrut Trapeze"
+**Command class:** `SgRevitAddin.Commands.Hangers.TrapezeUnistrutCommand`
 
 ## What It Does
 

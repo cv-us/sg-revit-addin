@@ -2,7 +2,7 @@
 
 **Command:** `PipeSleevesAtWallsCommand`
 **Domain:** Annotation
-**Ribbon:** SSG FP Suite > Annotation > Sleeves at Walls
+**Ribbon:** SG Revit Addin > Annotation > Sleeves at Walls
 
 ## Purpose
 

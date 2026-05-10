@@ -2,7 +2,7 @@
 
 **Command:** `PipesTooShortCommand`
 **Domain:** ModelCheck
-**Ribbon:** SSG FP Suite > Model Check > Pipes Too Short
+**Ribbon:** SG Revit Addin > Model Check > Pipes Too Short
 
 ## Purpose
 

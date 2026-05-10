@@ -6,7 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SSG_FP_Suite.Commands.ModelCheck
+namespace SgRevitAddin.Commands.ModelCheck
 {
     /// <summary>
     /// Checks upright sprinkler heads for NFPA clearance violations.

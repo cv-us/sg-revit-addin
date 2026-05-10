@@ -1,7 +1,7 @@
 # Replace Hanger Sizes
 
 **Ribbon:** SG → Hangers → Replace Sizes
-**Class:** `SSG_FP_Suite.Commands.Hangers.ReplaceHangerSizesCommand`
+**Class:** `SgRevitAddin.Commands.Hangers.ReplaceHangerSizesCommand`
 
 > **Sister command:** [Match Hanger Sizes](match-hanger-sizes.md) does
 > the same job using a parameter-set approach (no delete) and orange

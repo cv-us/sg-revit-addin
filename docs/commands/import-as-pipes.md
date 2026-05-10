@@ -2,7 +2,7 @@
 
 **Command:** `ImportASPipesCommand`
 **Domain:** Export
-**Ribbon:** SSG FP Suite > Export > Import AS Pipes
+**Ribbon:** SG Revit Addin > Export > Import AS Pipes
 
 ## Purpose
 

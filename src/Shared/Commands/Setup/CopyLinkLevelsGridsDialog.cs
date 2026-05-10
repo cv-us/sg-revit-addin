@@ -4,7 +4,7 @@ using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 
-namespace SSG_FP_Suite.Commands.Setup
+namespace SgRevitAddin.Commands.Setup
 {
     /// <summary>
     /// Dialog for the Copy Link Levels and Grids command.

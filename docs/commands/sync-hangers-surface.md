@@ -2,7 +2,7 @@
 
 **Command:** `SyncHangersSurfaceCommand`
 **Domain:** Hangers
-**Ribbon:** SSG FP Suite > Hangers > Sync Struct Surface
+**Ribbon:** SG Revit Addin > Hangers > Sync Struct Surface
 
 ## Purpose
 

@@ -4,7 +4,7 @@ using Autodesk.Revit.UI.Selection;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SSG_FP_Suite.Utils
+namespace SgRevitAddin.Utils
 {
     /// <summary>
     /// A selection filter that restricts user picks to a specific category.

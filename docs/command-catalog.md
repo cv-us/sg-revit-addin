@@ -1,6 +1,6 @@
 # Command Catalog
 
-Master list of all SSG FP Suite commands.
+Master list of all SG Revit Addin commands.
 
 ## PipeRouting
 - `ShortenFlexPipesCommand` - Replace selected flex pipes with shortest-length connections between the same endpoints

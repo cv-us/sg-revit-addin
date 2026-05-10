@@ -9,22 +9,22 @@ PowerShell scripts for building the plugin and deploying it to Revit.
 Compiles the source code into DLLs.
 
 ```powershell
-# Build both SSG24 and SSG25 in Debug mode (default)
+# Build both SgRevit24 and SgRevit25 in Debug mode (default)
 .\tools\build.ps1
 
 # Build only the Revit 2023-2024 version
-.\tools\build.ps1 -Project SSG24
+.\tools\build.ps1 -Project SgRevit24
 
 # Build only the Revit 2025-2026 version
-.\tools\build.ps1 -Project SSG25
+.\tools\build.ps1 -Project SgRevit25
 
 # Build for release (optimized, no debug symbols)
 .\tools\build.ps1 -Configuration Release
 ```
 
 **Output locations:**
-- `src/SSG24/bin/Debug/SSG24.dll`
-- `src/SSG25/bin/Debug/SSG25.dll`
+- `src/SgRevit24/bin/Debug/SgRevit24.dll`
+- `src/SgRevit25/bin/Debug/SgRevit25.dll`
 
 ### `deploy-addin.ps1` — Install to Revit
 
@@ -40,11 +40,11 @@ Copies the built DLL and `.addin` manifest to Revit's add-ins folder so Revit lo
 
 **Where it copies to:**
 ```
-%AppData%\Autodesk\Revit\Addins\2024\SSG24.dll
-%AppData%\Autodesk\Revit\Addins\2024\SSG24.addin
+%AppData%\Autodesk\Revit\Addins\2024\SgRevit24.dll
+%AppData%\Autodesk\Revit\Addins\2024\SgRevit24.addin
 
-%AppData%\Autodesk\Revit\Addins\2025\SSG25.dll
-%AppData%\Autodesk\Revit\Addins\2025\SSG25.addin
+%AppData%\Autodesk\Revit\Addins\2025\SgRevit25.dll
+%AppData%\Autodesk\Revit\Addins\2025\SgRevit25.addin
 ```
 
 **Important:** You must **restart Revit** after deploying for changes to take effect. Revit only loads add-ins at startup.
@@ -53,7 +53,7 @@ Copies the built DLL and `.addin` manifest to Revit's add-ins folder so Revit lo
 
 ```
 1. Edit code in src/Shared/
-2. .\tools\build.ps1 -Project SSG24
+2. .\tools\build.ps1 -Project SgRevit24
 3. .\tools\deploy-addin.ps1 -RevitVersion 2024
 4. Start Revit → test your command
 5. Close Revit → edit → repeat

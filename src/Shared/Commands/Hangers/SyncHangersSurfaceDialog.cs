@@ -2,7 +2,7 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 
-namespace SSG_FP_Suite.Commands.Hangers
+namespace SgRevitAddin.Commands.Hangers
 {
     /// <summary>
     /// Dialog for the AutoSync Hangers to Structural Elements (Surface) command.

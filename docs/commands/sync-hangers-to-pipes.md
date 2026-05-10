@@ -2,7 +2,7 @@
 
 **Command:** `SyncHangersToPipesCommand`
 **Domain:** Hangers
-**Ribbon:** SSG FP Suite > Hangers > Sync to Pipes
+**Ribbon:** SG Revit Addin > Hangers > Sync to Pipes
 
 ## Purpose
 

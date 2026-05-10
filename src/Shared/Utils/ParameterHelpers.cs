@@ -1,6 +1,6 @@
 using Autodesk.Revit.DB;
 
-namespace SSG_FP_Suite.Utils
+namespace SgRevitAddin.Utils
 {
     /// <summary>
     /// Helpers for reading and writing Revit element parameters by name.
@@ -15,7 +15,7 @@ namespace SSG_FP_Suite.Utils
     ///   string system = ParameterHelpers.GetParamValueAsString(pipe, "System Type");
     ///
     ///   // Write parameters (inside a transaction!)
-    ///   ParameterHelpers.SetParamValue(element, "Comments", "Placed by SSG FP Suite");
+    ///   ParameterHelpers.SetParamValue(element, "Comments", "Placed by SG Revit Addin");
     ///   ParameterHelpers.SetParamValue(element, "Offset", 10.5);  // in feet!
     ///
     /// NOTE: Parameter names are CASE-SENSITIVE and must match exactly.

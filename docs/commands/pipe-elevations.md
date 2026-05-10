@@ -2,7 +2,7 @@
 
 **Command:** `PipeElevationsCommand`
 **Domain:** Annotation
-**Ribbon:** SSG FP Suite > Annotation > Pipe Elevations
+**Ribbon:** SG Revit Addin > Annotation > Pipe Elevations
 
 ## Purpose
 

@@ -2,7 +2,7 @@
 
 **Command:** `SSBSymbolsCommand`
 **Domain:** Annotation
-**Ribbon:** SSG FP Suite > Annotation > SSB Symbols
+**Ribbon:** SG Revit Addin > Annotation > SSB Symbols
 
 ## Purpose
 

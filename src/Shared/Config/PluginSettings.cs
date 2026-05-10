@@ -1,7 +1,7 @@
-namespace SSG_FP_Suite.Config
+namespace SgRevitAddin.Config
 {
     /// <summary>
-    /// All configurable settings for the SSG FP Suite plugin.
+    /// All configurable settings for the SG Revit Addin plugin.
     ///
     /// Default values are set here. Users can override them via the settings dialog
     /// (or by editing the JSON file directly). SettingsManager handles loading/saving.

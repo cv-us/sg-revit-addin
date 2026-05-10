@@ -3,11 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SSG24", "src\SSG24\SSG24.csproj", "{A1000001-0000-0000-0000-000000000001}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SgRevit24", "src\SgRevit24\SgRevit24.csproj", "{A1000001-0000-0000-0000-000000000001}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SSG25", "src\SSG25\SSG25.csproj", "{A1000002-0000-0000-0000-000000000002}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SgRevit25", "src\SgRevit25\SgRevit25.csproj", "{A1000002-0000-0000-0000-000000000002}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SSG_FP_Suite.Tests", "tests\SSG_FP_Suite.Tests\SSG_FP_Suite.Tests.csproj", "{A1000003-0000-0000-0000-000000000003}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SgRevitAddin.Tests", "tests\SgRevitAddin.Tests\SgRevitAddin.Tests.csproj", "{A1000003-0000-0000-0000-000000000003}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{B1000001-0000-0000-0000-000000000001}"
 EndProject

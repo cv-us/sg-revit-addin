@@ -1,7 +1,7 @@
 # Auto Hang at CAD Lines
 
-**Ribbon location:** SSG FP Suite tab → Hangers panel → "Hang at CAD Lines"
-**Command class:** `SSG_FP_Suite.Commands.Hangers.HangAtCADLinesCommand`
+**Ribbon location:** SG Revit Addin tab → Hangers panel → "Hang at CAD Lines"
+**Command class:** `SgRevitAddin.Commands.Hangers.HangAtCADLinesCommand`
 
 ## What It Does
 

@@ -1,4 +1,4 @@
-# Icon Map — SSG FP Suite
+# Icon Map — SG Revit Addin
 
 All icons live in `src/Shared/UI/Resources/icons/` and are embedded into the DLL at build time.
 
@@ -61,8 +61,8 @@ To give each command a unique icon:
 2. Save to this folder with a descriptive name, e.g.:
    - `color-pipes-32.png` / `color-pipes-16.png`
    - `trimble-markers-32.png` / `trimble-markers-16.png`
-3. Update the icon filenames in both `src/SSG24/App.cs` and `src/SSG25/App.cs`
-4. Rebuild: `dotnet build src/SSG24/SSG24.csproj -c Release` and SSG25
+3. Update the icon filenames in both `src/SgRevit24/App.cs` and `src/SgRevit25/App.cs`
+4. Rebuild: `dotnet build src/SgRevit24/SgRevit24.csproj -c Release` and SgRevit25
 5. Redeploy: `powershell -File tools/deploy-addin.ps1 -RevitVersion {year}`
 
 The .csproj automatically embeds all PNGs from this folder via:

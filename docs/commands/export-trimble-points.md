@@ -2,7 +2,7 @@
 
 **Command:** `ExportTrimblePointsCommand`
 **Domain:** Export
-**Ribbon:** SSG FP Suite > Export > Trimble Points
+**Ribbon:** SG Revit Addin > Export > Trimble Points
 ## Purpose
 
 Exports pipe hanger locations as Trimble-compatible CSV point files for field layout of hanger inserts before concrete pours. The output file can be imported directly into Trimble FieldLink, Trimble Access (RTS total stations), Trimble Layout Manager, or any equipment that accepts CSV point files.

@@ -1,7 +1,7 @@
 # Auto Hang — Typical Spaced Runs (Hangers to Decks)
 
-**Ribbon location:** SSG FP Suite tab > Hangers panel > "Hang Spaced Runs"
-**Command class:** `SSG_FP_Suite.Commands.Hangers.HangTypicalSpacingCommand`
+**Ribbon location:** SG Revit Addin tab > Hangers panel > "Hang Spaced Runs"
+**Command class:** `SgRevitAddin.Commands.Hangers.HangTypicalSpacingCommand`
 
 ## What It Does
 

@@ -7,8 +7,8 @@ Everything that gets compiled into the plugin lives here.
 ```
 src/
 ├── Shared/       ← Where you write code (commands, utils, models, config)
-├── SSG24/        ← Build wrapper for Revit 2023-2024 (.NET Framework 4.8)
-└── SSG25/        ← Build wrapper for Revit 2025-2026 (.NET 8)
+├── SgRevit24/        ← Build wrapper for Revit 2023-2024 (.NET Framework 4.8)
+└── SgRevit25/        ← Build wrapper for Revit 2025-2026 (.NET 8)
 ```
 
 ## The Key Idea: Write Once in Shared, Build Twice
@@ -21,16 +21,16 @@ src/
 └──────────┬──────────────┬───────────────┘
            │              │
      ┌─────▼─────┐  ┌────▼──────┐
-     │  SSG24/   │  │  SSG25/   │
+     │  SgRevit24/   │  │  SgRevit25/   │
      │ .NET 4.8  │  │  .NET 8   │
      │ Revit     │  │  Revit    │
      │ 2023-2024 │  │  2025-2026│
      └─────┬─────┘  └────┬──────┘
            │              │
-      SSG24.dll      SSG25.dll
+      SgRevit24.dll      SgRevit25.dll
 ```
 
-**You work in `Shared/` 95% of the time.** Both SSG24 and SSG25 automatically pull in every `.cs` file from Shared via this line in their `.csproj`:
+**You work in `Shared/` 95% of the time.** Both SgRevit24 and SgRevit25 automatically pull in every `.cs` file from Shared via this line in their `.csproj`:
 
 ```xml
 <Compile Include="..\Shared\**\*.cs" LinkBase="Shared" />
@@ -38,7 +38,7 @@ src/
 
 This means: any `.cs` file you add anywhere under `Shared/` is automatically compiled into BOTH DLLs. No extra steps needed.
 
-## When Would I Touch SSG24/ or SSG25/?
+## When Would I Touch SgRevit24/ or SgRevit25/?
 
 Only in these rare cases:
 
@@ -46,7 +46,7 @@ Only in these rare cases:
 
 2. **Ribbon layout changes** — Each version has its own `App.cs` for ribbon button setup. Usually these are identical, but they could differ if the ribbon needs version-specific tweaks.
 
-3. **Adding a new command to the .addin manifest** — When you graduate a macro to a command, you register it in BOTH `SSG24.addin` and `SSG25.addin`.
+3. **Adding a new command to the .addin manifest** — When you graduate a macro to a command, you register it in BOTH `SgRevit24.addin` and `SgRevit25.addin`.
 
 ## The .csproj Files (Build Configuration)
 
@@ -67,8 +67,8 @@ The `.addin` XML file tells Revit:
 
 When you deploy, this file gets copied to:
 ```
-%AppData%\Autodesk\Revit\Addins\2024\SSG24.addin
-%AppData%\Autodesk\Revit\Addins\2025\SSG25.addin
+%AppData%\Autodesk\Revit\Addins\2024\SgRevit24.addin
+%AppData%\Autodesk\Revit\Addins\2025\SgRevit25.addin
 ```
 
 Revit reads it on startup and registers your commands.

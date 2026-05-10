@@ -2,13 +2,13 @@ using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Plumbing;
 using Autodesk.Revit.UI;
-using SSG_FP_Suite.Utils;
+using SgRevitAddin.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace SSG_FP_Suite.Commands.ModelCheck
+namespace SgRevitAddin.Commands.ModelCheck
 {
     /// <summary>
     /// Finds pipes that are shorter than the minimum fabrication nipple length

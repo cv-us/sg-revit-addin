@@ -1,6 +1,6 @@
 # Choosing the Right Command
 
-Many SSG FP Suite commands do related things. This guide helps you pick the right one.
+Many SG Revit Addin commands do related things. This guide helps you pick the right one.
 
 ---
 

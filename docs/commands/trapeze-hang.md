@@ -1,7 +1,7 @@
 # Auto Trapeze Hang — Standard Pipe Trapeze — Auto Spaced
 
-**Ribbon location:** SSG FP Suite tab > Hangers panel > "Trapeze Hang"
-**Command class:** `SSG_FP_Suite.Commands.Hangers.TrapezeHangCommand`
+**Ribbon location:** SG Revit Addin tab > Hangers panel > "Trapeze Hang"
+**Command class:** `SgRevitAddin.Commands.Hangers.TrapezeHangCommand`
 
 ## What It Does
 

@@ -1,7 +1,7 @@
 # Auto Hang — Typical Spacing (Parallel to Structural Framing)
 
-**Ribbon location:** SSG FP Suite tab > Hangers panel > "Hang Parallel Steel"
-**Command class:** `SSG_FP_Suite.Commands.Hangers.HangParallelStructuralCommand`
+**Ribbon location:** SG Revit Addin tab > Hangers panel > "Hang Parallel Steel"
+**Command class:** `SgRevitAddin.Commands.Hangers.HangParallelStructuralCommand`
 
 ## What It Does
 

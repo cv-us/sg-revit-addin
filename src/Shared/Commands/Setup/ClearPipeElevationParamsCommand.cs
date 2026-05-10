@@ -5,7 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SSG_FP_Suite.Commands.Setup
+namespace SgRevitAddin.Commands.Setup
 {
     /// <summary>
     /// Removes the pipe elevation shared parameters from the project.

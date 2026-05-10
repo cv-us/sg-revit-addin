@@ -1,4 +1,4 @@
-# SSG FP Suite - Build Installer
+# SG Revit Addin - Build Installer
 # Compiles both projects in Release mode and then builds the Inno Setup installer.
 #
 # Prerequisites:
@@ -22,18 +22,18 @@ $SolutionRoot = Split-Path -Parent $PSScriptRoot
 $InstallerDir = $PSScriptRoot
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  SSG FP Suite - Installer Build" -ForegroundColor Cyan
+Write-Host "  SG Revit Addin - Installer Build" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 
 # ── Step 1: Build both projects ──
 if (-not $SkipBuild) {
-    Write-Host "`n[1/4] Building SSG24 (Revit 2023-2024)..." -ForegroundColor Yellow
-    dotnet build "$SolutionRoot\src\SSG24\SSG24.csproj" -c Release --nologo
-    if ($LASTEXITCODE -ne 0) { throw "SSG24 build failed" }
+    Write-Host "`n[1/4] Building SgRevit24 (Revit 2023-2024)..." -ForegroundColor Yellow
+    dotnet build "$SolutionRoot\src\SgRevit24\SgRevit24.csproj" -c Release --nologo
+    if ($LASTEXITCODE -ne 0) { throw "SgRevit24 build failed" }
 
-    Write-Host "`n[2/4] Building SSG25 (Revit 2025-2026)..." -ForegroundColor Yellow
-    dotnet build "$SolutionRoot\src\SSG25\SSG25.csproj" -c Release --nologo
-    if ($LASTEXITCODE -ne 0) { throw "SSG25 build failed" }
+    Write-Host "`n[2/4] Building SgRevit25 (Revit 2025-2026)..." -ForegroundColor Yellow
+    dotnet build "$SolutionRoot\src\SgRevit25\SgRevit25.csproj" -c Release --nologo
+    if ($LASTEXITCODE -ne 0) { throw "SgRevit25 build failed" }
 } else {
     Write-Host "`n[1-2/4] Skipping build (using existing Release output)" -ForegroundColor DarkGray
 }
@@ -42,10 +42,10 @@ if (-not $SkipBuild) {
 Write-Host "`n[3/4] Verifying build output..." -ForegroundColor Yellow
 
 $requiredFiles = @(
-    "$SolutionRoot\src\SSG24\bin\Release\SSG24.dll",
-    "$SolutionRoot\src\SSG24\bin\Release\System.Text.Json.dll",
-    "$SolutionRoot\src\SSG25\bin\Release\SSG25.dll",
-    "$SolutionRoot\src\SSG25\bin\Release\SSG25.deps.json"
+    "$SolutionRoot\src\SgRevit24\bin\Release\SgRevit24.dll",
+    "$SolutionRoot\src\SgRevit24\bin\Release\System.Text.Json.dll",
+    "$SolutionRoot\src\SgRevit25\bin\Release\SgRevit25.dll",
+    "$SolutionRoot\src\SgRevit25\bin\Release\SgRevit25.deps.json"
 )
 
 foreach ($f in $requiredFiles) {
@@ -107,14 +107,14 @@ if ($rfaCount -gt 0) {
     Write-Host "  No .rfa files in installer\Families\ - installer will ship with no families." -ForegroundColor DarkYellow
 }
 
-& $iscc "$InstallerDir\ssg-fp-suite.iss"
+& $iscc "$InstallerDir\sg-revit-addin.iss"
 if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed" }
 
 # ── Optional: Sign the installer ──
 if ($Sign) {
     if (-not $CertPath) { throw "Code signing requested but -CertPath not provided" }
 
-    $installerExe = Get-ChildItem "$outputDir\SSG-FP-Suite-*-Setup.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    $installerExe = Get-ChildItem "$outputDir\SgRevitAddin-*-Setup.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
     if (-not $installerExe) { throw "Installer .exe not found in installer\Output\" }
 
     Write-Host "`n[Signing] Signing $($installerExe.Name)..." -ForegroundColor Yellow
@@ -141,7 +141,7 @@ if ($Sign) {
 }
 
 # ── Done ──
-$output = Get-ChildItem "$outputDir\SSG-FP-Suite-*-Setup.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+$output = Get-ChildItem "$outputDir\SgRevitAddin-*-Setup.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 Write-Host "`n========================================" -ForegroundColor Green
 Write-Host "  Installer built successfully!" -ForegroundColor Green
 Write-Host "  Output: $($output.FullName)" -ForegroundColor Green

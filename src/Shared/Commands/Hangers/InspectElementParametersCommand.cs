@@ -7,7 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace SSG_FP_Suite.Commands.Hangers
+namespace SgRevitAddin.Commands.Hangers
 {
     /// <summary>
     /// Diagnostic command. Dumps every parameter on a selected element

@@ -2,7 +2,7 @@
 
 **Command:** `SwapHydraCADHangersCommand`
 **Domain:** Hangers
-**Ribbon:** SSG FP Suite > Hangers > Swap HydraCAD
+**Ribbon:** SG Revit Addin > Hangers > Swap HydraCAD
 
 ## Purpose
 

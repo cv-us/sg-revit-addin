@@ -2,7 +2,7 @@
 
 **Command:** `RoomTextNotesCommand`
 **Domain:** Annotation
-**Ribbon:** SSG FP Suite > Annotation > Room Text Notes
+**Ribbon:** SG Revit Addin > Annotation > Room Text Notes
 
 ## Purpose
 

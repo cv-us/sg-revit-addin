@@ -1,7 +1,7 @@
 # Auto Trapeze Hang — Unistrut 21A — Auto Spaced
 
-**Ribbon location:** SSG FP Suite tab > Hangers panel > "Unistrut 21A"
-**Command class:** `SSG_FP_Suite.Commands.Hangers.TrapezeUnistrut21ACommand`
+**Ribbon location:** SG Revit Addin tab > Hangers panel > "Unistrut 21A"
+**Command class:** `SgRevitAddin.Commands.Hangers.TrapezeUnistrut21ACommand`
 
 ## What It Does
 

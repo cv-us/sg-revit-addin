@@ -33,7 +33,7 @@ using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 
-namespace SSG_FP_Suite.Commands.YourDomain
+namespace SgRevitAddin.Commands.YourDomain
 {
     [Transaction(TransactionMode.Manual)]
     [Regeneration(RegenerationOption.Manual)]
@@ -61,13 +61,13 @@ namespace SSG_FP_Suite.Commands.YourDomain
 
 ## Step 4: Register the Command
 
-Add to both `.addin` files (`src/SSG24/SSG24.addin` and `src/SSG25/SSG25.addin`):
+Add to both `.addin` files (`src/SgRevit24/SgRevit24.addin` and `src/SgRevit25/SgRevit25.addin`):
 
 ```xml
 <AddIn Type="Command">
   <Name>Your Feature Name</Name>
-  <Assembly>SSG24.dll</Assembly>  <!-- or SSG25.dll -->
-  <FullClassName>SSG_FP_Suite.Commands.YourDomain.YourFeatureCommand</FullClassName>
+  <Assembly>SgRevit24.dll</Assembly>  <!-- or SgRevit25.dll -->
+  <FullClassName>SgRevitAddin.Commands.YourDomain.YourFeatureCommand</FullClassName>
   <ClientId>GENERATE-A-NEW-GUID-HERE</ClientId>
   <VendorId>SSG</VendorId>
 </AddIn>

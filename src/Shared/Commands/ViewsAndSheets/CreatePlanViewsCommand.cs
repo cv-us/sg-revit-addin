@@ -1,12 +1,12 @@
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using SSG_FP_Suite.Utils;
+using SgRevitAddin.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SSG_FP_Suite.Commands.ViewsAndSheets
+namespace SgRevitAddin.Commands.ViewsAndSheets
 {
     /// <summary>
     /// Creates floor and/or ceiling plan views for selected levels.

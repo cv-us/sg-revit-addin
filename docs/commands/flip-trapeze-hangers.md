@@ -2,7 +2,7 @@
 
 **Command:** `FlipTrapezeHangersCommand`
 **Domain:** Hangers
-**Ribbon:** SSG FP Suite > Hangers > Flip Trapeze
+**Ribbon:** SG Revit Addin > Hangers > Flip Trapeze
 
 ## Purpose
 

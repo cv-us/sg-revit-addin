@@ -2,7 +2,7 @@
 
 **Command:** `PipeSleevesAtDecksCommand`
 **Domain:** Annotation
-**Ribbon:** SSG FP Suite > Annotation > Sleeves at Decks
+**Ribbon:** SG Revit Addin > Annotation > Sleeves at Decks
 
 ## Purpose
 

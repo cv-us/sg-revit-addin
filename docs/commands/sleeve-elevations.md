@@ -2,7 +2,7 @@
 
 **Command:** `SleeveElevationsCommand`
 **Domain:** Annotation
-**Ribbon:** SSG FP Suite > Annotation > Sleeve Elevations
+**Ribbon:** SG Revit Addin > Annotation > Sleeve Elevations
 
 ## Purpose
 

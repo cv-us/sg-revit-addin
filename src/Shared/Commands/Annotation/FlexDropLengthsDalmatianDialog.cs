@@ -2,7 +2,7 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 
-namespace SSG_FP_Suite.Commands.Annotation
+namespace SgRevitAddin.Commands.Annotation
 {
     /// <summary>
     /// Dialog for the Insert Flexible Drop Lengths (Dalmatian Fire Style) command.

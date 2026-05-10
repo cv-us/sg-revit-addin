@@ -2,7 +2,7 @@
 
 **Command:** `RotateScopeBoxCommand`
 **Domain:** ViewsAndSheets
-**Ribbon:** SSG FP Suite > Views & Sheets > Rotate Scope Box
+**Ribbon:** SG Revit Addin > Views & Sheets > Rotate Scope Box
 
 ## Purpose
 

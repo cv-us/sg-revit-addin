@@ -1,7 +1,7 @@
 # Auto Hang — Threaded Branchlines (Downstream Ends)
 
-**Ribbon location:** SSG FP Suite tab > Hangers panel > "Hang Downstream"
-**Command class:** `SSG_FP_Suite.Commands.Hangers.HangDownstreamCommand`
+**Ribbon location:** SG Revit Addin tab > Hangers panel > "Hang Downstream"
+**Command class:** `SgRevitAddin.Commands.Hangers.HangDownstreamCommand`
 
 ## What It Does
 

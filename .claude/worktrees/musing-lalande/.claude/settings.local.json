@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find \"C:\\\\\\\\dev\\\\\\\\ssg\\\\\\\\.claude\\\\\\\\worktrees\\\\\\\\musing-lalande\\\\\\\\src\\\\\\\\Shared\\\\\\\\Commands\" -name \"*Command.cs\" -type f)"
+    ]
+  }
+}

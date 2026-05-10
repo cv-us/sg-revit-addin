@@ -1,12 +1,12 @@
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using SSG_FP_Suite.Utils;
+using SgRevitAddin.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SSG_FP_Suite.Commands.ModelCheck
+namespace SgRevitAddin.Commands.ModelCheck
 {
     /// <summary>
     /// Identifies pipe hangers whose vertical gap between top-of-pipe and the
@@ -50,7 +50,7 @@ namespace SSG_FP_Suite.Commands.ModelCheck
         private const string RodLengthParam = "Rod Length";
 
         /// <summary>ApplicationId stamped on every marker DirectShape.</summary>
-        private const string MarkerAppId = "SSG_FP_Suite";
+        private const string MarkerAppId = "SgRevitAddin";
 
         /// <summary>ApplicationDataId stamped on every marker so we can find ours specifically.</summary>
         private const string MarkerAppDataId = "HangerGapMarker";

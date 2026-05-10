@@ -2,7 +2,7 @@
 
 **Command:** `SeismicBracesCommand`
 **Domain:** Seismic / Annotation
-**Ribbon:** SSG FP Suite > Seismic > Seismic Braces
+**Ribbon:** SG Revit Addin > Seismic > Seismic Braces
 
 ## Purpose
 

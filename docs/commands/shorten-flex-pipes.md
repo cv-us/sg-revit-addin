@@ -2,7 +2,7 @@
 
 **Command:** `ShortenFlexPipesCommand`
 **Domain:** PipeRouting
-**Ribbon:** SSG FP Suite > Pipe Routing > Shorten Flex Pipes
+**Ribbon:** SG Revit Addin > Pipe Routing > Shorten Flex Pipes
 
 ## Purpose
 

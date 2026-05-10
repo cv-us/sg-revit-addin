@@ -5,7 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SSG_FP_Suite.Commands.ViewsAndSheets
+namespace SgRevitAddin.Commands.ViewsAndSheets
 {
     /// <summary>
     /// Creates dependent views from selected parent floor and/or ceiling plan views.

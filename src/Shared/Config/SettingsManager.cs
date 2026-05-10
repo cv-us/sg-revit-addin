@@ -2,13 +2,13 @@ using System;
 using System.IO;
 using System.Text.Json;
 
-namespace SSG_FP_Suite.Config
+namespace SgRevitAddin.Config
 {
     /// <summary>
     /// Loads and saves plugin settings to a JSON file in the user's AppData folder.
     ///
     /// Settings file location:
-    ///   %AppData%\SSG_FP_Suite\settings.json
+    ///   %AppData%\SgRevitAddin\settings.json
     ///
     /// HOW IT WORKS:
     ///   - On first run, no settings.json exists → returns defaults from PluginSettings
@@ -29,7 +29,7 @@ namespace SSG_FP_Suite.Config
     {
         private static readonly string SettingsFolder = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "SSG_FP_Suite");
+            "SgRevitAddin");
 
         private static readonly string SettingsFile = Path.Combine(SettingsFolder, "settings.json");
 

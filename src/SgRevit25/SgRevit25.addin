@@ -3,9 +3,9 @@
 
   <!-- Application entry point (ribbon tab + buttons) -->
   <AddIn Type="Application">
-    <Name>SSG Fire Protection Suite</Name>
-    <Assembly>SSG25.dll</Assembly>
-    <FullClassName>SSG_FP_Suite.App</FullClassName>
+    <Name>SG Revit Addin</Name>
+    <Assembly>SgRevit25.dll</Assembly>
+    <FullClassName>SgRevitAddin.App</FullClassName>
     <ClientId>A1B2C3D4-E5F6-7890-ABCD-EF1234567890</ClientId>
     <VendorId>SSG</VendorId>
     <VendorDescription>SSG Fire Protection</VendorDescription>

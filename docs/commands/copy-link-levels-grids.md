@@ -2,7 +2,7 @@
 
 **Command:** `CopyLinkLevelsGridsCommand`
 **Domain:** Setup
-**Ribbon:** SSG FP Suite > Setup > Copy Link Levels/Grids
+**Ribbon:** SG Revit Addin > Setup > Copy Link Levels/Grids
 
 ## Purpose
 

@@ -1,7 +1,7 @@
 # AutoInsert — Flexible Drop Lengths
 
-**Ribbon location:** SSG FP Suite tab > Annotation panel > "Flex Drop Lengths"
-**Command class:** `SSG_FP_Suite.Commands.Annotation.FlexDropLengthsCommand`
+**Ribbon location:** SG Revit Addin tab > Annotation panel > "Flex Drop Lengths"
+**Command class:** `SgRevitAddin.Commands.Annotation.FlexDropLengthsCommand`
 
 ## What It Does
 

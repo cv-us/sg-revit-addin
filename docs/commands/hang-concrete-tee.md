@@ -2,7 +2,7 @@
 
 **Command:** `HangConcreteTeeCommand`
 **Domain:** Hangers
-**Ribbon:** SSG FP Suite > Hangers > Hang Tee Stems
+**Ribbon:** SG Revit Addin > Hangers > Hang Tee Stems
 
 ## Purpose
 

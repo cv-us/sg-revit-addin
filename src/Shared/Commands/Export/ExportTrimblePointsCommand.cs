@@ -1,13 +1,13 @@
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using SSG_FP_Suite.Utils;
+using SgRevitAddin.Utils;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace SSG_FP_Suite.Commands.Export
+namespace SgRevitAddin.Commands.Export
 {
     /// <summary>
     /// Exports pipe hanger locations as Trimble-compatible CSV point files

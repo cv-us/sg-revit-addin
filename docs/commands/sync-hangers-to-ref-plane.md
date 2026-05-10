@@ -2,7 +2,7 @@
 
 **Command:** `SyncHangersToRefPlaneCommand`
 **Domain:** Hangers
-**Ribbon:** SSG FP Suite > Hangers > Sync to Ref Plane
+**Ribbon:** SG Revit Addin > Hangers > Sync to Ref Plane
 
 ## Purpose
 

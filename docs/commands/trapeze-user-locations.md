@@ -1,7 +1,7 @@
 # Auto Trapeze Hang — Standard Pipe Trapeze — User Locations
 
-**Ribbon location:** SSG FP Suite tab > Hangers panel > "Trapeze User Loc"
-**Command class:** `SSG_FP_Suite.Commands.Hangers.TrapezeUserLocationsCommand`
+**Ribbon location:** SG Revit Addin tab > Hangers panel > "Trapeze User Loc"
+**Command class:** `SgRevitAddin.Commands.Hangers.TrapezeUserLocationsCommand`
 
 ## What It Does
 

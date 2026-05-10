@@ -4,7 +4,7 @@ using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 
-namespace SSG_FP_Suite.Commands.Hangers
+namespace SgRevitAddin.Commands.Hangers
 {
     /// <summary>
     /// Dialog for the Auto Trapeze Hang — Standard Pipe Trapeze — Auto Spaced command.

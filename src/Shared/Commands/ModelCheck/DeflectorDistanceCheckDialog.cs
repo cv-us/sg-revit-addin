@@ -1,7 +1,7 @@
 using System.Drawing;
 using System.Windows.Forms;
 
-namespace SSG_FP_Suite.Commands.ModelCheck
+namespace SgRevitAddin.Commands.ModelCheck
 {
     /// <summary>
     /// Dialog for the Deflector Distance Check command.

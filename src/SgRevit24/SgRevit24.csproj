@@ -1,13 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <RootNamespace>SSG_FP_Suite</RootNamespace>
-    <AssemblyName>SSG25</AssemblyName>
+    <TargetFramework>net48</TargetFramework>
+    <RootNamespace>SgRevitAddin</RootNamespace>
+    <AssemblyName>SgRevit24</AssemblyName>
     <LangVersion>latest</LangVersion>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
-    <DefineConstants>REVIT2025</DefineConstants>
+    <DefineConstants>REVIT2024</DefineConstants>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
 
@@ -19,13 +19,19 @@
   <!-- Revit API references - update paths to match your Revit installation -->
   <ItemGroup>
     <Reference Include="RevitAPI">
-      <HintPath>C:\Program Files\Autodesk\Revit 2025\RevitAPI.dll</HintPath>
+      <HintPath>C:\Program Files\Autodesk\Revit 2024\RevitAPI.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="RevitAPIUI">
-      <HintPath>C:\Program Files\Autodesk\Revit 2025\RevitAPIUI.dll</HintPath>
+      <HintPath>C:\Program Files\Autodesk\Revit 2024\RevitAPIUI.dll</HintPath>
       <Private>false</Private>
     </Reference>
+  </ItemGroup>
+
+  <!-- NuGet packages needed for .NET Framework 4.8 -->
+  <ItemGroup>
+    <PackageReference Include="System.Text.Json" Version="8.*" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
   </ItemGroup>
 
   <!-- Embedded icon resources -->
@@ -38,7 +44,7 @@
     <None Include="..\Shared\Config\defaults.json" Link="Config\defaults.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="SSG25.addin">
+    <None Include="SgRevit24.addin">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

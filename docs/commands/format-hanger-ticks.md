@@ -1,7 +1,7 @@
 # AutoFormat — Hanger Ticks
 
-**Ribbon location:** SSG FP Suite tab > Hangers panel > "Format Ticks"
-**Command class:** `SSG_FP_Suite.Commands.Hangers.FormatHangerTicksCommand`
+**Ribbon location:** SG Revit Addin tab > Hangers panel > "Format Ticks"
+**Command class:** `SgRevitAddin.Commands.Hangers.FormatHangerTicksCommand`
 
 ## What It Does
 

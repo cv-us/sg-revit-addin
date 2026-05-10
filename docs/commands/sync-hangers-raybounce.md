@@ -2,7 +2,7 @@
 
 **Command:** `SyncHangersRaybounceCommand`
 **Domain:** Hangers
-**Ribbon:** SSG FP Suite > Hangers > Sync to Structural
+**Ribbon:** SG Revit Addin > Hangers > Sync to Structural
 
 ## Purpose
 

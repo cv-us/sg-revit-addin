@@ -5,7 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SSG_FP_Suite.Commands.Hangers
+namespace SgRevitAddin.Commands.Hangers
 {
     /// <summary>
     /// Resizes selected pipe hangers to match the nominal diameter of the
@@ -73,7 +73,7 @@ namespace SSG_FP_Suite.Commands.Hangers
         // ── Drift-marker constants (DirectShape cylinder placed above hangers
         // that have no nearby pipe, so the user can find and re-attach them) ──
 
-        private const string DriftMarkerAppId = "SSG_FP_Suite";
+        private const string DriftMarkerAppId = "SgRevitAddin";
         private const string DriftMarkerAppDataId = "MatchSizesDriftedMarker";
         private const string DriftMarkerMaterialName = "SSG_DriftedHangerMarker";
         private const double DriftMarkerRadius = 2.0 / 12.0;   // 2"

@@ -4,7 +4,7 @@ using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 
-namespace SSG_FP_Suite.Commands.Annotation
+namespace SgRevitAddin.Commands.Annotation
 {
     /// <summary>
     /// Dialog for the Insert Pipe and Fitting Elevations command.
