@@ -58,3 +58,6 @@ installer/Output/*
 # Revit families bundled into the installer (large binary files, kept out of git)
 installer/Families/**/*.rfa
 installer/Families/**/*.rfa.bak
+
+# Claude Code session/worktree state — do not commit
+.claude/
