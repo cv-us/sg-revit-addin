@@ -53,7 +53,7 @@ namespace SgRevitAddin.Commands.Hangers
 
         private const string DriftMarkerAppId = "SgRevitAddin";
         private const string DriftMarkerAppDataId = "MatchSizesDriftedMarker";
-        private const string DriftMarkerMaterialName = "SSG_DriftedHangerMarker";
+        private const string DriftMarkerMaterialName = "SG_DriftedHangerMarker";
         private const double DriftMarkerRadius = 2.0 / 12.0;   // 2"
         private const double DriftMarkerHeight = 4.0 / 12.0;   // 4"
         private const double DriftMarkerZOffset = 0.5;         // 6" above BB center

@@ -69,7 +69,7 @@ Add to both `.addin` files (`src/SgRevit24/SgRevit24.addin` and `src/SgRevit25/S
   <Assembly>SgRevit24.dll</Assembly>  <!-- or SgRevit25.dll -->
   <FullClassName>SgRevitAddin.Commands.YourDomain.YourFeatureCommand</FullClassName>
   <ClientId>GENERATE-A-NEW-GUID-HERE</ClientId>
-  <VendorId>SSG</VendorId>
+  <VendorId>SG</VendorId>
 </AddIn>
 ```
 

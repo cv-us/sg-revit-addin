@@ -25,7 +25,7 @@ namespace SgRevitAddin.Commands.Hangers
     /// rotation, with all writable parameters captured and restored. The new
     /// instance's geometry is built from scratch for the target size — no
     /// prior parametric state, no drift. This is the same pattern used by
-    /// SwapHydraCADHangersCommand for HydraCAD-to-SSG family swaps.
+    /// SwapHydraCADHangersCommand for HydraCAD-to-SG family swaps.
     ///
     /// WORKFLOW:
     ///   1. User pre-selects hangers
@@ -75,7 +75,7 @@ namespace SgRevitAddin.Commands.Hangers
 
         private const string DriftMarkerAppId = "SgRevitAddin";
         private const string DriftMarkerAppDataId = "MatchSizesDriftedMarker";
-        private const string DriftMarkerMaterialName = "SSG_DriftedHangerMarker";
+        private const string DriftMarkerMaterialName = "SG_DriftedHangerMarker";
         private const double DriftMarkerRadius = 2.0 / 12.0;   // 2"
         private const double DriftMarkerHeight = 4.0 / 12.0;   // 4"
         private const double DriftMarkerZOffset = 0.5;         // 6" above BB center
@@ -727,7 +727,7 @@ namespace SgRevitAddin.Commands.Hangers
                                  "Ring Hanger\"), the family's geometry may require a host " +
                                  "relationship that NewFamilyInstance can't establish via the " +
                                  "API. Workaround: run \"Swap HydraCAD\" to convert it to the " +
-                                 "SSG -Pipe Hanger - Standard family first, then run Replace " +
+                                 "SG -Pipe Hanger - Standard family first, then run Replace " +
                                  "Sizes.");
                     return null;
                 }

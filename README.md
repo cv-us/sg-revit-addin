@@ -19,7 +19,7 @@ You don't need to understand all of this up front. The project is designed so yo
 ## Folder Map (What Goes Where)
 
 ```
-C:\dev\ssg\
+C:\dev\sg\
 │
 ├── SgRevitAddin.sln          ← Open this in Visual Studio
 ├── CLAUDE.md                  ← Rules for Claude Code to follow when editing this project
@@ -141,7 +141,7 @@ When you create a new command, just pick the folder that fits. If none fit, we c
 .\tools\deploy-addin.ps1 -RevitVersion 2025
 ```
 
-This copies the DLL and `.addin` manifest to Revit's add-ins folder. Restart Revit and you'll see the **"SSG Fire Protection"** tab in the ribbon.
+This copies the DLL and `.addin` manifest to Revit's add-ins folder. Restart Revit and you'll see the **"SG"** tab in the ribbon.
 
 ---
 

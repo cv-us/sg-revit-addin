@@ -75,7 +75,7 @@ namespace SgRevitAddin.Commands.ModelCheck
         private const double MaxPipeSlopeFromHorizontal = 0.5;
 
         /// <summary>Project material name for the blue marker fill.</summary>
-        private const string MarkerMaterialName = "SSG_HangerGapMarker";
+        private const string MarkerMaterialName = "SG_HangerGapMarker";
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
@@ -253,7 +253,7 @@ namespace SgRevitAddin.Commands.ModelCheck
                                 worstOffenders.Add((hanger, gapFt * 12.0, typeCode));
 
                                 // Place DirectShape marker at the pipe centerline, not at
-                                // the hanger's LocationPoint. SSG/Hydratec hanger families
+                                // the hanger's LocationPoint. SG/Hydratec hanger families
                                 // have their LocationPoint at the top of the rod (at the
                                 // structure), which is rod_length above the pipe — placing
                                 // the marker there would put it floating up near structure

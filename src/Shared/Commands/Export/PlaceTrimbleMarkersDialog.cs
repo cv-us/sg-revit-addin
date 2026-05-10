@@ -168,7 +168,7 @@ namespace SgRevitAddin.Commands.Export
 
             lblPrefixHint = new Label
             {
-                Text = "Comma-separate multiple prefixes: FP-, SSG-",
+                Text = "Comma-separate multiple prefixes: FP-, SG-",
                 Location = new Point(15, 74),
                 Size = new Size(350, 18),
                 ForeColor = Color.FromArgb(130, 130, 130),

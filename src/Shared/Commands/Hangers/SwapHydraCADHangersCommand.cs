@@ -11,7 +11,7 @@ namespace SgRevitAddin.Commands.Hangers
 {
     /// <summary>
     /// Replaces HydraCAD pipe hanger family instances ("Adjustable Ring Hanger")
-    /// with SSG "-Pipe Hanger - Standard" family instances. Transfers
+    /// with SG "-Pipe Hanger - Standard" family instances. Transfers
     /// parameters and computes correct position, rotation, and rod length.
     ///
     /// WORKFLOW:

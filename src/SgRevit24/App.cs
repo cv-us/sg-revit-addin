@@ -93,7 +93,7 @@ namespace SgRevitAddin
             hangersPanel.AddStackedItems(
                 MakeButton("AutoSwapHydraCAD", "Swap HydraCAD", asmPath,
                     "SgRevitAddin.Commands.Hangers.SwapHydraCADHangersCommand",
-                    "swap-hydracad-16.png", "Replace HydraCAD hangers with SSG -Pipe Hanger - Standard family instances."),
+                    "swap-hydracad-16.png", "Replace HydraCAD hangers with SG -Pipe Hanger - Standard family instances."),
                 MakeButton("InspectElementParameters", "Inspect Params", asmPath,
                     "SgRevitAddin.Commands.Hangers.InspectElementParametersCommand",
                     "inspect-params-16.png", "Diagnostic: dump every parameter of a selected element to a dialog + clipboard for debugging."));

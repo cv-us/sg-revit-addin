@@ -393,7 +393,7 @@ namespace SgRevitAddin.Commands.Hangers
 
         /// <summary>
         /// Recognises a FamilyInstance as a pipe hanger by its family name.
-        /// Covers both the SSG family naming conventions ("-Pipe Hanger",
+        /// Covers both the SG family naming conventions ("-Pipe Hanger",
         /// "-Pipe Trapeze", "-Basic Adjustable") and the HydraCAD ones
         /// ("Adjustable Ring Hanger", "Ring Hanger", etc.). Same filter
         /// the newer hanger commands (Match Sizes, Replace Sizes, Hanger

@@ -20,7 +20,7 @@ Loads custom Revit family (.rfa) files from a specified folder into the current 
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Family Folder | `C:\SSG FP\Revit Families\{version}` | Path to folder containing .rfa files |
+| Family Folder | `C:\SG\Revit Families\{version}` | Path to folder containing .rfa files |
 | Include subfolders | Checked | Recursively search subdirectories for .rfa files |
 
 The default subfolder is version-aware:
@@ -55,4 +55,4 @@ Reports:
 ## Notes
 
 - Uses `Directory.GetFiles()` with `SearchOption.AllDirectories` and the native `Document.LoadFamily()` API
-- The default path `C:\SSG FP\Revit Families\` can be changed to any folder via the browse button
+- The default path `C:\SG\Revit Families\` can be changed to any folder via the browse button

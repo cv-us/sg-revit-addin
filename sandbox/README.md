@@ -50,7 +50,7 @@ public void TryHangerPlacement()
 1. Open Revit with a test project
 2. Go to **Manage → Macro Manager**
 3. Click the **Application** tab (not Document)
-4. Click **Module** → create a new one if needed (e.g., "SSG_Experiments")
+4. Click **Module** → create a new one if needed (e.g., "SG_Experiments")
 5. Click **Edit** to open the macro code editor
 6. Paste your code into the `ThisApplication` partial class
 7. Click **Build** (the green play button)

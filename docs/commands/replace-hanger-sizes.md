@@ -84,7 +84,7 @@ hanger to the new one, except a small set of Revit-managed built-ins
 (Family, Type, Host Id, Phase, Level, IfcGUID, etc.) that Revit sets
 automatically based on the new instance's identity.
 
-For typical Hydratec / SSG hangers this includes:
+For typical Hydratec / SG hangers this includes:
 
 - `Rod Length`, `Distance off End`, `Rod Tilt`
 - `Type Code (Hydratec)`, `Type Code Description (Hydratec)`

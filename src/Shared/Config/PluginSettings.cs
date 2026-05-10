@@ -14,7 +14,7 @@ namespace SgRevitAddin.Config
     public class PluginSettings
     {
         /// <summary>Company name used in annotations and exports</summary>
-        public string CompanyName { get; set; } = "SSG";
+        public string CompanyName { get; set; } = "SG";
 
         /// <summary>Default pipe system type name (e.g., "Fire Protection Wet", "Fire Protection Dry")</summary>
         public string DefaultPipeSystem { get; set; } = "Fire Protection Wet";

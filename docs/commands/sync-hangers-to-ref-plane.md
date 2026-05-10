@@ -29,7 +29,7 @@ Calculates and writes rod lengths for pipe hangers by measuring the vertical dis
 ## Hanger Family Filtering
 
 Selected elements must have a family name containing any of:
-- `"-Pipe Hanger"` (SSG standard hangers)
+- `"-Pipe Hanger"` (SG standard hangers)
 - `"-Basic Adjustable"` (basic adjustable hangers)
 - `"Adjustable Ring Hanger"` (HydraCAD hangers)
 

@@ -1,6 +1,6 @@
 ; SG Revit Addin - Inno Setup Installer Script
 ; Builds a single .exe installer that deploys to Revit 2023-2026
-; and bundles shared .rfa families to C:\SSG FP\Revit Families\.
+; and bundles shared .rfa families to C:\SG\Revit Families\.
 ;
 ; Prerequisites:
 ;   - Inno Setup 6.x (https://jrsoftware.org/isinfo.php)
@@ -12,15 +12,15 @@
 ; Output: installer\Output\SgRevitAddin-{version}-Setup.exe
 
 #define MyAppName "SG Revit Addin"
-#define MyAppVersion "0.1.3"
-#define MyAppPublisher "SSG Fire Protection"
+#define MyAppVersion "0.1.4"
+#define MyAppPublisher "SG Fire Protection"
 #define MyAppURL "https://github.com/cv-us/sg-revit-addin"
 
 ; Paths relative to this .iss file's location
 #define SgRevit24Build "..\src\SgRevit24\bin\Release"
 #define SgRevit25Build "..\src\SgRevit25\bin\Release"
 #define FamiliesDir "Families"
-#define FamiliesInstallDir "C:\SSG FP\Revit Families"
+#define FamiliesInstallDir "C:\SG\Revit Families"
 
 [Setup]
 AppId={{B7E3A4F1-9D2C-4A8E-B6F5-1C3D7E9A2B4F}
@@ -336,7 +336,7 @@ Source: "{#SgRevit25Build}\Config\defaults.json"; DestDir: "{commonappdata}\Auto
 
 ; ── Shared Revit families (bundled with installer) ──
 ; All .rfa files under installer\Families\ (recursively) are deployed to
-; C:\SSG FP\Revit Families\. Subfolder structure (year + category) is
+; C:\SG\Revit Families\. Subfolder structure (year + category) is
 ; preserved via recursesubdirs + createallsubdirs so the LoadFamilies
 ; command can resolve the correct year folder at runtime.
 ; skipifsourcedoesntexist lets the installer compile even when no .rfa

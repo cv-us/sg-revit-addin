@@ -78,7 +78,7 @@ cylinder (8" diameter × 8" tall, Generic Model category, bright sky-blue
 material) created directly in the project. No family file required, and
 visible in both plan and 3D views automatically.
 
-The first run creates a project-wide material named `SSG_HangerGapMarker`;
+The first run creates a project-wide material named `SG_HangerGapMarker`;
 subsequent runs reuse it (and refresh its color, so projects upgraded from
 older versions of this command will recolor any leftover red markers to
 blue on the next run).

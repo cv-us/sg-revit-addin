@@ -18,7 +18,7 @@ Master list of all SG Revit Addin commands.
 - `TrapezeUnistrut21ACommand` - Place Unistrut 21A trapeze hangers with auto-calculated extensions, simplified variant
 - `FormatHangerTicksCommand` - Format pipe hanger tick symbols to consistent direction (/ or \) accounting for pipe rotation
 - `HangerSectionIDsCommand` - Populate Section_ID (Hydratec) with formatted rod length and type code for hanger tags
-- `SwapHydraCADHangersCommand` - Replace HydraCAD Adjustable Ring Hangers with SSG -Pipe Hanger - Standard with parameter transfer
+- `SwapHydraCADHangersCommand` - Replace HydraCAD Adjustable Ring Hangers with SG -Pipe Hanger - Standard with parameter transfer
 - `MatchHangerSizesCommand` - Resize selected hangers via parameter set + rod-length compensation, with orange review markers on resized + drifted hangers (kept as a backup for the delete+recreate ReplaceHangerSizes path)
 - `ReplaceHangerSizesCommand` - Resize selected hangers by deleting + recreating each at the new size (preserves all writable parameters; sidesteps the family-level centerline-drift bug)
 - `InspectElementParametersCommand` - Diagnostic: dumps every parameter on a selected element (instance + type + connectors) to a TaskDialog and clipboard for debugging family behavior

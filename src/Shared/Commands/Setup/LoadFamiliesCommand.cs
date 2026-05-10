@@ -14,7 +14,7 @@ namespace SgRevitAddin.Commands.Setup
     /// current project. Families that are already loaded (by name) are skipped.
     ///
     /// WORKFLOW:
-    ///   1. Dialog: pick folder (defaults to C:\SSG FP\Revit Families\{version})
+    ///   1. Dialog: pick folder (defaults to C:\SG\Revit Families\{version})
     ///   2. Enumerate all .rfa files (optionally recursive)
     ///   3. Check which families are already loaded by name
     ///   4. Load missing families via doc.LoadFamily()
@@ -27,7 +27,7 @@ namespace SgRevitAddin.Commands.Setup
         /// <summary>
         /// Base path for family storage.
         /// </summary>
-        private const string DefaultBasePath = @"C:\SSG FP\Revit Families\";
+        private const string DefaultBasePath = @"C:\SG\Revit Families\";
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {

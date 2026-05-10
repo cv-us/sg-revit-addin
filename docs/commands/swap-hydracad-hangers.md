@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Replaces HydraCAD pipe hanger family instances ("Adjustable Ring Hanger") with SSG "-Pipe Hanger - Standard" family instances. Transfers all relevant parameters, computes correct position on the nearest pipe, sets rotation to match pipe direction, and adjusts rod length for any elevation difference between the old and new placement points.
+Replaces HydraCAD pipe hanger family instances ("Adjustable Ring Hanger") with SG "-Pipe Hanger - Standard" family instances. Transfers all relevant parameters, computes correct position on the nearest pipe, sets rotation to match pipe direction, and adjusts rod length for any elevation difference between the old and new placement points.
 
 ## Workflow
 
@@ -79,7 +79,7 @@ The command looks for a family named exactly `"-Pipe Hanger - Standard"` in the 
 ## Not Adjusted
 
 Known limitations:
-- **Hanger Types** are not mapped between HydraCAD and SSG families
+- **Hanger Types** are not mapped between HydraCAD and SG families
 - **Top of Hanger** values are not adjusted
 
 ## Notes
