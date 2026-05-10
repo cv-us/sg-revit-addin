@@ -137,3 +137,4 @@ View activeView = RevitApiHelpers.GetActiveView(doc);
 3. Use the namespace `SgRevitAddin.Utils`
 4. Make methods `public static` so any command can call them
 5. Add a doc comment explaining what it does and a usage example
+

@@ -47,3 +47,4 @@ All sizes: 16" minimum (standard spool minimum for welded fabrication).
 - Uses `[Transaction(TransactionMode.ReadOnly)]` — no model changes are made
 - Pipe outer diameter is read from the `Diameter` parameter
 - Length is the pipe's actual curve length in Revit internal feet
+

@@ -26,3 +26,4 @@ Deletes scope boxes from the project. Used during project cleanup to remove temp
 - Scope boxes that are pinned will fail to delete — count as skipped
 - Views that reference a deleted scope box will revert to their default crop settings
 - The confirmation prompt always shows how many scope boxes will be affected
+

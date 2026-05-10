@@ -65,3 +65,4 @@ For each detail line x pipe intersection:
 ## Changing the Icon
 
 The button icon is at `src/Shared/UI/Resources/icons/hang-trapeze-ul-32.png` (and 16x16). Replace with same filename, rebuild, redeploy.
+

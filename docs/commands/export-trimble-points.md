@@ -87,3 +87,4 @@ The Code column includes the user-specified code text plus the hanger's Nominal 
 - **Survey control alignment** is critical — the Revit model's Shared Coordinates must match the field survey control for points to land in the correct locations
 - This is a **read-only** command — it does not modify any Revit elements
 - UTF-8 encoding is used for the output file
+

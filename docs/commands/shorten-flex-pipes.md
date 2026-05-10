@@ -64,3 +64,4 @@ The result is the shortest possible flex pipe path between the two endpoints —
 - After deleting original flex pipes, `Document.Regenerate()` is called to update connector states
 - Connector matching uses the connector ID first, with fallback to finding unconnected connectors by proximity
 - New flex pipes are created via `FlexPipe.Create` with explicit XYZ points, then reconnected via `Connector.ConnectTo`
+

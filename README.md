@@ -168,3 +168,4 @@ This copies the DLL and `.addin` manifest to Revit's add-ins folder. Restart Rev
 | `src/SgRevit25/SgRevit25.addin` | Same thing for Revit 2025-2026 |
 | `sandbox/_macro_template.cs` | Starting point for every new macro experiment |
 | `docs/command-catalog.md` | Master checklist of all commands and their status |
+

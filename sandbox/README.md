@@ -86,3 +86,4 @@ When the macro works and you want it permanently in the plugin:
 - The `ThisApplication` partial class wrapper Revit expects
 - A placeholder method to fill in
 - Comments explaining what to do next
+

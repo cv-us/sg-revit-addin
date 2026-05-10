@@ -45,3 +45,4 @@ SgRevitAddin.Utils                               ← Utilities
 SgRevitAddin.Config                              ← Settings
 SgRevitAddin.Models                              ← Data classes
 ```
+

@@ -345,3 +345,4 @@ Source: "{#FamiliesDir}\*.rfa"; DestDir: "{#FamiliesInstallDir}"; Flags: ignorev
 
 ; ── App icon (stored in install dir for uninstall display) ──
 Source: "icon.ico"; DestDir: "{app}"; Flags: ignoreversion
+

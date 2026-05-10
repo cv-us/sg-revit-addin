@@ -94,3 +94,4 @@ If no Clevis variant is found in the project, the standard family is used for al
 ## Changing the Icon
 
 The button icon is at `src/Shared/UI/Resources/icons/hang-trapeze-32.png` (and 16x16). Replace with same filename, rebuild, redeploy.
+

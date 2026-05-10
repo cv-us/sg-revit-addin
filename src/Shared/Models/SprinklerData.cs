@@ -46,3 +46,4 @@ namespace SgRevitAddin.Models
         public double CoverageArea { get; set; }
     }
 }
+

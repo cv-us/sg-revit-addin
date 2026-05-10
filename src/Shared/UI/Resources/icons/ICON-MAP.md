@@ -132,3 +132,4 @@ No .csproj edits needed — just drop PNGs here and rebuild.
 
 ### Coordination panel
 - `color-pipes-32.png` / `color-pipes-16.png` — ColorCodePipes
+

@@ -81,3 +81,4 @@ In `App.cs`, add the button to the appropriate panel.
 
 1. Move `sandbox/experiments/my_feature.cs` to `sandbox/graduated/`
 2. Update `docs/command-catalog.md` with the new command
+

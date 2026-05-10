@@ -79,3 +79,4 @@ The button icon is a 32x32 PNG at `src/Shared/UI/Resources/icons/hang-downstream
 - **[Choosing a Command](choosing-a-command.md)** — full comparison of all similar commands
 - **Hang Typical Spacing** — for full-run hanger spacing (not just branchline ends)
 - **Hang at Structural** — for hangers at beam crossings on any pipe type
+

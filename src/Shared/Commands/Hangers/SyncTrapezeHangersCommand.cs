@@ -476,3 +476,4 @@ namespace SgRevitAddin.Commands.Hangers
         }
     }
 }
+

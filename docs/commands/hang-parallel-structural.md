@@ -73,3 +73,4 @@ The button icon is at `src/Shared/UI/Resources/icons/hang-parallel-32.png` (and 
 - **[Choosing a Command](choosing-a-command.md)** — full comparison of all similar commands
 - **Hang Typical Spacing** — similar even spacing but without perpendicular beam search
 - **Hang at Structural** — for hangers at beam crossing points (perpendicular pipes)
+

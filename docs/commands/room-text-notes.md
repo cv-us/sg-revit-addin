@@ -57,3 +57,4 @@ ROOM
 - Room location uses the Revit `LocationPoint` from the linked room, transformed to host coordinates
 - Levels are collected from all loaded links and deduplicated for the dropdown
 - The linked model must be loaded (not unloaded) for rooms to be accessible
+

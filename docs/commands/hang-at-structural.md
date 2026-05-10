@@ -69,3 +69,4 @@ The button icon is a 32x32 PNG at `src/Shared/UI/Resources/icons/hang-struct-32.
 - **Hang Parallel Structural** — for pipes running parallel to beams where there are no crossings
 - **Hang User Locations** — for manual placement at detail-line locations
 - **Hang Downstream** — for branchline end hangers only
+

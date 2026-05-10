@@ -69,3 +69,4 @@ Reports:
 - Grid angles are computed in the XY plane only (Z component ignored)
 - Linked grid coordinates are properly transformed using the link instance transform
 - Delta angle is normalized to +/-180 degrees to ensure the shortest rotation path
+

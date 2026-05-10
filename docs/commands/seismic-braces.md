@@ -106,3 +106,4 @@ For each brace point:
 - Linked model must be loaded for rod length calculation; without it, BraceHeight defaults to 0
 - The command creates a separate Seismic panel in the ribbon
 - Rod lengths are rounded UP to nearest 6" per standard practice (field-cut to fit)
+

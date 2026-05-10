@@ -170,3 +170,4 @@ Idempotent — running again on already-matched hangers reports
 - [Hanger Gap Check](hanger-gap-check.md) — flags hangers whose
   top-of-pipe to structure gap exceeds a threshold; uses the same
   pipe-finding logic
+

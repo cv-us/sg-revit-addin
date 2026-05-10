@@ -75,3 +75,4 @@ For each pipe at each spacing point:
 ## Changing the Icon
 
 The button icon is at `src/Shared/UI/Resources/icons/hang-unistrut-32.png` (and 16x16). Replace with same filename, rebuild, redeploy.
+

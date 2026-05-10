@@ -41,3 +41,4 @@ Parameters are only written if they exist and are not read-only. Missing paramet
 - The axis of rotation is a vertical line through the hanger's `LocationPoint`
 - Rod parameter values are read before rotation and written after, so the swap reflects the geometry correctly
 - Hangers without a `LocationPoint` location (e.g. face-hosted instances) are skipped and counted as failed
+

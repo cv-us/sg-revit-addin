@@ -35,3 +35,4 @@ namespace SgRevitAddin.Config
         public double DefaultHangerSpacing { get; set; } = 10.0;
     }
 }
+

@@ -41,3 +41,4 @@ Row 0 is the header and is always skipped. All coordinate values are divided by 
 - The family symbol is activated before placement if not already active
 - Placement failures are caught per-point and counted as skipped
 - The Z offset field allows correcting for level datum differences between AutoSPRINK and Revit
+

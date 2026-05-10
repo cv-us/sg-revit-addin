@@ -7,3 +7,4 @@ $fs.Close()
 $icon.Dispose()
 $bmp.Dispose()
 Write-Host "icon.ico created from sprinkler-layout-32.png"
+

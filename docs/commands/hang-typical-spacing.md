@@ -81,3 +81,4 @@ The button icon is a 32x32 PNG at `src/Shared/UI/Resources/icons/hang-spacing-32
 - **Hang at Structural** — for hangers specifically at beam crossing points
 - **Hang Parallel Structural** — similar even spacing but searches perpendicular to pipe for nearest beam
 - **Hang Downstream** — for branchline end hangers only
+

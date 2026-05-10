@@ -111,3 +111,4 @@ Reports:
 - **Sync Surface** — alternative method with top/bottom framing choice and global parameter persistence
 - **Sync to Ref Plane** — simpler option when structure is a flat slab at known elevation
 - **Sync to Pipes** — run first to position hangers on pipes before calculating rod lengths
+

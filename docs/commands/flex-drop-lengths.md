@@ -41,3 +41,4 @@ The button icon is at `src/Shared/UI/Resources/icons/annotation-32.png` (shared 
 
 - **[Choosing a Command](choosing-a-command.md)** — comparison of Standard vs. Dalmatian flex drop commands
 - **Flex Drop Dalmatian** — auto-reads actual connected flex pipe lengths with Wet/Dry system support. Use when flex pipes are already modeled
+

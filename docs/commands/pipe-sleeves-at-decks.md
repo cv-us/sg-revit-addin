@@ -117,3 +117,4 @@ Deck thickness is determined geometrically from the vertical distance between th
 - **Sleeves at Beams** — for pipe penetrations through structural beams
 - **Sleeves at Walls** — for pipe penetrations through walls (uses NFPA lookup table with seismic sizing)
 - **Sleeve Elevations** — after placing sleeves, use this to calculate AFF/BBD elevation parameters
+

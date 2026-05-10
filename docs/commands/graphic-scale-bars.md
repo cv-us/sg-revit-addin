@@ -71,3 +71,4 @@ Scale bars are placed near the bottom-left of the sheet:
 ## Changing the Icon
 
 The button icon shares `annotation-32.png`. Replace with a unique icon if desired.
+

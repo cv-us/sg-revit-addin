@@ -144,3 +144,4 @@ namespace SgRevitAddin.Commands.Hangers  // ← domain name
 5. Register in `src/SgRevit24/SgRevit24.addin` AND `src/SgRevit25/SgRevit25.addin`
 6. Add a ribbon button in both `App.cs` files (optional — can also run from Add-Ins tab)
 7. Update `docs/command-catalog.md`
+

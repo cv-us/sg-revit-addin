@@ -67,3 +67,4 @@ Reports:
 
 - The C# version uses `GlobalParametersManager.FindByName()` and `GlobalParameter.Create()` directly
 - Parameter type is `SpecTypeId.String.Text` for both Revit 2024 and 2025+
+

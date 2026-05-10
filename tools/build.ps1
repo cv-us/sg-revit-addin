@@ -27,3 +27,4 @@ if ($Project -eq "All" -or $Project -eq "SgRevit25") {
 }
 
 Write-Host "`nBuild complete." -ForegroundColor Green
+

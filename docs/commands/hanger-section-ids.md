@@ -53,3 +53,4 @@ Other pipe accessories (valves, etc.) in the selection are silently skipped.
 ## Changing the Icon
 
 The button shares `hangers-32.png`. Replace with a unique icon if desired.
+

@@ -27,3 +27,4 @@ Places SSB hanger annotation symbols 1 ft from each end of selected pipe runs. U
 - Rotation is applied via `ElementTransformUtils.RotateElement` to match pipe direction
 - Missing or non-loaded SSB family will produce an error message
 - Offset of 1 ft from pipe end is in Revit internal units (feet)
+

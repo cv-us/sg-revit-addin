@@ -79,3 +79,4 @@ if (Test-Path $defaultsSource) {
 
 Write-Host "`nDeploy complete. Restart Revit to load the add-in." -ForegroundColor Green
 Write-Host "Look for the 'SG' tab in the ribbon." -ForegroundColor Gray
+

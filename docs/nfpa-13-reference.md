@@ -28,3 +28,4 @@ Common values used in commands. Always verify against the current edition of NFP
 ## Notes
 - This is a quick reference only — not a substitute for the full standard
 - Values may vary by occupancy classification and local amendments
+

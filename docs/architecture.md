@@ -137,3 +137,4 @@ The symbols `REVIT2024` and `REVIT2025` are defined in each project's `.csproj`.
 - **UI/**: WPF dialogs and ribbon icon images.
 
 Everything is in `Shared/` unless it absolutely must be version-specific.
+

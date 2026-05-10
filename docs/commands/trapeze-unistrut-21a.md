@@ -80,3 +80,4 @@ The same extension value is applied to both Rod 1 and Rod 2 sides.
 ## Changing the Icon
 
 The button icon is at `src/Shared/UI/Resources/icons/hang-uni21a-32.png` (and 16x16). Replace with same filename, rebuild, redeploy.
+

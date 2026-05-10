@@ -60,3 +60,4 @@ The button icon is at `src/Shared/UI/Resources/icons/hang-userloc-32.png` (and 1
 - **Hang Typical Spacing** — for automated even spacing when manual control isn't needed
 - **Hang at Structural** — for automated placement at beam crossings
 - **Hang Concrete Tee** — also uses detail lines for placement, but specialized for tee stems
+

@@ -26,3 +26,4 @@ Deletes duplicate text notes at the same location in the active view. Cleans up 
 
 - **[Choosing a Command](choosing-a-command.md)** — comparison of annotation cleanup commands
 - **Clear Annotations** — removes ALL generic annotation instances from the view (use when you want a complete reset)
+

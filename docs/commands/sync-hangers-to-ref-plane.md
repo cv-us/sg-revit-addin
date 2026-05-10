@@ -85,3 +85,4 @@ After processing, a summary dialog shows:
 - **[Choosing a Command](choosing-a-command.md)** — full comparison of all sync commands
 - **Sync Raybounce** or **Sync Surface** — better choice when structure varies (beams, sloped roofs, multiple levels)
 - **Sync to Pipes** — run first to position hangers on pipes before calculating rod lengths
+

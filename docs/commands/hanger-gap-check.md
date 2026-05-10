@@ -111,3 +111,4 @@ won't accumulate stale markers.
   rod lengths before running this check.
 - [Sprinkler Clearance Check](sprinkler-clearance-check.md) — same general
   pattern (clearance violation + marker family) for sprinkler heads.
+

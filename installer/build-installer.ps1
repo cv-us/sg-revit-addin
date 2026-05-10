@@ -147,3 +147,4 @@ Write-Host "  Installer built successfully!" -ForegroundColor Green
 Write-Host "  Output: $($output.FullName)" -ForegroundColor Green
 Write-Host "  Size:   $([math]::Round($output.Length / 1MB, 2)) MB" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
+

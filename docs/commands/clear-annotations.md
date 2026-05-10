@@ -25,3 +25,4 @@ Deletes all generic annotation family instances from the active view. Used to cl
 
 - **[Choosing a Command](choosing-a-command.md)** — comparison of annotation cleanup commands
 - **Delete Duplicate Text** — surgical removal of only duplicate text notes (keeps one copy at each location)
+

@@ -13,3 +13,4 @@ namespace SgRevitAddin.Models
         public string Material { get; set; }
     }
 }
+

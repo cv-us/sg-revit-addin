@@ -27,3 +27,4 @@ Places beam penetration annotation symbols at pipe-grid or pipe-detail line cros
 - The annotation is placed at the intersection point of the pipe centerline and the reference line
 - Symbols are oriented to align with the pipe direction
 - Missing or non-loaded beam penetration family will produce an error message
+

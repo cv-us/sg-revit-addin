@@ -42,3 +42,4 @@ Only pipe-compatible system classifications are shown (supply/return hydronic, f
 - Zero-length segments (start and end within 0.001 ft) are silently skipped
 - Pipe creation failures are caught per-segment and counted as skipped
 - Pipes are created with `Pipe.Create()` at the exact CSV coordinates; no diameter is set from the CSV (use the pipe type default)
+

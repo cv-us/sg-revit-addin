@@ -115,3 +115,4 @@ Reports:
 - **Sync Raybounce** — simpler alternative that doesn't need top/bottom choice; requires a 3D view
 - **Sync to Ref Plane** — fastest option when structure is a flat slab at known elevation
 - **Sync to Pipes** — run first to position hangers on pipes before calculating rod lengths
+

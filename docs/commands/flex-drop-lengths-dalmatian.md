@@ -114,3 +114,4 @@ Reports:
 
 - **[Choosing a Command](choosing-a-command.md)** — comparison of Standard vs. Dalmatian flex drop commands
 - **Flex Drop Lengths (Standard)** — applies one uniform length to all selected sprinklers. Use for initial layout before flex pipes are modeled
+

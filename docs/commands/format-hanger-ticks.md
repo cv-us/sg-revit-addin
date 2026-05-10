@@ -46,3 +46,4 @@ Only processes elements whose family name contains `"-Pipe Hanger"`. Other pipe 
 ## Changing the Icon
 
 The button icon is at `src/Shared/UI/Resources/icons/format-ticks-32.png` (and 16x16). Replace with same filename, rebuild, redeploy.
+

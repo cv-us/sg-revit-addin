@@ -88,3 +88,4 @@ Known limitations:
 - Hangers where no intersecting pipe is found within the search range are skipped
 - The command operates in a single transaction for full undo support
 - Pre-selection of pipe accessories is supported — if hangers are already selected, no pick prompt is shown
+

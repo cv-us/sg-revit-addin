@@ -61,3 +61,4 @@ installer/Families/**/*.rfa.bak
 
 # Claude Code session/worktree state — do not commit
 .claude/
+

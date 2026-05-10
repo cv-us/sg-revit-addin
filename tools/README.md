@@ -69,3 +69,4 @@ Copies the built DLL and `.addin` manifest to Revit's add-ins folder so Revit lo
 1. The command is registered in the `.addin` file (not commented out)
 2. The `FullClassName` matches your actual namespace + class name exactly
 3. You restarted Revit after deploying
+
