@@ -18,8 +18,12 @@ namespace SgRevitAddin.Commands.ModelCheck
     /// they're easy to spot in plan and 3D views.
     ///
     /// GAP MATH (by Type Code (Hydratec) prefix):
+    ///   - Type 01* (covers 01, 01V, 01W, …):
+    ///       gap = rod_length - 1.0" - (pipe_OD / 2)
     ///   - Type 02* (adjustable ring + 1.5" hardware — covers 02, 02C, 02D, …):
     ///       gap = rod_length - 1.5" - (pipe_OD / 2)
+    ///   - Type 05S* (covers 05S, 05SA, …):
+    ///       gap = rod_length - 0.5" - (pipe_OD / 2)
     ///   - Type 03* and everything else (e.g. 03, 03A, 03B, 04, …):
     ///       gap = rod_length - (pipe_OD / 2)
     ///
@@ -55,8 +59,14 @@ namespace SgRevitAddin.Commands.ModelCheck
         /// <summary>ApplicationDataId stamped on every marker so we can find ours specifically.</summary>
         private const string MarkerAppDataId = "HangerGapMarker";
 
+        /// <summary>Hardware offset for Type 01* hangers (01, 01V, 01W, …), in feet (1.0 inch).</summary>
+        private const double Type01HardwareOffset = 1.0 / 12.0;
+
         /// <summary>Hardware offset for Type 02 adjustable hangers, in feet (1.5 inches).</summary>
         private const double Type02HardwareOffset = 1.5 / 12.0;
+
+        /// <summary>Hardware offset for Type 05S* hangers, in feet (0.5 inch).</summary>
+        private const double Type05SHardwareOffset = 0.5 / 12.0;
 
         /// <summary>Vertical offset above the hanger location for the marker base, in feet.</summary>
         private const double MarkerZOffset = 0.5; // 6 inches
@@ -319,20 +329,33 @@ namespace SgRevitAddin.Commands.ModelCheck
 
         /// <summary>
         /// Computes the vertical gap from top-of-pipe to bottom-of-structure.
-        /// Type 02 adjustable hangers have an additional 1.5" hardware offset.
+        /// Some type-code families have additional hardware offsets stacked
+        /// on top of the rod-minus-half-OD baseline:
+        ///   - Type 01* (01, 01V, 01W, …):  -1.0"
+        ///   - Type 02* (02, 02C, 02D, …):  -1.5"
+        ///   - Type 05S* (05S, 05SA, …):    -0.5"
+        ///   - everything else:             baseline only
+        /// Prefix match is case-insensitive. 05S is checked before 05* so it
+        /// doesn't fall through to the baseline branch.
         /// </summary>
         private double ComputeGap(string typeCode, double rodLengthFt, double pipeODFt)
         {
             double gapFt = rodLengthFt - (pipeODFt / 2.0);
 
-            // Type 02 family (02, 02C, 02D, …) shares the adjustable-ring +
-            // 1.5" hardware offset. Everything else (Type 03 family — 03,
-            // 03A, 03B, …, plus 04 etc.) just uses the rod-minus-half-OD
-            // baseline.
-            if (!string.IsNullOrEmpty(typeCode) &&
-                typeCode.StartsWith("02", StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrEmpty(typeCode))
+                return gapFt;
+
+            if (typeCode.StartsWith("01", StringComparison.OrdinalIgnoreCase))
+            {
+                gapFt -= Type01HardwareOffset;
+            }
+            else if (typeCode.StartsWith("02", StringComparison.OrdinalIgnoreCase))
             {
                 gapFt -= Type02HardwareOffset;
+            }
+            else if (typeCode.StartsWith("05S", StringComparison.OrdinalIgnoreCase))
+            {
+                gapFt -= Type05SHardwareOffset;
             }
 
             return gapFt;

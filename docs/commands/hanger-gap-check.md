@@ -45,7 +45,9 @@ reads the pipe's outside diameter (actual, not nominal), and computes:
 
 | Type Code | Formula |
 |---|---|
+| `01*` — any code starting with `01` (e.g. `01`, `01V`, `01W`) | `gap = rod_length − 1.0" − (pipe_OD ÷ 2)` |
 | `02*` — any code starting with `02` (e.g. `02`, `02C`, `02D`) | `gap = rod_length − 1.5" − (pipe_OD ÷ 2)` |
+| `05S*` — any code starting with `05S` (e.g. `05S`, `05SA`) | `gap = rod_length − 0.5" − (pipe_OD ÷ 2)` |
 | Everything else — `03*` (`03`, `03A`, `03B`, …), `04`, etc. | `gap = rod_length − (pipe_OD ÷ 2)` |
 
 The math is grouped by **Type Code prefix**, not the full code, because the
@@ -53,9 +55,11 @@ hardware shape is the same across all variants in a family (Hydratec uses the
 trailing letter — `02C`, `02D`, `03A`, `03B`, … — to distinguish things like
 ceiling vs deck attachment that don't change the rod-to-ring geometry).
 
-The 1.5" subtraction for the `02` family accounts for the adjustable-ring
-hardware between the rod end and the pipe top that isn't captured in the
-**Rod Length** parameter.
+The hardware offsets account for fixed pieces between the rod end and the
+pipe top (adjustable ring, retainer, etc.) that aren't captured in the
+**Rod Length** parameter. `05S` is matched **before** `05*` would otherwise
+fall through, so `05S*` codes get the 0.5" offset while any other `05`-prefixed
+code uses the baseline formula.
 
 If `gap > threshold`, the hanger is flagged.
 
@@ -101,9 +105,9 @@ won't accumulate stale markers.
 - Does not measure the actual structure-to-rod-top distance via raybounce —
   it trusts the `Rod Length` parameter. Use `Sync Hangers Raybounce` first
   to ensure rod lengths are accurate.
-- Only Type 02 has a hardcoded hardware offset; if you need additional
-  type-specific math (e.g. Type 04 has a 0.75" offset), add a branch in
-  `ComputeGap()` in the command file.
+- Hardcoded hardware offsets cover Type `01*` (1.0"), `02*` (1.5"), and
+  `05S*` (0.5"). If you need additional type-specific math (e.g. Type 04
+  has a 0.75" offset), add a branch in `ComputeGap()` in the command file.
 
 ## See also
 
