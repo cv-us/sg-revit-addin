@@ -39,6 +39,28 @@ if (-not (Test-Path $revitAddinsFolder)) {
     New-Item -ItemType Directory -Path $revitAddinsFolder -Force | Out-Null
 }
 
+# ── Legacy cleanup ──
+# Earlier versions of this project were named SSG24/SSG25 and deployed
+# files with those names. The new SgRevit24/SgRevit25 .addin uses the
+# same <ClientId>, so Revit refuses to load the new manifest if the old
+# SSG24.addin / SSG25.addin is still next to it (duplicate ClientId).
+# Wipe legacy SSG-named artifacts before deploying the new files.
+$legacyFiles = @(
+    'SSG24.addin', 'SSG24.dll',
+    'SSG25.addin', 'SSG25.dll', 'SSG25.deps.json'
+)
+$legacyRemoved = 0
+foreach ($f in $legacyFiles) {
+    $full = Join-Path $revitAddinsFolder $f
+    if (Test-Path $full) {
+        Remove-Item -Path $full -Force -ErrorAction SilentlyContinue
+        if (-not (Test-Path $full)) { $legacyRemoved++ }
+    }
+}
+if ($legacyRemoved -gt 0) {
+    Write-Host "Removed $legacyRemoved legacy SSG file(s) from $revitAddinsFolder" -ForegroundColor DarkYellow
+}
+
 # Copy DLL
 Write-Host "Deploying $projectName to Revit $RevitVersion..." -ForegroundColor Cyan
 
