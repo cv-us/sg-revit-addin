@@ -54,10 +54,15 @@ namespace SgRevitAddin
                     "hang-tee-16.png", "Place hangers on sides of concrete double tee stems at user-marked detail line locations."),
                 MakeButton("FormatHangerTicks", "Format Ticks", asmPath,
                     "SgRevitAddin.Commands.Hangers.FormatHangerTicksCommand",
-                    "format-ticks-16.png", "Format all selected pipe hanger tick symbols to face the same direction (/ or \\)."),
+                    "format-ticks-16.png", "Format all selected pipe hanger tick symbols to face the same direction (/ or \\)."));
+            // Small stack: Section ID variants
+            hangersPanel.AddStackedItems(
                 MakeButton("InsertHangerSectionIDs", "Section IDs", asmPath,
                     "SgRevitAddin.Commands.Hangers.HangerSectionIDsCommand",
-                    "section-ids-16.png", "Populate Section_ID (Hydratec) with formatted hanger type and rod length for tags."));
+                    "section-ids-16.png", "Populate Section_ID (Hydratec) with formatted hanger type and rod length for tags."),
+                MakeButton("RingHangerSectionIDs", "Ring Section IDs", asmPath,
+                    "SgRevitAddin.Commands.Hangers.RingHangerSectionIDsCommand",
+                    "section-ids-16.png", "Adjustable Ring Hanger variant of Section IDs: subtracts a nominal-diameter-based ring takeout from Rod Length before writing Section_ID (Hydratec)."));
 
             // Large: primary trapeze command
             AddLargeButton(hangersPanel, "AutoTrapezeHang", "Trapeze\nHang", asmPath,
