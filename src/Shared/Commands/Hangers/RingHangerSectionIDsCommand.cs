@@ -16,7 +16,7 @@ namespace SgRevitAddin.Commands.Hangers
     /// Properties palette) using the same tag-friendly format as the
     /// non-ring section-IDs command.
     ///
-    /// FORMAT: (WHOLE#TYPECODE_FRACTION) — e.g. (22#R3R¼)
+    /// FORMAT: #TYPECODE(LENGTH) — e.g. #05S(7½), #02C(26¼), #R3R(22)
     ///
     /// TAKEOUT TABLE (ring/pipe nominal diameter → takeout, inches):
     ///   1" / 1¼" / 1½"  →  1.5"
@@ -168,10 +168,11 @@ namespace SgRevitAddin.Commands.Hangers
                         int wholePart = (int)Math.Floor(roundedInches);
                         double fraction = roundedInches - wholePart;
 
-                        // Format and write
+                        // Format: #TYPECODE(LENGTH_WITH_FRACTION)
+                        // e.g.  #05S(7½)   #02C(26¼)   #R3R(22)
                         string typeCode = GetStringParam(hanger, TypeCodeParam) ?? "";
                         string fractionStr = FormatFraction(fraction);
-                        string sectionId = "(" + wholePart + "#" + typeCode + fractionStr + ")";
+                        string sectionId = "#" + typeCode + "(" + wholePart + fractionStr + ")";
 
                         SetStringParam(hanger, SectionIdParam, sectionId);
                         updated++;
@@ -198,7 +199,7 @@ namespace SgRevitAddin.Commands.Hangers
                 if (skippedNegative > 0)
                     report += $"Skipped (takeout > rod):   {skippedNegative}\n";
 
-                report += $"\nSection_ID (Hydratec) populated as (length#type) " +
+                report += $"\nSection_ID (Hydratec) populated as #type(length) " +
                           $"with ring takeout subtracted from Rod Length.";
 
                 TaskDialog.Show("Ring Hanger Section IDs", report);

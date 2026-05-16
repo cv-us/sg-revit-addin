@@ -58,23 +58,26 @@ if needed.
 
 ## Output format
 
-Same format as the non-ring [Hanger Section IDs](hanger-section-ids.md)
-command, so tags render consistently across hanger types:
-
 ```
-(WHOLE#TYPECODE_FRACTION)
+#TYPECODE(LENGTH)
 ```
 
 Examples:
 
 | Rod Length | Nominal Dia | Takeout | Type Code | Section_ID |
 |---|---|---|---|---|
-| 24" | 2" | 2.0" | `R3R` | `(22#R3R)` |
-| 18¼" | 1½" | 1.5" | `01V` | `(16#01V¾)` |
-| 30" | 4" | 3.5" | `02C` | `(26#02C½)` |
+| 24" | 2" | 2.0" | `R3R` | `#R3R(22)` |
+| 18¼" | 1½" | 1.5" | `01V` | `#01V(16¾)` |
+| 30" | 4" | 3.5" | `02C` | `#02C(26½)` |
+| 9" | 1" | 1.5" | `05S` | `#05S(7½)` |
 
 Fractions render as Unicode `¼`, `½`, `¾`. Whole inches have no fraction
 suffix.
+
+> The format intentionally differs from the non-ring
+> [Hanger Section IDs](hanger-section-ids.md) command (which uses
+> `(WHOLE#TYPECODE_FRACTION)`). Hanger tag families can read either
+> shape — match whichever your tag is set up for.
 
 ## Filtering
 
