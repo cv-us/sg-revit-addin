@@ -20,9 +20,8 @@ namespace SgRevitAddin.Utils
     ///   The Autodesk.Windows.RibbonTab is a logical object; the visible
     ///   widget is a WPF FrameworkElement whose DataContext points at that
     ///   RibbonTab. We walk the visual tree of ComponentManager.Ribbon to
-    ///   find that widget, then apply BorderBrush + BorderThickness on its
-    ///   bottom edge — yielding the colored underline strip seen on the
-    ///   HydraCAD/CALC/LIST tabs.
+    ///   find that widget, then apply BorderBrush + BorderThickness on all
+    ///   four sides — yielding a colored outline around the tab header.
     ///
     /// TIMING:
     ///   ComponentManager.Ribbon exists by OnStartup, but the visual tree
@@ -35,8 +34,8 @@ namespace SgRevitAddin.Utils
         /// <summary>SG brand color — applied as the accent underline. Theme-independent.</summary>
         public static readonly Color AccentColor = Color.FromRgb(0x08, 0x59, 0x90);
 
-        /// <summary>Thickness of the colored underline, in device-independent pixels.</summary>
-        private const double AccentBarThickness = 3.0;
+        /// <summary>Thickness of the colored border (all 4 sides), in device-independent pixels.</summary>
+        private const double AccentBorderThickness = 2.0;
 
         private static EventHandler<Adn.RibbonItemEventArgs> _itemInitializedHandler;
         private static string _targetTabTitle;
@@ -98,7 +97,7 @@ namespace SgRevitAddin.Utils
                 brush.Freeze(); // immutable + cheap
 
                 widget.BorderBrush = brush;
-                widget.BorderThickness = new Thickness(0, 0, 0, AccentBarThickness);
+                widget.BorderThickness = new Thickness(AccentBorderThickness);
 
                 _applied = true;
                 return true;

@@ -266,7 +266,7 @@ namespace SgRevitAddin
                     "SgRevitAddin.Commands.ModelCheck.PipesTooShortCommand",
                     "pipes-too-short-16.png", "Flag pipes shorter than the minimum fabricable nipple length for their size."));
 
-            // Apply the SG-brand color accent under the tab title. Best-effort
+            // Apply the SG-brand color border around the tab title. Best-effort
             // hook into AdWindows — no-op if Revit's WPF tree shape changes.
             RibbonStyling.ApplyTabAccent(tabName);
 
