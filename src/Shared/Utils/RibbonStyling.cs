@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -8,45 +7,42 @@ using Adn = Autodesk.Windows;
 namespace SgRevitAddin.Utils
 {
     /// <summary>
-    /// Best-effort styling for our ribbon tab. Revit's public API can't color
-    /// tab UI (Autodesk.Revit.UI.RibbonPanel has only IsEnabled / Title /
-    /// Visible), so we reach into Autodesk.Windows (AdWindows.dll, ships with
-    /// every Revit install) to manipulate the underlying WPF control.
-    ///
-    /// Every operation here is guarded by try/catch — if Revit's internal
-    /// tree changes between versions, the worst case is the accent doesn't
-    /// appear, never a crash.
+    /// Best-effort styling for our ribbon tab header chip. Revit's public
+    /// API can't color tab UI, so we reach into Autodesk.Windows
+    /// (AdWindows.dll, ships with every Revit install) to manipulate the
+    /// underlying WPF visual tree.
     ///
     /// MECHANISM:
-    ///   The Autodesk.Windows.RibbonTab is a logical object; the visible
-    ///   widget is a WPF FrameworkElement whose DataContext points at that
-    ///   RibbonTab. We walk the visual tree to find it, then recursively
-    ///   paint:
-    ///     • every Border.Background     → SG blue
-    ///     • every Rectangle.Fill        → SG blue
-    ///     • every TextBlock.Foreground  → white
-    ///     • the wrapper Control.{Background,Foreground} too as a fallback
+    ///   1. Find the TextBlock in the ribbon's visual tree whose .Text
+    ///      equals our tab title (e.g. "SG ♈"). That TextBlock IS the
+    ///      header label visible at the top of the ribbon.
+    ///   2. Walk UP from the TextBlock to its nearest Border ancestor —
+    ///      that's the chip background.
+    ///   3. Paint: Border.Background = SG blue, TextBlock.Foreground = white.
     ///
-    ///   We need to walk the whole subtree because Revit's tab template uses
-    ///   a Border (or similar) inside to draw the actual chip — setting
-    ///   Background on the outer control wouldn't reach the painted pixels.
+    ///   The earlier approach (walk DOWN from the RibbonTab's DataContext
+    ///   match) found the wrong element — it grabbed the panel content
+    ///   container, which holds all panels under the tab, and painted
+    ///   everything blue. Walking up from the TextBlock targets only the
+    ///   chip.
     ///
     /// TIMING:
-    ///   ComponentManager.Ribbon exists by OnStartup, but the visual tree
-    ///   for our tab isn't fully wired until ItemInitialized fires (and
-    ///   often only after the user clicks the tab once). We hook the event
-    ///   and retry on every fire until the apply succeeds, then unhook.
+    ///   The tab header isn't in the visual tree until ItemInitialized
+    ///   fires (and the tab is touched). We hook the event and re-apply
+    ///   on every fire so Revit re-styling (theme switches, tab
+    ///   re-creation) doesn't strip our paint.
     ///
-    ///   The Revit theme can also re-style tabs lazily (e.g. on theme
-    ///   switch). We re-apply on every ItemInitialized fire rather than
-    ///   only the first to survive a theme reset.
+    /// SAFETY:
+    ///   Every operation is in try/catch. If Revit changes the visual
+    ///   tree shape in a future version, the worst case is the styling
+    ///   doesn't appear — never a crash.
     /// </summary>
     public static class RibbonStyling
     {
-        /// <summary>SG brand color — applied as the tab chip background. Theme-independent.</summary>
+        /// <summary>SG brand color — applied as the tab chip background.</summary>
         public static readonly Color AccentColor = Color.FromRgb(0x08, 0x59, 0x90);
 
-        /// <summary>Tab title color when the chip is painted SG blue.</summary>
+        /// <summary>Tab title text color when the chip is painted SG blue.</summary>
         public static readonly Color TextColor = Colors.White;
 
         private static EventHandler<Adn.RibbonItemEventArgs> _itemInitializedHandler;
@@ -68,12 +64,12 @@ namespace SgRevitAddin.Utils
                 _fgBrush = new SolidColorBrush(TextColor);
                 _fgBrush.Freeze();
 
-                // Try once now — sometimes the tab is already wired up if
-                // panels were created earlier in OnStartup.
+                // Try once now — sometimes the tab header is already wired
+                // up if panels were created earlier in OnStartup.
                 TryApply();
 
-                // Hook ItemInitialized and re-apply on every fire. Re-applying
-                // (vs. unhooking after first success) survives Revit re-styling
+                // Re-apply on every ItemInitialized fire. Re-applying (vs.
+                // unhooking after first success) survives Revit re-styling
                 // the tab on theme switches or context changes.
                 if (_itemInitializedHandler == null)
                 {
@@ -95,22 +91,34 @@ namespace SgRevitAddin.Utils
                 var ribbon = Adn.ComponentManager.Ribbon;
                 if (ribbon == null) return false;
 
-                var tab = ribbon.Tabs.FirstOrDefault(t =>
-                    string.Equals(t.Title, _targetTabTitle, StringComparison.Ordinal));
-                if (tab == null) return false;
+                // Find the visible label for our tab — a TextBlock whose
+                // Text is exactly the tab title.
+                var titleBlock = FindTextBlockByText(ribbon, _targetTabTitle);
+                if (titleBlock == null) return false;
 
-                var widget = FindVisualFor(ribbon, tab);
-                if (widget == null) return false;
+                // Paint the title text white.
+                titleBlock.Foreground = _fgBrush;
 
-                // Wrapper element: set its own Background/Foreground. Many tab
-                // templates respect this as a TemplateBinding source.
-                widget.Background = _bgBrush;
-                widget.Foreground = _fgBrush;
+                // Walk up to the chip's background element. We try Border
+                // first (most common), then any Control that exposes a
+                // Background property as a fallback.
+                var border = FindAncestor<Border>(titleBlock);
+                if (border != null)
+                {
+                    border.Background = _bgBrush;
+                    return true;
+                }
 
-                // Walk into the subtree and paint every visible element. This
-                // overrides whatever the template was binding from the parent.
-                PaintDescendants(widget);
+                var ctl = FindAncestor<Control>(titleBlock);
+                if (ctl != null)
+                {
+                    ctl.Background = _bgBrush;
+                    return true;
+                }
 
+                // Got the text block but couldn't find a paintable ancestor.
+                // Text is white; chip background unchanged. Better than
+                // painting the world.
                 return true;
             }
             catch (Exception ex)
@@ -122,48 +130,11 @@ namespace SgRevitAddin.Utils
         }
 
         /// <summary>
-        /// Recursively paints every Border/Rectangle background and every
-        /// TextBlock foreground in the visual subtree. Brutal but effective —
-        /// scope is the tab header chip, which is a tiny subtree (a few
-        /// nested elements at most).
-        /// </summary>
-        private static void PaintDescendants(DependencyObject root)
-        {
-            int count;
-            try { count = VisualTreeHelper.GetChildrenCount(root); }
-            catch { return; }
-
-            for (int i = 0; i < count; i++)
-            {
-                var child = VisualTreeHelper.GetChild(root, i);
-                switch (child)
-                {
-                    case Border b:
-                        b.Background = _bgBrush;
-                        break;
-                    case System.Windows.Shapes.Rectangle r:
-                        r.Fill = _bgBrush;
-                        break;
-                    case TextBlock tb:
-                        tb.Foreground = _fgBrush;
-                        break;
-                    case Control c:
-                        // ContentPresenter / Label / etc. — try fg/bg on
-                        // anything that exposes them.
-                        c.Background = _bgBrush;
-                        c.Foreground = _fgBrush;
-                        break;
-                }
-                PaintDescendants(child);
-            }
-        }
-
-        /// <summary>
         /// Depth-first walk of the WPF visual tree under <paramref name="root"/>
-        /// looking for a Control whose DataContext is the given RibbonTab.
-        /// Returns null if the tab's widget isn't in the tree yet.
+        /// looking for a TextBlock whose Text equals <paramref name="text"/>.
+        /// Returns null if no match.
         /// </summary>
-        private static Control FindVisualFor(DependencyObject root, Adn.RibbonTab tab)
+        private static TextBlock FindTextBlockByText(DependencyObject root, string text)
         {
             if (root == null) return null;
 
@@ -174,10 +145,23 @@ namespace SgRevitAddin.Utils
             for (int i = 0; i < count; i++)
             {
                 var child = VisualTreeHelper.GetChild(root, i);
-                if (child is Control ctl && ReferenceEquals(ctl.DataContext, tab))
-                    return ctl;
-                var deeper = FindVisualFor(child, tab);
+                if (child is TextBlock tb && string.Equals(tb.Text, text, StringComparison.Ordinal))
+                    return tb;
+
+                var deeper = FindTextBlockByText(child, text);
                 if (deeper != null) return deeper;
+            }
+            return null;
+        }
+
+        /// <summary>Walks up the visual tree from <paramref name="element"/> until it finds an ancestor of type T.</summary>
+        private static T FindAncestor<T>(DependencyObject element) where T : DependencyObject
+        {
+            var parent = VisualTreeHelper.GetParent(element);
+            while (parent != null)
+            {
+                if (parent is T t) return t;
+                parent = VisualTreeHelper.GetParent(parent);
             }
             return null;
         }
