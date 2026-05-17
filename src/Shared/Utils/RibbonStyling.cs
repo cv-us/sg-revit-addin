@@ -15,22 +15,23 @@ namespace SgRevitAddin.Utils
     /// MECHANISM:
     ///   1. Find the TextBlock whose .Text equals our tab title (e.g.
     ///      "SG ♈"). That's the visible label in the tab strip.
-    ///   2. Paint the TextBlock's Foreground white, Background blue (a
-    ///      guaranteed-correct floor in case the walk below fails).
-    ///   3. Walk UP from the TextBlock for at most a few levels. At each
-    ///      level: if the ancestor's bounds are still small enough to be
-    ///      the chip (~&lt;= ChipMaxWidth), paint its Background blue too;
-    ///      if it's wider than that, we've left the chip and are touching
-    ///      the tab strip — stop.
-    ///
-    ///   The bounded walk-up is the fix for an earlier bug where a naive
-    ///   FindAncestor&lt;Border&gt; jumped straight to the tab strip's outer
-    ///   Border and ended up coloring every tab.
+    ///   2. Paint the TextBlock's Foreground white, Background blue.
+    ///   3. Walk UP from the TextBlock for at most MaxWalkDepth (4) levels.
+    ///      At each level: if the ancestor's bounds are still small enough
+    ///      to be the chip (~&lt;= ChipMaxWidth), paint its Background blue
+    ///      too; if it's wider than that, stop — we've reached the tab
+    ///      strip.
+    ///   4. Hook the TextBlock's LayoutUpdated event so we re-paint on
+    ///      every layout pass. This is how the paint survives the tab
+    ///      becoming active: Revit's active-state styling re-applies its
+    ///      own brushes to some ancestors, and we need to re-paint them
+    ///      back to SG blue right after.
     ///
     /// TIMING:
-    ///   The tab header isn't in the visual tree until ItemInitialized
-    ///   fires. We re-apply on every fire so Revit re-styling (theme
-    ///   switches, tab re-creation) doesn't strip our paint.
+    ///   • OnStartup → TryApply once
+    ///   • ComponentManager.ItemInitialized → re-apply
+    ///   • TextBlock.LayoutUpdated (hooked once we find the widget) →
+    ///     re-apply, with a re-entry guard so we don't loop
     ///
     /// SAFETY:
     ///   Every operation is in try/catch. Worst-case the chip just doesn't
@@ -44,23 +45,19 @@ namespace SgRevitAddin.Utils
         /// <summary>Tab title text color when the chip is painted SG blue.</summary>
         public static readonly Color TextColor = Colors.White;
 
-        /// <summary>
-        /// Max walk-up depth from the title TextBlock when searching for the
-        /// chip background. The chip is typically 1-3 levels above the text.
-        /// </summary>
+        /// <summary>Max walk-up depth from the title TextBlock.</summary>
         private const int MaxWalkDepth = 4;
 
-        /// <summary>
-        /// Width threshold (DIPs) above which an ancestor is assumed to be
-        /// the tab strip container rather than the chip. Tab chips in Revit
-        /// are ~60-120px wide; the tab strip is hundreds.
-        /// </summary>
+        /// <summary>Width threshold (DIPs) above which an ancestor is assumed to be the tab strip, not the chip.</summary>
         private const double ChipMaxWidth = 200.0;
 
         private static EventHandler<Adn.RibbonItemEventArgs> _itemInitializedHandler;
+        private static EventHandler _layoutUpdatedHandler;
+        private static TextBlock _hookedTitleBlock;
         private static string _targetTabTitle;
         private static SolidColorBrush _bgBrush;
         private static SolidColorBrush _fgBrush;
+        private static bool _isApplying; // re-entry guard for LayoutUpdated loops
 
         /// <summary>
         /// Schedules the accent to be applied to the named tab as soon as
@@ -93,6 +90,9 @@ namespace SgRevitAddin.Utils
 
         private static bool TryApply()
         {
+            if (_isApplying) return false; // re-entry guard
+
+            _isApplying = true;
             try
             {
                 var ribbon = Adn.ComponentManager.Ribbon;
@@ -101,36 +101,23 @@ namespace SgRevitAddin.Utils
                 var titleBlock = FindTextBlockByText(ribbon, _targetTabTitle);
                 if (titleBlock == null) return false;
 
-                // Guaranteed minimum: paint the text itself.
-                titleBlock.Foreground = _fgBrush;
-                titleBlock.Background = _bgBrush;
-
-                // Bounded walk-up: paint each ancestor's background until we
-                // hit something too wide to be the chip. That keeps the
-                // paint scoped to the SG tab and never touches the strip.
-                DependencyObject current = titleBlock;
-                for (int depth = 0; depth < MaxWalkDepth; depth++)
+                // Hook LayoutUpdated once, on the first TextBlock we find.
+                // LayoutUpdated fires after every WPF layout pass — including
+                // when the tab is activated, when the user hovers it, and
+                // when Revit re-applies its selection-state brushes. We
+                // re-paint after each one so our colors stick.
+                if (_hookedTitleBlock != titleBlock)
                 {
-                    var parent = VisualTreeHelper.GetParent(current);
-                    if (parent == null) break;
-
-                    if (parent is FrameworkElement fe)
+                    if (_hookedTitleBlock != null && _layoutUpdatedHandler != null)
                     {
-                        // ActualWidth can be 0 during initial layout — treat
-                        // unknown size as "still inside the chip" and keep
-                        // walking, but cap at the depth limit.
-                        if (fe.ActualWidth > 0 && fe.ActualWidth > ChipMaxWidth)
-                        {
-                            // Too wide — we've reached the strip. Stop.
-                            break;
-                        }
-
-                        TrySetBackground(parent, _bgBrush);
+                        _hookedTitleBlock.LayoutUpdated -= _layoutUpdatedHandler;
                     }
-
-                    current = parent;
+                    _layoutUpdatedHandler = (_, __) => TryApply();
+                    titleBlock.LayoutUpdated += _layoutUpdatedHandler;
+                    _hookedTitleBlock = titleBlock;
                 }
 
+                Paint(titleBlock);
                 return true;
             }
             catch (Exception ex)
@@ -139,37 +126,69 @@ namespace SgRevitAddin.Utils
                     $"[SgRevitAddin] RibbonStyling.TryApply: {ex.Message}");
                 return false;
             }
+            finally
+            {
+                _isApplying = false;
+            }
         }
 
         /// <summary>
-        /// Sets Background on the element if it exposes one. Different WPF
-        /// types use different property names — Border, Panel, and Control
-        /// all have a Background property but no common base class declares
-        /// it (Border.Background is its own, etc.).
+        /// Paints the title TextBlock and walks up, painting each ancestor
+        /// whose bounds are still chip-sized. Idempotent — setting an
+        /// already-set Brush is a no-op in WPF, so re-running on every
+        /// LayoutUpdated tick is cheap.
+        /// </summary>
+        private static void Paint(TextBlock titleBlock)
+        {
+            titleBlock.Foreground = _fgBrush;
+            titleBlock.Background = _bgBrush;
+
+            DependencyObject current = titleBlock;
+            for (int depth = 0; depth < MaxWalkDepth; depth++)
+            {
+                var parent = VisualTreeHelper.GetParent(current);
+                if (parent == null) break;
+
+                if (parent is FrameworkElement fe
+                    && fe.ActualWidth > 0
+                    && fe.ActualWidth > ChipMaxWidth)
+                {
+                    // Reached the tab strip — stop.
+                    break;
+                }
+
+                TrySetBackground(parent, _bgBrush);
+                current = parent;
+            }
+        }
+
+        /// <summary>
+        /// Sets Background on the element if it exposes one. Border, Panel,
+        /// Control, and TextBlock each declare their own Background — no
+        /// common base interface for it.
         /// </summary>
         private static void TrySetBackground(DependencyObject element, Brush brush)
         {
             switch (element)
             {
                 case Border b:
-                    b.Background = brush;
+                    if (!ReferenceEquals(b.Background, brush)) b.Background = brush;
                     break;
                 case Panel p:
-                    p.Background = brush;
+                    if (!ReferenceEquals(p.Background, brush)) p.Background = brush;
                     break;
                 case Control c:
-                    c.Background = brush;
+                    if (!ReferenceEquals(c.Background, brush)) c.Background = brush;
                     break;
                 case TextBlock tb:
-                    tb.Background = brush;
+                    if (!ReferenceEquals(tb.Background, brush)) tb.Background = brush;
                     break;
             }
         }
 
         /// <summary>
-        /// Depth-first walk of the WPF visual tree under <paramref name="root"/>
-        /// looking for a TextBlock whose Text equals <paramref name="text"/>.
-        /// Returns null if no match.
+        /// Depth-first walk of the WPF visual tree looking for a TextBlock
+        /// whose Text equals <paramref name="text"/>. Returns null if no match.
         /// </summary>
         private static TextBlock FindTextBlockByText(DependencyObject root, string text)
         {
