@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using Adn = Autodesk.Windows;
 
@@ -19,27 +20,39 @@ namespace SgRevitAddin.Utils
     /// MECHANISM:
     ///   The Autodesk.Windows.RibbonTab is a logical object; the visible
     ///   widget is a WPF FrameworkElement whose DataContext points at that
-    ///   RibbonTab. We walk the visual tree of ComponentManager.Ribbon to
-    ///   find that widget, then apply BorderBrush + BorderThickness on all
-    ///   four sides — yielding a colored outline around the tab header.
+    ///   RibbonTab. We walk the visual tree to find it, then recursively
+    ///   paint:
+    ///     • every Border.Background     → SG blue
+    ///     • every Rectangle.Fill        → SG blue
+    ///     • every TextBlock.Foreground  → white
+    ///     • the wrapper Control.{Background,Foreground} too as a fallback
+    ///
+    ///   We need to walk the whole subtree because Revit's tab template uses
+    ///   a Border (or similar) inside to draw the actual chip — setting
+    ///   Background on the outer control wouldn't reach the painted pixels.
     ///
     /// TIMING:
     ///   ComponentManager.Ribbon exists by OnStartup, but the visual tree
     ///   for our tab isn't fully wired until ItemInitialized fires (and
     ///   often only after the user clicks the tab once). We hook the event
     ///   and retry on every fire until the apply succeeds, then unhook.
+    ///
+    ///   The Revit theme can also re-style tabs lazily (e.g. on theme
+    ///   switch). We re-apply on every ItemInitialized fire rather than
+    ///   only the first to survive a theme reset.
     /// </summary>
     public static class RibbonStyling
     {
-        /// <summary>SG brand color — applied as the accent underline. Theme-independent.</summary>
+        /// <summary>SG brand color — applied as the tab chip background. Theme-independent.</summary>
         public static readonly Color AccentColor = Color.FromRgb(0x08, 0x59, 0x90);
 
-        /// <summary>Thickness of the colored border (all 4 sides), in device-independent pixels.</summary>
-        private const double AccentBorderThickness = 2.0;
+        /// <summary>Tab title color when the chip is painted SG blue.</summary>
+        public static readonly Color TextColor = Colors.White;
 
         private static EventHandler<Adn.RibbonItemEventArgs> _itemInitializedHandler;
         private static string _targetTabTitle;
-        private static bool _applied;
+        private static SolidColorBrush _bgBrush;
+        private static SolidColorBrush _fgBrush;
 
         /// <summary>
         /// Schedules the accent to be applied to the named tab as soon as
@@ -50,25 +63,21 @@ namespace SgRevitAddin.Utils
             try
             {
                 _targetTabTitle = tabTitle;
-                _applied = false;
+                _bgBrush = new SolidColorBrush(AccentColor);
+                _bgBrush.Freeze();
+                _fgBrush = new SolidColorBrush(TextColor);
+                _fgBrush.Freeze();
 
                 // Try once now — sometimes the tab is already wired up if
-                // panels were created earlier in the same OnStartup.
-                if (TryApply()) return;
+                // panels were created earlier in OnStartup.
+                TryApply();
 
-                // Otherwise, hook ItemInitialized and retry on every fire
-                // until success.
+                // Hook ItemInitialized and re-apply on every fire. Re-applying
+                // (vs. unhooking after first success) survives Revit re-styling
+                // the tab on theme switches or context changes.
                 if (_itemInitializedHandler == null)
                 {
-                    _itemInitializedHandler = (_, __) =>
-                    {
-                        if (_applied) return;
-                        if (TryApply())
-                        {
-                            Adn.ComponentManager.ItemInitialized -= _itemInitializedHandler;
-                            _itemInitializedHandler = null;
-                        }
-                    };
+                    _itemInitializedHandler = (_, __) => TryApply();
                     Adn.ComponentManager.ItemInitialized += _itemInitializedHandler;
                 }
             }
@@ -93,13 +102,15 @@ namespace SgRevitAddin.Utils
                 var widget = FindVisualFor(ribbon, tab);
                 if (widget == null) return false;
 
-                var brush = new SolidColorBrush(AccentColor);
-                brush.Freeze(); // immutable + cheap
+                // Wrapper element: set its own Background/Foreground. Many tab
+                // templates respect this as a TemplateBinding source.
+                widget.Background = _bgBrush;
+                widget.Foreground = _fgBrush;
 
-                widget.BorderBrush = brush;
-                widget.BorderThickness = new Thickness(AccentBorderThickness);
+                // Walk into the subtree and paint every visible element. This
+                // overrides whatever the template was binding from the parent.
+                PaintDescendants(widget);
 
-                _applied = true;
                 return true;
             }
             catch (Exception ex)
@@ -111,12 +122,48 @@ namespace SgRevitAddin.Utils
         }
 
         /// <summary>
+        /// Recursively paints every Border/Rectangle background and every
+        /// TextBlock foreground in the visual subtree. Brutal but effective —
+        /// scope is the tab header chip, which is a tiny subtree (a few
+        /// nested elements at most).
+        /// </summary>
+        private static void PaintDescendants(DependencyObject root)
+        {
+            int count;
+            try { count = VisualTreeHelper.GetChildrenCount(root); }
+            catch { return; }
+
+            for (int i = 0; i < count; i++)
+            {
+                var child = VisualTreeHelper.GetChild(root, i);
+                switch (child)
+                {
+                    case Border b:
+                        b.Background = _bgBrush;
+                        break;
+                    case System.Windows.Shapes.Rectangle r:
+                        r.Fill = _bgBrush;
+                        break;
+                    case TextBlock tb:
+                        tb.Foreground = _fgBrush;
+                        break;
+                    case Control c:
+                        // ContentPresenter / Label / etc. — try fg/bg on
+                        // anything that exposes them.
+                        c.Background = _bgBrush;
+                        c.Foreground = _fgBrush;
+                        break;
+                }
+                PaintDescendants(child);
+            }
+        }
+
+        /// <summary>
         /// Depth-first walk of the WPF visual tree under <paramref name="root"/>
         /// looking for a Control whose DataContext is the given RibbonTab.
         /// Returns null if the tab's widget isn't in the tree yet.
         /// </summary>
-        private static System.Windows.Controls.Control FindVisualFor(
-            DependencyObject root, Adn.RibbonTab tab)
+        private static Control FindVisualFor(DependencyObject root, Adn.RibbonTab tab)
         {
             if (root == null) return null;
 
@@ -127,11 +174,8 @@ namespace SgRevitAddin.Utils
             for (int i = 0; i < count; i++)
             {
                 var child = VisualTreeHelper.GetChild(root, i);
-                if (child is System.Windows.Controls.Control ctl
-                    && ReferenceEquals(ctl.DataContext, tab))
-                {
+                if (child is Control ctl && ReferenceEquals(ctl.DataContext, tab))
                     return ctl;
-                }
                 var deeper = FindVisualFor(child, tab);
                 if (deeper != null) return deeper;
             }
