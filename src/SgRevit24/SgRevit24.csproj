@@ -26,6 +26,18 @@
       <HintPath>C:\Program Files\Autodesk\Revit 2024\RevitAPIUI.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <!-- AdWindows.dll exposes the underlying WPF ribbon (Autodesk.Windows
+         namespace) — not part of the public Revit API but ships with every
+         Revit install. We use it for ribbon-tab styling that Revit's public
+         API can't reach (the colored underline beneath our tab). -->
+    <Reference Include="AdWindows">
+      <HintPath>C:\Program Files\Autodesk\Revit 2024\AdWindows.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="WindowsBase" />
+    <Reference Include="System.Xaml" />
   </ItemGroup>
 
   <!-- NuGet packages needed for .NET Framework 4.8 -->
