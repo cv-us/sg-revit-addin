@@ -15,23 +15,24 @@ namespace SgRevitAddin.Utils
     /// MECHANISM:
     ///   1. Find the TextBlock whose .Text equals our tab title (e.g.
     ///      "SG ♈"). That's the visible label in the tab strip.
-    ///   2. Paint the TextBlock's Foreground white, Background blue.
-    ///   3. Walk UP from the TextBlock for at most MaxWalkDepth (4) levels.
-    ///      At each level: if the ancestor's bounds are still small enough
-    ///      to be the chip (~&lt;= ChipMaxWidth), paint its Background blue
-    ///      too; if it's wider than that, stop — we've reached the tab
-    ///      strip.
-    ///   4. Hook the TextBlock's LayoutUpdated event so we re-paint on
-    ///      every layout pass. This is how the paint survives the tab
-    ///      becoming active: Revit's active-state styling re-applies its
-    ///      own brushes to some ancestors, and we need to re-paint them
-    ///      back to SG blue right after.
+    ///   2. Walk UP from the TextBlock to locate the "chip container" —
+    ///      the topmost ancestor that's still small enough to be a single
+    ///      tab chip (≤ ChipMaxWidth). One level above that is the tab
+    ///      strip, which we never touch.
+    ///   3. Recursively paint EVERY element under the chip container:
+    ///        - Border.Background, Panel.Background, Control.Background,
+    ///          TextBlock.Background = SG blue
+    ///        - TextBlock.Foreground = white
+    ///      This catches Revit's selection-state overlay (a translucent
+    ///      element that appears on top of the chip when the tab is
+    ///      active, otherwise blends our blue with white and looks lighter).
+    ///   4. Re-apply on every LayoutUpdated so Revit's re-styling on
+    ///      activation/deactivation doesn't strip the paint.
     ///
     /// TIMING:
     ///   • OnStartup → TryApply once
     ///   • ComponentManager.ItemInitialized → re-apply
-    ///   • TextBlock.LayoutUpdated (hooked once we find the widget) →
-    ///     re-apply, with a re-entry guard so we don't loop
+    ///   • TextBlock.LayoutUpdated → re-apply (with re-entry guard)
     ///
     /// SAFETY:
     ///   Every operation is in try/catch. Worst-case the chip just doesn't
@@ -45,10 +46,10 @@ namespace SgRevitAddin.Utils
         /// <summary>Tab title text color when the chip is painted SG blue.</summary>
         public static readonly Color TextColor = Colors.White;
 
-        /// <summary>Max walk-up depth from the title TextBlock.</summary>
-        private const int MaxWalkDepth = 4;
+        /// <summary>Max walk-up depth from the title TextBlock when searching for the chip container.</summary>
+        private const int MaxWalkDepth = 6;
 
-        /// <summary>Width threshold (DIPs) above which an ancestor is assumed to be the tab strip, not the chip.</summary>
+        /// <summary>Width threshold (DIPs) above which an ancestor is the tab strip, not the chip.</summary>
         private const double ChipMaxWidth = 200.0;
 
         private static EventHandler<Adn.RibbonItemEventArgs> _itemInitializedHandler;
@@ -101,23 +102,29 @@ namespace SgRevitAddin.Utils
                 var titleBlock = FindTextBlockByText(ribbon, _targetTabTitle);
                 if (titleBlock == null) return false;
 
-                // Hook LayoutUpdated once, on the first TextBlock we find.
-                // LayoutUpdated fires after every WPF layout pass — including
-                // when the tab is activated, when the user hovers it, and
-                // when Revit re-applies its selection-state brushes. We
-                // re-paint after each one so our colors stick.
-                if (_hookedTitleBlock != titleBlock)
+                // Hook LayoutUpdated once. WPF fires this after every layout
+                // pass — including when Revit applies its active-state
+                // brushes to the tab on selection. We re-paint after each
+                // one so our colors stick.
+                if (!ReferenceEquals(_hookedTitleBlock, titleBlock))
                 {
                     if (_hookedTitleBlock != null && _layoutUpdatedHandler != null)
-                    {
                         _hookedTitleBlock.LayoutUpdated -= _layoutUpdatedHandler;
-                    }
                     _layoutUpdatedHandler = (_, __) => TryApply();
                     titleBlock.LayoutUpdated += _layoutUpdatedHandler;
                     _hookedTitleBlock = titleBlock;
                 }
 
-                Paint(titleBlock);
+                // Walk up to find the chip container — the topmost ancestor
+                // whose width is still chip-sized. Its parent is the tab
+                // strip; we never touch that.
+                DependencyObject chipRoot = FindChipContainer(titleBlock);
+
+                // Paint the chip container's entire subtree. This catches
+                // active-state overlay elements that sit above our painted
+                // ancestors in z-order.
+                PaintSubtree(chipRoot);
+
                 return true;
             }
             catch (Exception ex)
@@ -133,17 +140,18 @@ namespace SgRevitAddin.Utils
         }
 
         /// <summary>
-        /// Paints the title TextBlock and walks up, painting each ancestor
-        /// whose bounds are still chip-sized. Idempotent — setting an
-        /// already-set Brush is a no-op in WPF, so re-running on every
-        /// LayoutUpdated tick is cheap.
+        /// Walks up from the title TextBlock and returns the topmost ancestor
+        /// whose ActualWidth is still ≤ ChipMaxWidth. That's the chip
+        /// container; one level higher is the tab strip.
+        ///
+        /// Falls back to the TextBlock itself if no ancestor qualifies (e.g.
+        /// during initial layout when widths are still zero).
         /// </summary>
-        private static void Paint(TextBlock titleBlock)
+        private static DependencyObject FindChipContainer(TextBlock titleBlock)
         {
-            titleBlock.Foreground = _fgBrush;
-            titleBlock.Background = _bgBrush;
-
+            DependencyObject candidate = titleBlock;
             DependencyObject current = titleBlock;
+
             for (int depth = 0; depth < MaxWalkDepth; depth++)
             {
                 var parent = VisualTreeHelper.GetParent(current);
@@ -153,19 +161,42 @@ namespace SgRevitAddin.Utils
                     && fe.ActualWidth > 0
                     && fe.ActualWidth > ChipMaxWidth)
                 {
-                    // Reached the tab strip — stop.
+                    // parent is the tab strip — current is the chip root.
                     break;
                 }
 
-                TrySetBackground(parent, _bgBrush);
+                candidate = parent;
                 current = parent;
+            }
+
+            return candidate;
+        }
+
+        /// <summary>
+        /// Paints the given element and every descendant with our brushes.
+        /// Scope is the chip subtree, so this safely catches selection-state
+        /// overlays without bleeding to other tabs.
+        /// </summary>
+        private static void PaintSubtree(DependencyObject element)
+        {
+            TrySetBackground(element, _bgBrush);
+            if (element is TextBlock tb && !ReferenceEquals(tb.Foreground, _fgBrush))
+                tb.Foreground = _fgBrush;
+
+            int count;
+            try { count = VisualTreeHelper.GetChildrenCount(element); }
+            catch { return; }
+
+            for (int i = 0; i < count; i++)
+            {
+                PaintSubtree(VisualTreeHelper.GetChild(element, i));
             }
         }
 
         /// <summary>
-        /// Sets Background on the element if it exposes one. Border, Panel,
-        /// Control, and TextBlock each declare their own Background — no
-        /// common base interface for it.
+        /// Sets Background on the element if it exposes one. Skips redundant
+        /// writes via ReferenceEquals so the LayoutUpdated re-apply loop
+        /// stays cheap.
         /// </summary>
         private static void TrySetBackground(DependencyObject element, Brush brush)
         {
@@ -182,6 +213,9 @@ namespace SgRevitAddin.Utils
                     break;
                 case TextBlock tb:
                     if (!ReferenceEquals(tb.Background, brush)) tb.Background = brush;
+                    break;
+                case System.Windows.Shapes.Rectangle r:
+                    if (!ReferenceEquals(r.Fill, brush)) r.Fill = brush;
                     break;
             }
         }
