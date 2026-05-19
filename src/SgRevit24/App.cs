@@ -62,7 +62,10 @@ namespace SgRevitAddin
                     "section-ids-16.png", "Populate Section_ID (Hydratec) with formatted hanger type and rod length for tags."),
                 MakeButton("RingHangerSectionIDs", "Ring Section IDs", asmPath,
                     "SgRevitAddin.Commands.Hangers.RingHangerSectionIDsCommand",
-                    "section-ids-16.png", "Adjustable Ring Hanger variant of Section IDs: subtracts a nominal-diameter-based ring takeout from Rod Length before writing Section_ID (Hydratec)."));
+                    "section-ids-16.png", "Adjustable Ring Hanger variant of Section IDs: subtracts a nominal-diameter-based ring takeout from Rod Length before writing Section_ID (Hydratec)."),
+                MakeButton("ChangeTypeCode", "Change Type Code", asmPath,
+                    "SgRevitAddin.Commands.Hangers.ChangeTypeCodeCommand",
+                    "section-ids-16.png", "Bulk-change Type Code (Hydratec) on selected hangers: pick a From code from the selection, type the To code, only matching hangers are updated."));
 
             // Large: primary trapeze command
             AddLargeButton(hangersPanel, "AutoTrapezeHang", "Trapeze\nHang", asmPath,
