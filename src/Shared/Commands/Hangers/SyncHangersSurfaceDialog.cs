@@ -174,25 +174,25 @@ namespace SgRevitAddin.Commands.Hangers
                 Size = new Size(470, 120)
             };
 
-            int tw = 60, rowH = 24;
+            int tw = 60, rowH = 26, labelW2 = 175, tx2 = 195;
             gy = 22;
-            grpTypes.Controls.Add(new Label { Text = "Floors:", Location = new Point(lx, gy + 3), Size = new Size(130, 18) });
-            txtFloors = new TextBox { Text = TypeCodeFloors, Location = new Point(150, gy), Size = new Size(tw, 22) };
+            grpTypes.Controls.Add(new Label { Text = "Floors:", Location = new Point(lx, gy + 3), Size = new Size(labelW2, 18) });
+            txtFloors = new TextBox { Text = TypeCodeFloors, Location = new Point(tx2, gy), Size = new Size(tw, 22) };
             grpTypes.Controls.Add(txtFloors);
 
             gy += rowH;
-            grpTypes.Controls.Add(new Label { Text = "Stairs:", Location = new Point(lx, gy + 3), Size = new Size(130, 18) });
-            txtStairs = new TextBox { Text = TypeCodeStairs, Location = new Point(150, gy), Size = new Size(tw, 22) };
+            grpTypes.Controls.Add(new Label { Text = "Stairs:", Location = new Point(lx, gy + 3), Size = new Size(labelW2, 18) });
+            txtStairs = new TextBox { Text = TypeCodeStairs, Location = new Point(tx2, gy), Size = new Size(tw, 22) };
             grpTypes.Controls.Add(txtStairs);
 
             gy += rowH;
-            grpTypes.Controls.Add(new Label { Text = "Roofs:", Location = new Point(lx, gy + 3), Size = new Size(130, 18) });
-            txtRoofs = new TextBox { Text = TypeCodeRoofs, Location = new Point(150, gy), Size = new Size(tw, 22) };
+            grpTypes.Controls.Add(new Label { Text = "Roofs:", Location = new Point(lx, gy + 3), Size = new Size(labelW2, 18) });
+            txtRoofs = new TextBox { Text = TypeCodeRoofs, Location = new Point(tx2, gy), Size = new Size(tw, 22) };
             grpTypes.Controls.Add(txtRoofs);
 
             gy += rowH;
-            grpTypes.Controls.Add(new Label { Text = "Structural Framing:", Location = new Point(lx, gy + 3), Size = new Size(130, 18) });
-            txtFraming = new TextBox { Text = TypeCodeFraming, Location = new Point(150, gy), Size = new Size(tw, 22) };
+            grpTypes.Controls.Add(new Label { Text = "Structural Framing:", Location = new Point(lx, gy + 3), Size = new Size(labelW2, 18) });
+            txtFraming = new TextBox { Text = TypeCodeFraming, Location = new Point(tx2, gy), Size = new Size(tw, 22) };
             grpTypes.Controls.Add(txtFraming);
 
             Controls.Add(grpTypes);

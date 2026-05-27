@@ -50,16 +50,16 @@ namespace SgRevitAddin.Commands.Hangers
             string defaultFamily, string defaultTypeCode, string defaultWidemouthType, double defaultMaxClash)
         {
             Text = "Auto Hang — Structural Framing";
-            Size = new Size(500, 480);
+            ClientSize = new Size(560, 480);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
 
             int y = 15;
-            int labelW = 170;
-            int inputX = 185;
-            int inputW = 280;
+            int labelW = 215;
+            int inputX = 235;
+            int inputW = 310;
 
             // ── Hanger Family ──
             AddLabel("Hanger Family:", 15, y);
@@ -140,15 +140,16 @@ namespace SgRevitAddin.Commands.Hangers
             };
             y += 45;
 
-            // ── OK / Cancel ──
-            btnOK = new Button { Text = "Place Hangers", Left = 255, Top = y, Width = 110, Height = 32, DialogResult = DialogResult.OK };
+            // ── OK / Cancel (right-aligned) ──
+            // Form width 560, margin 15 → Cancel right edge at 545.
+            btnCancel = new Button { Text = "Cancel", Left = 455, Top = y, Width = 90, Height = 32, DialogResult = DialogResult.Cancel };
+            Controls.Add(btnCancel);
+            CancelButton = btnCancel;
+
+            btnOK = new Button { Text = "Place Hangers", Left = 335, Top = y, Width = 110, Height = 32, DialogResult = DialogResult.OK };
             btnOK.Click += BtnOK_Click;
             Controls.Add(btnOK);
             AcceptButton = btnOK;
-
-            btnCancel = new Button { Text = "Cancel", Left = 375, Top = y, Width = 90, Height = 32, DialogResult = DialogResult.Cancel };
-            Controls.Add(btnCancel);
-            CancelButton = btnCancel;
         }
 
         private void AddLabel(string text, int x, int y, bool bold = true)

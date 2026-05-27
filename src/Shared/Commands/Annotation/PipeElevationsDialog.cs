@@ -128,27 +128,28 @@ namespace SgRevitAddin.Commands.Annotation
             Controls.Add(grpType);
             y += 65;
 
-            // ── Buttons ──
+            // ── Buttons (right-aligned with 10px gap) ──
+            // Form width 440, margin 15 → Cancel right edge at 425.
+            var btnCancel = new Button
+            {
+                Text = "Cancel",
+                DialogResult = DialogResult.Cancel,
+                Location = new Point(350, y),
+                Size = new Size(75, 30)
+            };
+            CancelButton = btnCancel;
+            Controls.Add(btnCancel);
+
             var btnOK = new Button
             {
                 Text = "Calculate Elevations",
                 DialogResult = DialogResult.OK,
-                Location = new Point(200, y),
+                Location = new Point(210, y),
                 Size = new Size(130, 30)
             };
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
             Controls.Add(btnOK);
-
-            var btnCancel = new Button
-            {
-                Text = "Cancel",
-                DialogResult = DialogResult.Cancel,
-                Location = new Point(335, y),
-                Size = new Size(75, 30)
-            };
-            CancelButton = btnCancel;
-            Controls.Add(btnCancel);
         }
 
         private void BuildReferenceSection(GroupBox grp, string prefix,

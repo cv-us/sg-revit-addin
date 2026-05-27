@@ -118,7 +118,18 @@ namespace SgRevitAddin.Commands.Annotation
             Controls.Add(grpFormat);
             y += 85;
 
-            // ── Buttons ──
+            // ── Buttons (right-aligned with 10px gap) ──
+            // Form width 460, margin 15 → Cancel right edge at 445.
+            var btnCancel = new Button
+            {
+                Text = "Cancel",
+                DialogResult = DialogResult.Cancel,
+                Location = new Point(370, y),
+                Size = new Size(75, 30)
+            };
+            CancelButton = btnCancel;
+            Controls.Add(btnCancel);
+
             var btnOK = new Button
             {
                 Text = "Select Sleeves",
@@ -129,16 +140,6 @@ namespace SgRevitAddin.Commands.Annotation
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
             Controls.Add(btnOK);
-
-            var btnCancel = new Button
-            {
-                Text = "Cancel",
-                DialogResult = DialogResult.Cancel,
-                Location = new Point(365, y),
-                Size = new Size(75, 30)
-            };
-            CancelButton = btnCancel;
-            Controls.Add(btnCancel);
         }
 
         private void BtnOK_Click(object sender, EventArgs e)

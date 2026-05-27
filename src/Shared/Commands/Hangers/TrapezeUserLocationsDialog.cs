@@ -61,22 +61,22 @@ namespace SgRevitAddin.Commands.Hangers
             IList<string> linkNames)
         {
             Text = "Auto Trapeze Hang — User Locations";
-            Size = new Size(540, 530);
+            ClientSize = new Size(600, 530);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
 
             int y = 10;
-            int inputX = 220;
-            int inputW = 280;
+            int inputX = 260;
+            int inputW = 305;
 
             // ── About note ──
             var note = new Label
             {
                 Text = "Draw detail lines across pipes to mark trapeze locations.\n" +
                        "Select BOTH the pipes AND detail lines, then configure below.",
-                Left = 15, Top = y, Width = 490, Height = 36,
+                Left = 15, Top = y, Width = 570, Height = 36,
                 ForeColor = Color.DarkSlateGray
             };
             Controls.Add(note);
@@ -194,7 +194,7 @@ namespace SgRevitAddin.Commands.Hangers
 
             cboStructuralLink = new ComboBox
             {
-                Left = 180, Top = y - 2, Width = 300,
+                Left = 180, Top = y - 2, Width = 380,
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 Enabled = false
             };
@@ -213,25 +213,26 @@ namespace SgRevitAddin.Commands.Hangers
             }
             y += 35;
 
-            // ── OK / Cancel ──
+            // ── OK / Cancel (right-aligned) ──
+            // Form width 600, margin 15 → Cancel right edge at 585.
+            var btnCancel = new Button
+            {
+                Text = "Cancel",
+                Left = 495, Top = y, Width = 90, Height = 32,
+                DialogResult = DialogResult.Cancel
+            };
+            Controls.Add(btnCancel);
+            CancelButton = btnCancel;
+
             var btnOK = new Button
             {
                 Text = "Place Trapezes",
-                Left = 290, Top = y, Width = 120, Height = 32,
+                Left = 365, Top = y, Width = 120, Height = 32,
                 DialogResult = DialogResult.OK
             };
             btnOK.Click += BtnOK_Click;
             Controls.Add(btnOK);
             AcceptButton = btnOK;
-
-            var btnCancel = new Button
-            {
-                Text = "Cancel",
-                Left = 420, Top = y, Width = 90, Height = 32,
-                DialogResult = DialogResult.Cancel
-            };
-            Controls.Add(btnCancel);
-            CancelButton = btnCancel;
         }
 
         private void AddLabel(string text, int x, int y)

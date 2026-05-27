@@ -172,7 +172,8 @@ namespace SgRevitAddin.Commands.ModelCheck
 
             grpThreshold.Controls.Add(new Label
             {
-                Text = "Math: gap = rod length − (pipe OD ÷ 2). Any 02* type (02, 02C, 02D…) also subtracts 1.5\".",
+                Text = "Math: gap = rod length − (pipe OD ÷ 2).  " +
+                       "Hardware offsets: 01* −1.0\",  02* −1.5\",  05S* −0.5\".",
                 Location = new Point(10, 50),
                 Size = new Size(490, 18),
                 ForeColor = SystemColors.GrayText

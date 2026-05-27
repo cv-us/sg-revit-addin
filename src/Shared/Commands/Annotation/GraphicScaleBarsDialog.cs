@@ -117,8 +117,8 @@ namespace SgRevitAddin.Commands.Annotation
             btnSelectNone = new Button
             {
                 Text = "Select None",
-                Location = new Point(100, y),
-                Size = new Size(80, 25)
+                Location = new Point(105, y),
+                Size = new Size(85, 25)
             };
             btnSelectNone.Click += (s, e) =>
             {

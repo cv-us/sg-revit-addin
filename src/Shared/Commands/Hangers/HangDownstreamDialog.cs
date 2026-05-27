@@ -62,23 +62,23 @@ namespace SgRevitAddin.Commands.Hangers
             double defaultDistFromEnd, double defaultMinLength)
         {
             Text = "Auto Hang — Threaded Lines (Downstream Ends)";
-            Size = new Size(500, 520);
+            ClientSize = new Size(560, 520);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
 
             int y = 15;
-            int labelW = 200;
-            int inputX = 215;
-            int inputW = 250;
+            int labelW = 245;
+            int inputX = 265;
+            int inputW = 280;
 
             // ── About note ──
             var note = new Label
             {
                 Text = "Places hangers at downstream ends of threaded branchline pipes.\n" +
                        "Rod length is set by raybounce to the nearest structure above.",
-                Left = 15, Top = y, Width = 455, Height = 36,
+                Left = 15, Top = y, Width = 530, Height = 36,
                 ForeColor = Color.DarkSlateGray
             };
             Controls.Add(note);
@@ -125,7 +125,7 @@ namespace SgRevitAddin.Commands.Hangers
             y += 35;
 
             // ── Separator ──
-            var sep = new Label { Left = 15, Top = y, Width = 450, Height = 2, BorderStyle = BorderStyle.Fixed3D };
+            var sep = new Label { Left = 15, Top = y, Width = 530, Height = 2, BorderStyle = BorderStyle.Fixed3D };
             Controls.Add(sep);
             y += 15;
 
@@ -149,15 +149,16 @@ namespace SgRevitAddin.Commands.Hangers
             Controls.Add(cboCClamp);
             y += 45;
 
-            // ── OK / Cancel ──
-            btnOK = new Button { Text = "Place Hangers", Left = 255, Top = y, Width = 110, Height = 32, DialogResult = DialogResult.OK };
+            // ── OK / Cancel (right-aligned) ──
+            // Form width 560, margin 15 → Cancel right edge at 545.
+            btnCancel = new Button { Text = "Cancel", Left = 455, Top = y, Width = 90, Height = 32, DialogResult = DialogResult.Cancel };
+            Controls.Add(btnCancel);
+            CancelButton = btnCancel;
+
+            btnOK = new Button { Text = "Place Hangers", Left = 335, Top = y, Width = 110, Height = 32, DialogResult = DialogResult.OK };
             btnOK.Click += BtnOK_Click;
             Controls.Add(btnOK);
             AcceptButton = btnOK;
-
-            btnCancel = new Button { Text = "Cancel", Left = 375, Top = y, Width = 90, Height = 32, DialogResult = DialogResult.Cancel };
-            Controls.Add(btnCancel);
-            CancelButton = btnCancel;
         }
 
         private void AddLabel(string text, int x, int y, bool bold = true)

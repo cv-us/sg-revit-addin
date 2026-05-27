@@ -35,7 +35,7 @@ namespace SgRevitAddin.Commands.Annotation
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(300, 310);
+            ClientSize = new Size(340, 310);
 
             int margin = 15;
             int y = margin;
@@ -45,7 +45,7 @@ namespace SgRevitAddin.Commands.Annotation
             {
                 Text = "Flexible Drop Standard Lengths",
                 Location = new Point(margin, y),
-                Size = new Size(270, 155)
+                Size = new Size(310, 155)
             };
 
             int ry = 22;
@@ -76,34 +76,35 @@ namespace SgRevitAddin.Commands.Annotation
             {
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 Location = new Point(120, y),
-                Size = new Size(165, 24)
+                Size = new Size(205, 24)
             };
             cboOrientation.Items.AddRange(new object[] { "N", "NE", "E", "SE", "S", "SW", "W", "NW" });
             cboOrientation.SelectedIndex = 0;
             Controls.Add(cboOrientation);
             y += 40;
 
-            // ── Buttons ──
+            // ── Buttons (right-aligned with 10px gap) ──
+            // Form width 340, margin 15 → Cancel right edge at 325.
+            btnCancel = new Button
+            {
+                Text = "Cancel",
+                DialogResult = DialogResult.Cancel,
+                Location = new Point(250, y),
+                Size = new Size(75, 30)
+            };
+            CancelButton = btnCancel;
+            Controls.Add(btnCancel);
+
             btnOK = new Button
             {
                 Text = "Insert Tags",
                 DialogResult = DialogResult.OK,
-                Location = new Point(95, y),
+                Location = new Point(145, y),
                 Size = new Size(95, 30)
             };
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
             Controls.Add(btnOK);
-
-            btnCancel = new Button
-            {
-                Text = "Cancel",
-                DialogResult = DialogResult.Cancel,
-                Location = new Point(195, y),
-                Size = new Size(75, 30)
-            };
-            CancelButton = btnCancel;
-            Controls.Add(btnCancel);
         }
 
         private void BtnOK_Click(object sender, EventArgs e)

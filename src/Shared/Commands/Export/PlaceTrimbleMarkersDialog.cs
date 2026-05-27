@@ -28,7 +28,7 @@ namespace SgRevitAddin.Commands.Export
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(420, 315);
+            ClientSize = new Size(480, 315);
 
             int y = 15;
 
@@ -37,7 +37,7 @@ namespace SgRevitAddin.Commands.Export
             {
                 Text = "Actions",
                 Location = new Point(12, y),
-                Size = new Size(380, 125)
+                Size = new Size(440, 125)
             };
             Controls.Add(grpActions);
 
@@ -45,7 +45,7 @@ namespace SgRevitAddin.Commands.Export
             {
                 Text = "Place Markers",
                 Location = new Point(15, 25),
-                Size = new Size(350, 28),
+                Size = new Size(410, 28),
                 TextAlign = ContentAlignment.MiddleCenter
             };
             btnPlace.Click += (s, e) =>
@@ -60,7 +60,7 @@ namespace SgRevitAddin.Commands.Export
             {
                 Text = "Place new markers at selected hangers/braces (keeps existing markers)",
                 Location = new Point(15, 55),
-                Size = new Size(350, 15),
+                Size = new Size(410, 15),
                 ForeColor = Color.FromArgb(110, 110, 110),
                 Font = new Font(Font.FontFamily, 7.5f, FontStyle.Italic)
             };
@@ -70,7 +70,7 @@ namespace SgRevitAddin.Commands.Export
             {
                 Text = "Clear && Place Markers",
                 Location = new Point(15, 73),
-                Size = new Size(170, 28),
+                Size = new Size(200, 28),
                 TextAlign = ContentAlignment.MiddleCenter
             };
             btnClearAndPlace.Click += (s, e) =>
@@ -84,8 +84,8 @@ namespace SgRevitAddin.Commands.Export
             var btnClearOnly = new Button
             {
                 Text = "Clear Markers Only",
-                Location = new Point(195, 73),
-                Size = new Size(170, 28),
+                Location = new Point(225, 73),
+                Size = new Size(200, 28),
                 TextAlign = ContentAlignment.MiddleCenter
             };
             btnClearOnly.Click += (s, e) =>
@@ -100,7 +100,7 @@ namespace SgRevitAddin.Commands.Export
             {
                 Text = "Clear removes Trimble families from the active view before or instead of placing",
                 Location = new Point(15, 103),
-                Size = new Size(350, 15),
+                Size = new Size(410, 15),
                 ForeColor = Color.FromArgb(110, 110, 110),
                 Font = new Font(Font.FontFamily, 7.5f, FontStyle.Italic)
             };
@@ -113,7 +113,7 @@ namespace SgRevitAddin.Commands.Export
             {
                 Text = "Clear Filter",
                 Location = new Point(12, y),
-                Size = new Size(380, 105)
+                Size = new Size(440, 105)
             };
             Controls.Add(grpFilter);
 
@@ -121,7 +121,7 @@ namespace SgRevitAddin.Commands.Export
             {
                 Text = "By default, clears families starting with \"-Trimble-\" and \"Trmb_FieldPoints_\"",
                 Location = new Point(15, 22),
-                Size = new Size(350, 18),
+                Size = new Size(410, 18),
                 ForeColor = Color.FromArgb(100, 100, 100)
             };
             grpFilter.Controls.Add(lblDefault);
@@ -170,7 +170,7 @@ namespace SgRevitAddin.Commands.Export
             {
                 Text = "Comma-separate multiple prefixes: FP-, SG-",
                 Location = new Point(15, 74),
-                Size = new Size(350, 18),
+                Size = new Size(410, 18),
                 ForeColor = Color.FromArgb(130, 130, 130),
                 Font = new Font(Font.FontFamily, 7.5f, FontStyle.Italic),
                 Visible = false
@@ -179,12 +179,13 @@ namespace SgRevitAddin.Commands.Export
 
             y += 115;
 
-            // ── Cancel button ──
+            // ── Cancel button (right-aligned) ──
+            // Form width 480, margin 15 → Cancel right edge at 465.
             var btnCancel = new Button
             {
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
-                Location = new Point(305, y),
+                Location = new Point(380, y),
                 Size = new Size(85, 28)
             };
             Controls.Add(btnCancel);

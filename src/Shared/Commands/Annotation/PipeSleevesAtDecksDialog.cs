@@ -110,18 +110,8 @@ namespace SgRevitAddin.Commands.Annotation
             Controls.Add(grpLength);
             y += 85;
 
-            // ── Buttons ──
-            var btnOK = new Button
-            {
-                Text = "Select Pipes",
-                DialogResult = DialogResult.OK,
-                Location = new Point(275, y),
-                Size = new Size(110, 30)
-            };
-            btnOK.Click += BtnOK_Click;
-            AcceptButton = btnOK;
-            Controls.Add(btnOK);
-
+            // ── Buttons (right-aligned with 10px gap) ──
+            // Form width 480, margin 15 → Cancel right edge at 465.
             var btnCancel = new Button
             {
                 Text = "Cancel",
@@ -131,6 +121,17 @@ namespace SgRevitAddin.Commands.Annotation
             };
             CancelButton = btnCancel;
             Controls.Add(btnCancel);
+
+            var btnOK = new Button
+            {
+                Text = "Select Pipes",
+                DialogResult = DialogResult.OK,
+                Location = new Point(270, y),
+                Size = new Size(110, 30)
+            };
+            btnOK.Click += BtnOK_Click;
+            AcceptButton = btnOK;
+            Controls.Add(btnOK);
         }
 
         private void BtnOK_Click(object sender, EventArgs e)

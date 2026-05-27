@@ -33,7 +33,7 @@ namespace SgRevitAddin.Commands.ModelCheck
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(500, 350);
+            ClientSize = new Size(540, 350);
 
             int y = 15;
 
@@ -51,21 +51,21 @@ namespace SgRevitAddin.Commands.ModelCheck
             {
                 Text = "NFPA 13 Maximum Deflector Distance",
                 Location = new Point(15, y),
-                Size = new Size(470, 105)
+                Size = new Size(510, 105)
             };
 
             rbUnobstructed = new RadioButton
             {
                 Text = "Unobstructed construction — 1\" to 12\" (NFPA 13 Table 8.6.2.1.1)",
                 Location = new Point(15, 22),
-                Size = new Size(445, 20),
+                Size = new Size(485, 20),
                 Checked = true
             };
             rbObstructed = new RadioButton
             {
                 Text = "Obstructed construction — 1\" to 22\" (NFPA 13 Table 8.6.2.1.1)",
                 Location = new Point(15, 46),
-                Size = new Size(445, 20)
+                Size = new Size(485, 20)
             };
             rbCustom = new RadioButton
             {
@@ -103,7 +103,7 @@ namespace SgRevitAddin.Commands.ModelCheck
             {
                 Text = "Sprinkler Head Height (pipe center to deflector top)",
                 Location = new Point(15, y),
-                Size = new Size(470, 55)
+                Size = new Size(510, 55)
             };
 
             var lblHead = new Label
@@ -138,7 +138,7 @@ namespace SgRevitAddin.Commands.ModelCheck
             {
                 Text = "Annotation Mode",
                 Location = new Point(15, y),
-                Size = new Size(470, 55)
+                Size = new Size(510, 55)
             };
             rbAnnotateExceeds = new RadioButton
             {
@@ -157,12 +157,23 @@ namespace SgRevitAddin.Commands.ModelCheck
             Controls.Add(grpAnnot);
             y += 65;
 
-            // ── Buttons ──
+            // ── Buttons (right-aligned with 10px gap) ──
+            // Form width 540, margin 15 → Cancel right edge at 525.
+            var btnCancel = new Button
+            {
+                Text = "Cancel",
+                DialogResult = DialogResult.Cancel,
+                Location = new Point(445, y),
+                Size = new Size(80, 30)
+            };
+            CancelButton = btnCancel;
+            Controls.Add(btnCancel);
+
             var btnOK = new Button
             {
                 Text = "Check",
                 DialogResult = DialogResult.OK,
-                Location = new Point(320, y),
+                Location = new Point(355, y),
                 Size = new Size(80, 30)
             };
             btnOK.Click += (s, e) =>
@@ -179,16 +190,6 @@ namespace SgRevitAddin.Commands.ModelCheck
             };
             AcceptButton = btnOK;
             Controls.Add(btnOK);
-
-            var btnCancel = new Button
-            {
-                Text = "Cancel",
-                DialogResult = DialogResult.Cancel,
-                Location = new Point(405, y),
-                Size = new Size(80, 30)
-            };
-            CancelButton = btnCancel;
-            Controls.Add(btnCancel);
         }
     }
 }

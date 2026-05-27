@@ -89,27 +89,27 @@ namespace SgRevitAddin.Commands.Hangers
             Controls.Add(grpDirection);
             y += 105;
 
-            // ── Buttons ──
+            // ── Buttons (right-aligned with 10px gap) ──
+            btnCancel = new Button
+            {
+                Text = "Cancel",
+                DialogResult = DialogResult.Cancel,
+                Location = new Point(340 - 15 - 75, y),
+                Size = new Size(75, 30)
+            };
+            CancelButton = btnCancel;
+            Controls.Add(btnCancel);
+
             btnOK = new Button
             {
                 Text = "Format Ticks",
                 DialogResult = DialogResult.OK,
-                Location = new Point(130, y),
+                Location = new Point(340 - 15 - 75 - 10 - 95, y),
                 Size = new Size(95, 30)
             };
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
             Controls.Add(btnOK);
-
-            btnCancel = new Button
-            {
-                Text = "Cancel",
-                DialogResult = DialogResult.Cancel,
-                Location = new Point(230, y),
-                Size = new Size(75, 30)
-            };
-            CancelButton = btnCancel;
-            Controls.Add(btnCancel);
         }
 
         private void BtnOK_Click(object sender, EventArgs e)

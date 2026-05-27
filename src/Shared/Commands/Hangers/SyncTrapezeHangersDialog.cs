@@ -127,27 +127,28 @@ namespace SgRevitAddin.Commands.Hangers
             Controls.Add(grpPosition);
             y += 75;
 
-            // ── Buttons ──
+            // ── Buttons (right-aligned) ──
+            // Form width 460, margin 15 → Cancel right edge at 445.
+            var btnCancel = new Button
+            {
+                Text = "Cancel",
+                DialogResult = DialogResult.Cancel,
+                Location = new Point(370, y),
+                Size = new Size(75, 30)
+            };
+            CancelButton = btnCancel;
+            Controls.Add(btnCancel);
+
             var btnOK = new Button
             {
                 Text = "Sync Trapeze",
                 DialogResult = DialogResult.OK,
-                Location = new Point(270, y),
+                Location = new Point(260, y),
                 Size = new Size(100, 30)
             };
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
             Controls.Add(btnOK);
-
-            var btnCancel = new Button
-            {
-                Text = "Cancel",
-                DialogResult = DialogResult.Cancel,
-                Location = new Point(375, y),
-                Size = new Size(75, 30)
-            };
-            CancelButton = btnCancel;
-            Controls.Add(btnCancel);
         }
 
         private void BtnOK_Click(object sender, EventArgs e)

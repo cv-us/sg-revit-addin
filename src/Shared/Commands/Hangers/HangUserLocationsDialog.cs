@@ -43,7 +43,7 @@ namespace SgRevitAddin.Commands.Hangers
             string defaultFamily, string defaultTypeCode)
         {
             Text = "Auto Hang — User Locations (Raybounce to Structure)";
-            Size = new Size(500, 330);
+            ClientSize = new Size(500, 330);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;

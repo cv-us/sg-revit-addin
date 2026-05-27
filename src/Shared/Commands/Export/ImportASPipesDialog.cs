@@ -29,11 +29,11 @@ namespace SgRevitAddin.Commands.Export
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(400, 220);
+            ClientSize = new Size(440, 220);
 
             int margin = 15;
             int y = margin;
-            int labelW = 120;
+            int labelW = 160;
             int ctrlW = 245;
 
             // Level
@@ -65,15 +65,16 @@ namespace SgRevitAddin.Commands.Export
             {
                 Text = "CSV columns expected: [name, X1, Y1, Z1, X2, Y2, Z2] in inches. Header row is skipped.",
                 Location = new Point(margin, y),
-                Size = new Size(370, 32),
+                Size = new Size(410, 32),
                 ForeColor = Color.Gray
             };
             Controls.Add(note);
             y += 40;
 
-            // Buttons
-            var btnOk = new Button { Text = "Import", DialogResult = DialogResult.OK, Location = new Point(margin + 130, y), Size = new Size(90, 28) };
-            var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(margin + 230, y), Size = new Size(90, 28) };
+            // Buttons (right-aligned with 10px gap)
+            // Form width 440, margin 15 → Cancel right edge at 425.
+            var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(335, y), Size = new Size(90, 28) };
+            var btnOk = new Button { Text = "Import", DialogResult = DialogResult.OK, Location = new Point(235, y), Size = new Size(90, 28) };
             Controls.Add(btnOk);
             Controls.Add(btnCancel);
             AcceptButton = btnOk;

@@ -50,16 +50,16 @@ namespace SgRevitAddin.Commands.Hangers
         private void InitializeForm()
         {
             Text = "Auto Hang — Pipes Crossing CAD Lines";
-            Size = new Size(480, 560);
+            ClientSize = new Size(520, 540);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
 
             int y = 15;
-            int labelW = 140;
-            int inputX = 155;
-            int inputW = 290;
+            int labelW = 175;
+            int inputX = 195;
+            int inputW = 310;
 
             // ── Hanger Family ──
             AddLabel("Hanger Family:", 15, y);
@@ -103,15 +103,16 @@ namespace SgRevitAddin.Commands.Hangers
             Controls.Add(btnSelectNone);
             y += 40;
 
-            // ── OK / Cancel ──
-            btnOK = new Button { Text = "Place Hangers", Left = 230, Top = y, Width = 110, Height = 32, DialogResult = DialogResult.OK };
+            // ── OK / Cancel (right-aligned) ──
+            // Form width 520, margin 15 → Cancel right edge at 505.
+            btnCancel = new Button { Text = "Cancel", Left = 415, Top = y, Width = 90, Height = 32, DialogResult = DialogResult.Cancel };
+            Controls.Add(btnCancel);
+            CancelButton = btnCancel;
+
+            btnOK = new Button { Text = "Place Hangers", Left = 295, Top = y, Width = 110, Height = 32, DialogResult = DialogResult.OK };
             btnOK.Click += BtnOK_Click;
             Controls.Add(btnOK);
             AcceptButton = btnOK;
-
-            btnCancel = new Button { Text = "Cancel", Left = 350, Top = y, Width = 90, Height = 32, DialogResult = DialogResult.Cancel };
-            Controls.Add(btnCancel);
-            CancelButton = btnCancel;
         }
 
         private void AddLabel(string text, int x, int y)

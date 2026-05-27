@@ -63,7 +63,7 @@ namespace SgRevitAddin.Commands.Hangers
             string defaultFamily, string defaultTypeCode, double defaultMaxClash)
         {
             Text = "Auto Hang — Typical Spaced Straight Runs";
-            Size = new Size(520, 620);
+            ClientSize = new Size(520, 620);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;

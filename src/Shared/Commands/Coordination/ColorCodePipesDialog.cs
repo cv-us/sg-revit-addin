@@ -64,11 +64,23 @@ namespace SgRevitAddin.Commands.Coordination
             Controls.Add(grp);
             y += 120;
 
+            // Buttons (right-aligned with 10px gap)
+            // Form width 440, margin 15 → Cancel right edge at 425.
+            var btnCancel = new Button
+            {
+                Text = "Cancel",
+                DialogResult = DialogResult.Cancel,
+                Location = new Point(350, y),
+                Size = new Size(75, 30)
+            };
+            CancelButton = btnCancel;
+            Controls.Add(btnCancel);
+
             var btnOK = new Button
             {
                 Text = "Apply",
                 DialogResult = DialogResult.OK,
-                Location = new Point(265, y),
+                Location = new Point(260, y),
                 Size = new Size(80, 30)
             };
             btnOK.Click += (s, e) =>
@@ -79,16 +91,6 @@ namespace SgRevitAddin.Commands.Coordination
             };
             AcceptButton = btnOK;
             Controls.Add(btnOK);
-
-            var btnCancel = new Button
-            {
-                Text = "Cancel",
-                DialogResult = DialogResult.Cancel,
-                Location = new Point(350, y),
-                Size = new Size(75, 30)
-            };
-            CancelButton = btnCancel;
-            Controls.Add(btnCancel);
         }
     }
 }

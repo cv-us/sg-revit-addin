@@ -200,7 +200,18 @@ namespace SgRevitAddin.Commands.Export
             Controls.Add(grpElev);
             y += 78;
 
-            // ── Buttons ──
+            // ── Buttons (right-aligned with 10px gap) ──
+            // Form width 480, margin 15 → Cancel right edge at 465.
+            var btnCancel = new Button
+            {
+                Text = "Cancel",
+                DialogResult = DialogResult.Cancel,
+                Location = new Point(390, y),
+                Size = new Size(75, 30)
+            };
+            CancelButton = btnCancel;
+            Controls.Add(btnCancel);
+
             var btnOK = new Button
             {
                 Text = "Export CSV",
@@ -211,16 +222,6 @@ namespace SgRevitAddin.Commands.Export
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
             Controls.Add(btnOK);
-
-            var btnCancel = new Button
-            {
-                Text = "Cancel",
-                DialogResult = DialogResult.Cancel,
-                Location = new Point(385, y),
-                Size = new Size(75, 30)
-            };
-            CancelButton = btnCancel;
-            Controls.Add(btnCancel);
         }
 
         private void BtnOK_Click(object sender, EventArgs e)

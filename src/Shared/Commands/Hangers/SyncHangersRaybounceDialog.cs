@@ -95,32 +95,32 @@ namespace SgRevitAddin.Commands.Hangers
             {
                 Text = "Hanger Assembly Type Codes (Hydratec)",
                 Location = new Point(margin, y),
-                Size = new Size(450, 105)
+                Size = new Size(450, 115)
             };
 
-            int lx = 10, tx = 150, tw = 60, rowH = 24;
+            int lx = 10, tx = 195, tw = 60, rowH = 26, labelW = 175;
             int gy = 20;
-            grpTypes.Controls.Add(new Label { Text = "Floors:", Location = new Point(lx, gy + 3), Size = new Size(130, 18) });
+            grpTypes.Controls.Add(new Label { Text = "Floors:", Location = new Point(lx, gy + 3), Size = new Size(labelW, 18) });
             txtFloors = new TextBox { Text = TypeCodeFloors, Location = new Point(tx, gy), Size = new Size(tw, 22) };
             grpTypes.Controls.Add(txtFloors);
 
             gy += rowH;
-            grpTypes.Controls.Add(new Label { Text = "Stairs:", Location = new Point(lx, gy + 3), Size = new Size(130, 18) });
+            grpTypes.Controls.Add(new Label { Text = "Stairs:", Location = new Point(lx, gy + 3), Size = new Size(labelW, 18) });
             txtStairs = new TextBox { Text = TypeCodeStairs, Location = new Point(tx, gy), Size = new Size(tw, 22) };
             grpTypes.Controls.Add(txtStairs);
 
             gy += rowH;
-            grpTypes.Controls.Add(new Label { Text = "Roofs:", Location = new Point(lx, gy + 3), Size = new Size(130, 18) });
+            grpTypes.Controls.Add(new Label { Text = "Roofs:", Location = new Point(lx, gy + 3), Size = new Size(labelW, 18) });
             txtRoofs = new TextBox { Text = TypeCodeRoofs, Location = new Point(tx, gy), Size = new Size(tw, 22) };
             grpTypes.Controls.Add(txtRoofs);
 
             gy += rowH;
-            grpTypes.Controls.Add(new Label { Text = "Structural Framing:", Location = new Point(lx, gy + 3), Size = new Size(130, 18) });
+            grpTypes.Controls.Add(new Label { Text = "Structural Framing:", Location = new Point(lx, gy + 3), Size = new Size(labelW, 18) });
             txtFraming = new TextBox { Text = TypeCodeFraming, Location = new Point(tx, gy), Size = new Size(tw, 22) };
             grpTypes.Controls.Add(txtFraming);
 
             Controls.Add(grpTypes);
-            y += 115;
+            y += 125;
 
             // ── Keep Types ──
             chkKeepTypes = new CheckBox

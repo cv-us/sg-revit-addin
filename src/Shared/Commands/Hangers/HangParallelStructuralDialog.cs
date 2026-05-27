@@ -66,22 +66,22 @@ namespace SgRevitAddin.Commands.Hangers
             string defaultFamily, string defaultTypeCode, string defaultWidemouthCode)
         {
             Text = "Auto Hang — Typical Spacing (Parallel to Structural)";
-            Size = new Size(520, 720);
+            ClientSize = new Size(560, 720);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
 
             int y = 15;
-            int inputX = 210;
-            int inputW = 270;
+            int inputX = 235;
+            int inputW = 310;
 
             // ── About note ──
             var note = new Label
             {
                 Text = "Places hangers at typical spacing along pipe runs. Hangers attach\n" +
                        "to structural framing (beams/joists) running parallel to the pipes.",
-                Left = 15, Top = y, Width = 475, Height = 36,
+                Left = 15, Top = y, Width = 530, Height = 36,
                 ForeColor = Color.DarkSlateGray
             };
             Controls.Add(note);
@@ -146,7 +146,7 @@ namespace SgRevitAddin.Commands.Hangers
             y += 32;
 
             // ── Separator ──
-            Controls.Add(new Label { Left = 15, Top = y, Width = 470, Height = 2, BorderStyle = BorderStyle.Fixed3D });
+            Controls.Add(new Label { Left = 15, Top = y, Width = 530, Height = 2, BorderStyle = BorderStyle.Fixed3D });
             y += 12;
 
             // ── Type Codes ──
@@ -177,7 +177,7 @@ namespace SgRevitAddin.Commands.Hangers
             y += 35;
 
             // ── Separator ──
-            Controls.Add(new Label { Left = 15, Top = y, Width = 470, Height = 2, BorderStyle = BorderStyle.Fixed3D });
+            Controls.Add(new Label { Left = 15, Top = y, Width = 530, Height = 2, BorderStyle = BorderStyle.Fixed3D });
             y += 12;
 
             // ── Structural Source ──
@@ -201,14 +201,16 @@ namespace SgRevitAddin.Commands.Hangers
             };
             y += 42;
 
-            // ── OK / Cancel ──
-            btnOK = new Button { Text = "Place Hangers", Left = 275, Top = y, Width = 110, Height = 32, DialogResult = DialogResult.OK };
+            // ── OK / Cancel (right-aligned) ──
+            // Form width 560, margin 15 → Cancel right edge at 545.
+            btnCancel = new Button { Text = "Cancel", Left = 455, Top = y, Width = 90, Height = 32, DialogResult = DialogResult.Cancel };
+            Controls.Add(btnCancel);
+            CancelButton = btnCancel;
+
+            btnOK = new Button { Text = "Place Hangers", Left = 335, Top = y, Width = 110, Height = 32, DialogResult = DialogResult.OK };
             btnOK.Click += BtnOK_Click;
             Controls.Add(btnOK);
             AcceptButton = btnOK;
-            btnCancel = new Button { Text = "Cancel", Left = 395, Top = y, Width = 90, Height = 32, DialogResult = DialogResult.Cancel };
-            Controls.Add(btnCancel);
-            CancelButton = btnCancel;
         }
 
         private void AddLabel(string text, int x, int y, bool bold = true)

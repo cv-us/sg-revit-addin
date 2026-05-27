@@ -202,18 +202,8 @@ namespace SgRevitAddin.Commands.Annotation
             Controls.Add(grpLink);
             y += 65;
 
-            // ── Buttons ──
-            var btnOK = new Button
-            {
-                Text = "Select Pipes",
-                DialogResult = DialogResult.OK,
-                Location = new Point(295, y),
-                Size = new Size(110, 30)
-            };
-            btnOK.Click += BtnOK_Click;
-            AcceptButton = btnOK;
-            Controls.Add(btnOK);
-
+            // ── Buttons (right-aligned with 10px gap) ──
+            // Form width 500, margin 15 → Cancel right edge at 485.
             var btnCancel = new Button
             {
                 Text = "Cancel",
@@ -223,6 +213,17 @@ namespace SgRevitAddin.Commands.Annotation
             };
             CancelButton = btnCancel;
             Controls.Add(btnCancel);
+
+            var btnOK = new Button
+            {
+                Text = "Select Pipes",
+                DialogResult = DialogResult.OK,
+                Location = new Point(290, y),
+                Size = new Size(110, 30)
+            };
+            btnOK.Click += BtnOK_Click;
+            AcceptButton = btnOK;
+            Controls.Add(btnOK);
         }
 
         private void UpdatePanelVisibility()
