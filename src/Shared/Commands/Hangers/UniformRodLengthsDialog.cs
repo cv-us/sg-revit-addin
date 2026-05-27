@@ -12,11 +12,13 @@ namespace SgRevitAddin.Commands.Hangers
     ///   • Type Code — combo box, populated from distinct codes present
     ///                  in the current selection.
     ///   • Max length (inches) — only hangers with Rod Length ≤ this
-    ///                            value are touched. Hangers above this
-    ///                            threshold are assumed to be on a lower
-    ///                            pipe and left alone.
-    ///   • Target length (inches) — the uniform Rod Length value applied
-    ///                               to in-range matching hangers.
+    ///                            value are touched.
+    ///   • Target length (inches) — the uniform Rod Length value applied.
+    ///
+    /// LAYOUT:
+    ///   Hints are stacked *below* their inputs rather than to the right,
+    ///   so the form stays narrow enough to fit on small monitors without
+    ///   clipping the hint text.
     /// </summary>
     public class UniformRodLengthsDialog : Form
     {
@@ -39,54 +41,64 @@ namespace SgRevitAddin.Commands.Hangers
 
         private void InitializeComponent(int hangerCount, List<string> availableCodes)
         {
+            // Layout constants — generous so labels never clip.
+            const int Margin = 15;
+            const int FormWidth = 480;
+            const int LabelW = 200;
+            const int InputX = Margin + LabelW + 10;
+            const int NumericW = 100;
+            const int HintW = FormWidth - Margin * 2;
+            const int RowGap = 8;
+            const int SectionGap = 14;
+
             Text = "Uniform Rod Lengths";
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(400, 280);
 
-            const int margin = 15;
-            int y = margin;
+            int y = Margin;
 
             // ── Selection summary ──
             var lblSummary = new Label
             {
                 Text = $"Selected hangers: {hangerCount}",
-                Location = new Point(margin, y),
-                Size = new Size(370, 18),
-                AutoSize = false
+                Location = new Point(Margin, y),
+                Size = new Size(HintW, 20),
+                AutoSize = false,
+                Font = new Font(Font, FontStyle.Bold)
             };
             Controls.Add(lblSummary);
             y += 26;
 
+            // ── Description (multi-line, generous height) ──
             var lblDesc = new Label
             {
-                Text = "Sweeps Rod Length on hangers of the chosen Type Code\n" +
-                       "to a uniform target value — but only on hangers whose\n" +
-                       "current Rod Length is at or below the max cutoff. Anything\n" +
-                       "longer (likely on a lower pipe) is left alone.",
-                Location = new Point(margin, y),
-                Size = new Size(370, 60),
+                Text = "Sweeps Rod Length on hangers of the chosen Type Code to a " +
+                       "uniform target — but only on hangers whose current Rod " +
+                       "Length is at or below the max cutoff. Anything longer " +
+                       "(likely on a lower pipe) is left alone.",
+                Location = new Point(Margin, y),
+                Size = new Size(HintW, 64),
                 AutoSize = false
             };
             Controls.Add(lblDesc);
-            y += 68;
+            y += 64 + SectionGap;
 
             // ── Type Code ──
             var lblCode = new Label
             {
                 Text = "Type Code:",
-                Location = new Point(margin, y + 3),
-                Size = new Size(140, 18),
+                Location = new Point(Margin, y + 3),
+                Size = new Size(LabelW, 20),
                 AutoSize = false
             };
             Controls.Add(lblCode);
 
             cbTypeCode = new ComboBox
             {
-                Location = new Point(margin + 145, y),
-                Size = new Size(225, 22),
+                Location = new Point(InputX, y),
+                Size = new Size(FormWidth - InputX - Margin, 24),
                 DropDownStyle = ComboBoxStyle.DropDownList
             };
             foreach (var code in availableCodes)
@@ -94,22 +106,22 @@ namespace SgRevitAddin.Commands.Hangers
             if (cbTypeCode.Items.Count > 0)
                 cbTypeCode.SelectedIndex = 0;
             Controls.Add(cbTypeCode);
-            y += 32;
+            y += 24 + SectionGap;
 
-            // ── Max length ──
+            // ── Max length (label + numeric on row 1, hint on row 2) ──
             var lblMax = new Label
             {
                 Text = "Max Rod Length (in):",
-                Location = new Point(margin, y + 3),
-                Size = new Size(140, 18),
+                Location = new Point(Margin, y + 3),
+                Size = new Size(LabelW, 20),
                 AutoSize = false
             };
             Controls.Add(lblMax);
 
             nudMax = new NumericUpDown
             {
-                Location = new Point(margin + 145, y),
-                Size = new Size(80, 22),
+                Location = new Point(InputX, y),
+                Size = new Size(NumericW, 24),
                 Minimum = 0.25m,
                 Maximum = 1000m,
                 DecimalPlaces = 2,
@@ -117,32 +129,33 @@ namespace SgRevitAddin.Commands.Hangers
                 Value = 24.00m
             };
             Controls.Add(nudMax);
+            y += 24 + RowGap;
 
             var lblMaxHint = new Label
             {
-                Text = "(hangers ≤ this length get changed)",
-                Location = new Point(margin + 232, y + 3),
-                Size = new Size(160, 18),
+                Text = "Hangers with Rod Length ≤ this value are eligible to be changed.",
+                Location = new Point(Margin, y),
+                Size = new Size(HintW, 20),
                 ForeColor = SystemColors.GrayText,
                 AutoSize = false
             };
             Controls.Add(lblMaxHint);
-            y += 30;
+            y += 20 + SectionGap;
 
-            // ── Target length ──
+            // ── Target length (label + numeric on row 1, hint on row 2) ──
             var lblTarget = new Label
             {
                 Text = "Target Rod Length (in):",
-                Location = new Point(margin, y + 3),
-                Size = new Size(140, 18),
+                Location = new Point(Margin, y + 3),
+                Size = new Size(LabelW, 20),
                 AutoSize = false
             };
             Controls.Add(lblTarget);
 
             nudTarget = new NumericUpDown
             {
-                Location = new Point(margin + 145, y),
-                Size = new Size(80, 22),
+                Location = new Point(InputX, y),
+                Size = new Size(NumericW, 24),
                 Minimum = 0.25m,
                 Maximum = 1000m,
                 DecimalPlaces = 2,
@@ -150,39 +163,47 @@ namespace SgRevitAddin.Commands.Hangers
                 Value = 12.00m
             };
             Controls.Add(nudTarget);
+            y += 24 + RowGap;
 
             var lblTargetHint = new Label
             {
-                Text = "(new Rod Length value)",
-                Location = new Point(margin + 232, y + 3),
-                Size = new Size(160, 18),
+                Text = "Each eligible hanger's Rod Length is set to this value.",
+                Location = new Point(Margin, y),
+                Size = new Size(HintW, 20),
                 ForeColor = SystemColors.GrayText,
                 AutoSize = false
             };
             Controls.Add(lblTargetHint);
-            y += 38;
+            y += 20 + SectionGap + 6;
 
-            // ── Buttons ──
-            btnOK = new Button
-            {
-                Text = "Apply",
-                DialogResult = DialogResult.OK,
-                Location = new Point(195, y),
-                Size = new Size(85, 30)
-            };
-            btnOK.Click += BtnOK_Click;
-            AcceptButton = btnOK;
-            Controls.Add(btnOK);
+            // ── Buttons (right-aligned) ──
+            const int BtnW = 95;
+            const int BtnH = 30;
+            const int BtnGap = 10;
 
             btnCancel = new Button
             {
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
-                Location = new Point(285, y),
-                Size = new Size(85, 30)
+                Location = new Point(FormWidth - Margin - BtnW, y),
+                Size = new Size(BtnW, BtnH)
             };
             CancelButton = btnCancel;
             Controls.Add(btnCancel);
+
+            btnOK = new Button
+            {
+                Text = "Apply",
+                DialogResult = DialogResult.OK,
+                Location = new Point(FormWidth - Margin - BtnW * 2 - BtnGap, y),
+                Size = new Size(BtnW, BtnH)
+            };
+            btnOK.Click += BtnOK_Click;
+            AcceptButton = btnOK;
+            Controls.Add(btnOK);
+
+            y += BtnH + Margin;
+            ClientSize = new Size(FormWidth, y);
         }
 
         private void BtnOK_Click(object sender, EventArgs e)

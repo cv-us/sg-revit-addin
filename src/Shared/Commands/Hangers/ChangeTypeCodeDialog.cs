@@ -12,9 +12,12 @@ namespace SgRevitAddin.Commands.Hangers
     ///   • From Type Code — combo box, populated from distinct codes in
     ///                       the current selection (no free-text; we
     ///                       can't change a code we don't have).
-    ///   • To   Type Code — text box, free-form. The new code can be
-    ///                       anything; we don't validate against an
-    ///                       allowed list.
+    ///   • To   Type Code — text box, free-form.
+    ///
+    /// LAYOUT:
+    ///   Generous label-column width and an explicit input column so
+    ///   nothing clips on small monitors. Buttons right-aligned at the
+    ///   bottom.
     /// </summary>
     public class ChangeTypeCodeDialog : Form
     {
@@ -35,15 +38,20 @@ namespace SgRevitAddin.Commands.Hangers
 
         private void InitializeComponent(int hangerCount, int hangersWithNoCode, List<string> availableCodes)
         {
+            const int Margin = 15;
+            const int FormWidth = 480;
+            const int LabelW = 160;
+            const int InputX = Margin + LabelW + 10;
+            const int HintW = FormWidth - Margin * 2;
+            const int SectionGap = 14;
+
             Text = "Change Type Code";
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(360, 230);
 
-            const int margin = 15;
-            int y = margin;
+            int y = Margin;
 
             // ── Selection summary ──
             string summary = $"Selected hangers: {hangerCount}";
@@ -53,38 +61,40 @@ namespace SgRevitAddin.Commands.Hangers
             var lblSummary = new Label
             {
                 Text = summary,
-                Location = new Point(margin, y),
-                Size = new Size(330, 18),
-                AutoSize = false
+                Location = new Point(Margin, y),
+                Size = new Size(HintW, 20),
+                AutoSize = false,
+                Font = new Font(Font, FontStyle.Bold)
             };
             Controls.Add(lblSummary);
-            y += 28;
+            y += 26;
 
             var lblDesc = new Label
             {
-                Text = "Hangers with the From code will be re-stamped with the\n" +
-                       "To code. Hangers with other codes are left unchanged.",
-                Location = new Point(margin, y),
-                Size = new Size(330, 34),
+                Text = "Hangers carrying the From code will be re-stamped with the " +
+                       "To code. Hangers with any other code (or none) are left " +
+                       "unchanged.",
+                Location = new Point(Margin, y),
+                Size = new Size(HintW, 48),
                 AutoSize = false
             };
             Controls.Add(lblDesc);
-            y += 44;
+            y += 48 + SectionGap;
 
             // ── From Type Code ──
             var lblFrom = new Label
             {
                 Text = "From Type Code:",
-                Location = new Point(margin, y + 3),
-                Size = new Size(110, 18),
+                Location = new Point(Margin, y + 3),
+                Size = new Size(LabelW, 20),
                 AutoSize = false
             };
             Controls.Add(lblFrom);
 
             cbFromCode = new ComboBox
             {
-                Location = new Point(margin + 115, y),
-                Size = new Size(215, 22),
+                Location = new Point(InputX, y),
+                Size = new Size(FormWidth - InputX - Margin, 24),
                 DropDownStyle = ComboBoxStyle.DropDownList
             };
             foreach (var code in availableCodes)
@@ -92,47 +102,54 @@ namespace SgRevitAddin.Commands.Hangers
             if (cbFromCode.Items.Count > 0)
                 cbFromCode.SelectedIndex = 0;
             Controls.Add(cbFromCode);
-            y += 32;
+            y += 24 + SectionGap;
 
             // ── To Type Code ──
             var lblTo = new Label
             {
                 Text = "To Type Code:",
-                Location = new Point(margin, y + 3),
-                Size = new Size(110, 18),
+                Location = new Point(Margin, y + 3),
+                Size = new Size(LabelW, 20),
                 AutoSize = false
             };
             Controls.Add(lblTo);
 
             txtToCode = new TextBox
             {
-                Location = new Point(margin + 115, y),
-                Size = new Size(215, 22)
+                Location = new Point(InputX, y),
+                Size = new Size(FormWidth - InputX - Margin, 24)
             };
             Controls.Add(txtToCode);
-            y += 38;
+            y += 24 + SectionGap + 6;
 
-            // ── Buttons ──
-            btnOK = new Button
-            {
-                Text = "Change",
-                DialogResult = DialogResult.OK,
-                Location = new Point(155, y),
-                Size = new Size(90, 30)
-            };
-            btnOK.Click += BtnOK_Click;
-            AcceptButton = btnOK;
-            Controls.Add(btnOK);
+            // ── Buttons (right-aligned) ──
+            const int BtnW = 95;
+            const int BtnH = 30;
+            const int BtnGap = 10;
 
             btnCancel = new Button
             {
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
-                Location = new Point(250, y),
-                Size = new Size(80, 30)
+                Location = new Point(FormWidth - Margin - BtnW, y),
+                Size = new Size(BtnW, BtnH)
             };
             CancelButton = btnCancel;
             Controls.Add(btnCancel);
+
+            btnOK = new Button
+            {
+                Text = "Change",
+                DialogResult = DialogResult.OK,
+                Location = new Point(FormWidth - Margin - BtnW * 2 - BtnGap, y),
+                Size = new Size(BtnW, BtnH)
+            };
+            btnOK.Click += BtnOK_Click;
+            AcceptButton = btnOK;
+            Controls.Add(btnOK);
+
+            y += BtnH + Margin;
+            ClientSize = new Size(FormWidth, y);
         }
 
         private void BtnOK_Click(object sender, EventArgs e)
