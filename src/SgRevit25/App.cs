@@ -97,14 +97,17 @@ namespace SgRevitAddin
                 MakeButton("ReplaceHangerSizes", "Replace Sizes", asmPath,
                     "SgRevitAddin.Commands.Hangers.ReplaceHangerSizesCommand",
                     "replace-sizes-16.png", "Resize hangers by deleting + recreating them at the new size with parameters preserved. Avoids the centerline-drift bug from parametric resize."));
-            // Small stack: family swap + parameter diagnostic
+            // Small stack: family swap + parameter diagnostic + rod-length sweep
             hangersPanel.AddStackedItems(
                 MakeButton("AutoSwapHydraCAD", "Swap HydraCAD", asmPath,
                     "SgRevitAddin.Commands.Hangers.SwapHydraCADHangersCommand",
                     "swap-hydracad-16.png", "Replace HydraCAD hangers with SG -Pipe Hanger - Standard family instances."),
                 MakeButton("InspectElementParameters", "Inspect Params", asmPath,
                     "SgRevitAddin.Commands.Hangers.InspectElementParametersCommand",
-                    "inspect-params-16.png", "Diagnostic: dump every parameter of a selected element to a dialog + clipboard for debugging."));
+                    "inspect-params-16.png", "Diagnostic: dump every parameter of a selected element to a dialog + clipboard for debugging."),
+                MakeButton("UniformRodLengths", "Uniform Rods", asmPath,
+                    "SgRevitAddin.Commands.Hangers.UniformRodLengthsCommand",
+                    "match-sizes-16.png", "Sweep Rod Length on hangers of a chosen Type Code to a uniform target — only those under a max-length cutoff (longer rods, likely on lower pipe, are left alone)."));
             // Small stack: rod-length syncs
             hangersPanel.AddStackedItems(
                 MakeButton("SyncHangersToRefPlane", "Sync Ref Plane", asmPath,

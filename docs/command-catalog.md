@@ -20,6 +20,7 @@ Master list of all SG Revit Addin commands.
 - `HangerSectionIDsCommand` - Populate Section_ID (Hydratec) with formatted rod length and type code for hanger tags
 - `RingHangerSectionIDsCommand` - Adjustable-ring-hanger variant: subtracts a nominal-diameter-based ring takeout from Rod Length before writing Section_ID (Hydratec)
 - `ChangeTypeCodeCommand` - Bulk-change Type Code (Hydratec) on selected hangers from a chosen From code (dropdown of codes in selection) to a typed To code
+- `UniformRodLengthsCommand` - Sweep Rod Length on hangers of a chosen Type Code to a uniform target, only on hangers under a max-length cutoff (so longer rods on lower pipes are left alone)
 - `SwapHydraCADHangersCommand` - Replace HydraCAD Adjustable Ring Hangers with SG -Pipe Hanger - Standard with parameter transfer
 - `MatchHangerSizesCommand` - Resize selected hangers via parameter set + rod-length compensation, with orange review markers on resized + drifted hangers (kept as a backup for the delete+recreate ReplaceHangerSizes path)
 - `ReplaceHangerSizesCommand` - Resize selected hangers by deleting + recreating each at the new size (preserves all writable parameters; sidesteps the family-level centerline-drift bug)
