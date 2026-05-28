@@ -63,15 +63,21 @@ namespace SgRevitAddin
                     "section-ids-16.png", "Populate Section_ID (Hydratec) with formatted hanger type and rod length for tags."),
                 MakeButton("RingHangerSectionIDs", "Ring Section IDs", asmPath,
                     "SgRevitAddin.Commands.Hangers.RingHangerSectionIDsCommand",
-                    "section-ids-16.png", "Adjustable Ring Hanger variant of Section IDs: subtracts a nominal-diameter-based ring takeout from Rod Length before writing Section_ID (Hydratec)."));
-            // Small stack: Type Code edits
+                    "section-ids-16.png", "Adjustable Ring Hanger variant of Section IDs: subtracts a nominal-diameter-based ring takeout from Rod Length before writing Section_ID (Hydratec)."),
+                MakeButton("RingSectionIDsHardware", "Ring IDs (+Hardware)", asmPath,
+                    "SgRevitAddin.Commands.Hangers.RingSectionIDsHardwareCommand",
+                    "section-ids-16.png", "Ring takeout like Ring Section IDs, then adds 1.5\" back for Type Codes starting with 01 or 02. Writes type(length) with no leading #. e.g. 02D rod 4\" becomes 02D(4)."));
+            // Small stack: Type Code / Section_ID edits
             hangersPanel.AddStackedItems(
                 MakeButton("ChangeTypeCode", "Change Type Code", asmPath,
                     "SgRevitAddin.Commands.Hangers.ChangeTypeCodeCommand",
                     "section-ids-16.png", "Bulk-change Type Code (Hydratec) on selected hangers: pick a From code from the selection, type the To code, only matching hangers are updated."),
                 MakeButton("StripSectionIDTypeCode", "Strip Section ID Code", asmPath,
                     "SgRevitAddin.Commands.Hangers.StripSectionIDTypeCodeCommand",
-                    "section-ids-16.png", "Strip the Type Code prefix from Section_ID (Hydratec) on selected hangers matching a chosen Type Code. \"#11T(5)\" becomes \"(5)\"."));
+                    "section-ids-16.png", "Strip the Type Code prefix from Section_ID (Hydratec) on selected hangers matching a chosen Type Code. \"#11T(5)\" becomes \"(5)\"."),
+                MakeButton("StripSectionIDHashes", "Strip # From IDs", asmPath,
+                    "SgRevitAddin.Commands.Hangers.StripSectionIDHashesCommand",
+                    "section-ids-16.png", "Remove every '#' character from Section_ID (Hydratec) on all selected hangers. \"#11T(5)\" becomes \"11T(5)\"."));
 
             // Large: primary trapeze command
             AddLargeButton(hangersPanel, "AutoTrapezeHang", "Trapeze\nHang", asmPath,
