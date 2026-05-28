@@ -24,6 +24,7 @@ Master list of all SG Revit Addin commands.
 - `StripSectionIDTypeCodeCommand` - For hangers matching a chosen Type Code, strip the prefix before the first '(' in Section_ID (Hydratec). E.g. "#11T(5)" becomes "(5)"
 - `StripSectionIDHashesCommand` - Remove every '#' character from Section_ID (Hydratec) on all selected hangers. E.g. "#11T(5)" becomes "11T(5)"
 - `RingSectionIDsHardwareCommand` - Ring takeout like Ring Section IDs, then adds 1.5" back for Type Codes starting with 01 or 02; writes type(length) with no leading #. E.g. 02D rod 4" becomes 02D(4)
+- `MarkTypeForReviewCommand` - Flag hangers of a chosen Type Code with a tall magenta cylinder extending above + below the hanger, visible in plan and 3D (review/QA marker)
 - `SwapHydraCADHangersCommand` - Replace HydraCAD Adjustable Ring Hangers with SG -Pipe Hanger - Standard with parameter transfer
 - `MatchHangerSizesCommand` - Resize selected hangers via parameter set + rod-length compensation, with orange review markers on resized + drifted hangers (kept as a backup for the delete+recreate ReplaceHangerSizes path)
 - `ReplaceHangerSizesCommand` - Resize selected hangers by deleting + recreating each at the new size (preserves all writable parameters; sidesteps the family-level centerline-drift bug)

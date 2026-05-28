@@ -120,6 +120,11 @@ namespace SgRevitAddin
                 MakeButton("UniformRodLengths", "Uniform Rods", asmPath,
                     "SgRevitAddin.Commands.Hangers.UniformRodLengthsCommand",
                     "match-sizes-16.png", "Sweep Rod Length on hangers of a chosen Type Code to a uniform target — only those under a max-length cutoff (longer rods, likely on lower pipe, are left alone)."));
+            // Large: review markers by type code
+            AddLargeButton(hangersPanel, "MarkTypeForReview", "Mark for\nReview", asmPath,
+                "SgRevitAddin.Commands.Hangers.MarkTypeForReviewCommand",
+                "modelcheck-32.png", "modelcheck-16.png",
+                "Flag hangers of a chosen Type Code with a tall magenta cylinder that extends above and below the hanger, visible in plan and 3D.");
             // Small stack: rod-length syncs
             hangersPanel.AddStackedItems(
                 MakeButton("SyncHangersToRefPlane", "Sync Ref Plane", asmPath,
