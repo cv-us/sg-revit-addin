@@ -11,22 +11,21 @@ namespace SgRevitAddin.Commands.Hangers
     /// Marks hangers of a chosen Type Code (Hydratec) for review by placing a
     /// tall vertical DirectShape cylinder at each one. The cylinder extends a
     /// configurable distance above AND below the hanger's elevation so it
-    /// crosses plan-view cut planes and stands out in 3D — making flagged
-    /// hangers easy to find regardless of the view.
+    /// crosses plan-view cut planes and stands out in 3D.
     ///
-    /// Same marker mechanism as HangerGapCheckCommand (DirectShape +
-    /// ApplicationId/ApplicationDataId tagging for clean re-runs), but:
-    ///   - filtered by Type Code instead of gap math
-    ///   - a tall column (reach above + below) instead of a short puck
-    ///   - a distinct magenta material and ApplicationDataId so the two
-    ///     commands' markers never collide
+    /// The dialog drives three actions:
+    ///   • Place Markers       — needs a hanger selection; flags every hanger
+    ///                            of the chosen Type Code. No-op if nothing is
+    ///                            selected.
+    ///   • Delete All Markers  — removes every review marker in the project.
+    ///   • Delete by Type Code — removes only the markers placed for one Type
+    ///                            Code (chosen from the codes that currently
+    ///                            have markers).
     ///
-    /// WORKFLOW:
-    ///   1. User pre-selects hangers.
-    ///   2. Dialog: pick the Type Code to flag and the vertical reach.
-    ///      (Or choose "Clear Markers Only" to wipe existing review markers.)
-    ///   3. A magenta cylinder is placed on every matching hanger and the
-    ///      flagged hangers are added to the selection.
+    /// Each marker's Type Code is encoded into its ApplicationDataId
+    /// ("TypeReviewMarker|02D") so delete-by-type can target the right ones.
+    /// A distinct magenta material keeps these visually separate from the
+    /// blue Hanger Gap Check markers and orange resize-drift markers.
     /// </summary>
     [Transaction(TransactionMode.Manual)]
     [Regeneration(RegenerationOption.Manual)]
@@ -35,7 +34,7 @@ namespace SgRevitAddin.Commands.Hangers
         private const string TypeCodeParam = "Type Code (Hydratec)";
 
         private const string MarkerAppId = "SgRevitAddin";
-        private const string MarkerAppDataId = "TypeReviewMarker";
+        private const string MarkerAppDataPrefix = "TypeReviewMarker";
         private const string MarkerMaterialName = "SG_TypeReviewMarker";
 
         /// <summary>Marker cylinder radius, in feet (3 inches → 6-inch diameter).</summary>
@@ -64,37 +63,7 @@ namespace SgRevitAddin.Commands.Hangers
                     .Where(IsHanger)
                     .ToList();
 
-                if (hangers.Count == 0)
-                {
-                    // No hanger selection — offer to clear existing markers.
-                    int existing = CountExistingMarkers(doc);
-                    if (existing > 0)
-                    {
-                        var td = new TaskDialog("Mark Type for Review")
-                        {
-                            MainInstruction = "No hangers selected.",
-                            MainContent = $"There {(existing == 1 ? "is" : "are")} {existing} existing " +
-                                          $"review marker{(existing != 1 ? "s" : "")} in the project. Clear them?",
-                            CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.Cancel,
-                            DefaultButton = TaskDialogResult.Cancel
-                        };
-                        if (td.Show() == TaskDialogResult.Yes)
-                        {
-                            int cleared = ClearAllMarkers(doc);
-                            TaskDialog.Show("Mark Type for Review",
-                                $"Cleared {cleared} marker{(cleared != 1 ? "s" : "")}.");
-                            return Result.Succeeded;
-                        }
-                        return Result.Cancelled;
-                    }
-
-                    TaskDialog.Show("Mark Type for Review",
-                        "No pipe hangers found in the current selection.\n\n" +
-                        "Select hangers and run the command again.");
-                    return Result.Cancelled;
-                }
-
-                // Pre-scan distinct type codes in the selection.
+                // Type codes available to place markers for (from selection).
                 var availableCodes = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var h in hangers)
                 {
@@ -103,86 +72,105 @@ namespace SgRevitAddin.Commands.Hangers
                         availableCodes.Add(tc);
                 }
 
-                if (availableCodes.Count == 0)
-                {
-                    TaskDialog.Show("Mark Type for Review",
-                        $"None of the {hangers.Count} selected hangers have a " +
-                        $"\"{TypeCodeParam}\" value.");
-                    return Result.Cancelled;
-                }
+                // Existing markers in the project, grouped by encoded type code.
+                Dictionary<string, int> markerCounts = GetMarkerCountsByType(doc);
 
-                string targetCode;
+                string placeCode, deleteCode;
                 double reachFt;
-                using (var dlg = new MarkTypeForReviewDialog(hangers.Count, availableCodes.ToList()))
+                MarkTypeForReviewDialog.MarkAction action;
+
+                using (var dlg = new MarkTypeForReviewDialog(
+                    hangers.Count, availableCodes.ToList(), markerCounts))
                 {
                     if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK)
                         return Result.Cancelled;
 
-                    if (dlg.ClearOnly)
+                    action = dlg.Action;
+                    placeCode = dlg.TypeCode?.Trim() ?? "";
+                    deleteCode = dlg.DeleteTypeCode ?? "";
+                    reachFt = dlg.ReachFeet;
+                }
+
+                switch (action)
+                {
+                    case MarkTypeForReviewDialog.MarkAction.DeleteAll:
                     {
-                        int cleared = ClearAllMarkers(doc);
+                        int cleared = DeleteMarkers(doc, GetAllMarkerIds(doc));
                         TaskDialog.Show("Mark Type for Review",
                             $"Cleared {cleared} review marker{(cleared != 1 ? "s" : "")}.");
                         return Result.Succeeded;
                     }
 
-                    targetCode = dlg.TypeCode?.Trim() ?? "";
-                    reachFt = dlg.ReachFeet;
-                }
-
-                if (string.IsNullOrEmpty(targetCode))
-                {
-                    TaskDialog.Show("Mark Type for Review", "No Type Code selected.");
-                    return Result.Cancelled;
-                }
-
-                var flaggedIds = new List<ElementId>();
-                int markersPlaced = 0;
-
-                using (var tx = new Transaction(doc, "Mark Type for Review"))
-                {
-                    tx.Start();
-
-                    ClearPreviousMarkers(doc);
-                    ElementId materialId = GetOrCreateMarkerMaterial(doc);
-
-                    foreach (var hanger in hangers)
+                    case MarkTypeForReviewDialog.MarkAction.DeleteByType:
                     {
-                        string current = GetStringParam(hanger, TypeCodeParam)?.Trim() ?? "";
-                        if (!string.Equals(current, targetCode, StringComparison.OrdinalIgnoreCase))
-                            continue;
-
-                        XYZ center = GetVisualLocation(hanger);
-                        if (center == null) continue;
-
-                        try
-                        {
-                            XYZ basePt = new XYZ(center.X, center.Y, center.Z - reachFt);
-                            CreateMarker(doc, basePt, reachFt * 2.0, materialId);
-                            markersPlaced++;
-                            flaggedIds.Add(hanger.Id);
-                        }
-                        catch { /* non-critical; keep going */ }
+                        int cleared = DeleteMarkers(doc, GetMarkerIdsForType(doc, deleteCode));
+                        string label = deleteCode.Length == 0 ? "(untagged)" : deleteCode;
+                        TaskDialog.Show("Mark Type for Review",
+                            $"Cleared {cleared} marker{(cleared != 1 ? "s" : "")} for Type Code \"{label}\".");
+                        return Result.Succeeded;
                     }
 
-                    tx.Commit();
+                    case MarkTypeForReviewDialog.MarkAction.Place:
+                    {
+                        // Needs a selection — does nothing without one.
+                        if (hangers.Count == 0 || string.IsNullOrEmpty(placeCode))
+                            return Result.Cancelled;
+
+                        var flaggedIds = new List<ElementId>();
+                        int markersPlaced = 0;
+
+                        using (var tx = new Transaction(doc, "Mark Type for Review"))
+                        {
+                            tx.Start();
+
+                            // Replace any prior markers for this same code so a
+                            // re-run with a new reach doesn't stack columns.
+                            var prior = GetMarkerIdsForType(doc, placeCode);
+                            if (prior.Count > 0) doc.Delete(prior);
+
+                            ElementId materialId = GetOrCreateMarkerMaterial(doc);
+                            string appDataId = MarkerAppDataPrefix + "|" + placeCode;
+
+                            foreach (var hanger in hangers)
+                            {
+                                string current = GetStringParam(hanger, TypeCodeParam)?.Trim() ?? "";
+                                if (!string.Equals(current, placeCode, StringComparison.OrdinalIgnoreCase))
+                                    continue;
+
+                                XYZ center = GetVisualLocation(hanger);
+                                if (center == null) continue;
+
+                                try
+                                {
+                                    XYZ basePt = new XYZ(center.X, center.Y, center.Z - reachFt);
+                                    CreateMarker(doc, basePt, reachFt * 2.0, materialId, appDataId);
+                                    markersPlaced++;
+                                    flaggedIds.Add(hanger.Id);
+                                }
+                                catch { /* non-critical; keep going */ }
+                            }
+
+                            tx.Commit();
+                        }
+
+                        if (flaggedIds.Count > 0)
+                            uidoc.Selection.SetElementIds(flaggedIds);
+
+                        string report =
+                            $"Mark Type for Review\n\n" +
+                            $"Hangers in selection:  {hangers.Count}\n" +
+                            $"Type Code \"{placeCode}\":  {markersPlaced} marked\n" +
+                            $"Cylinder reach:        {reachFt:F1} ft above + below\n";
+                        report += markersPlaced > 0
+                            ? "\nMagenta cylinders placed and flagged hangers selected."
+                            : "\nNo hangers matched that Type Code.";
+                        TaskDialog.Show("Mark Type for Review", report);
+                        return Result.Succeeded;
+                    }
+
+                    default:
+                        return Result.Cancelled;
                 }
-
-                if (flaggedIds.Count > 0)
-                    uidoc.Selection.SetElementIds(flaggedIds);
-
-                string report =
-                    $"Mark Type for Review\n\n" +
-                    $"Hangers in selection:  {hangers.Count}\n" +
-                    $"Type Code \"{targetCode}\":  {markersPlaced} marked\n" +
-                    $"Cylinder reach:        {reachFt:F1} ft above + below\n";
-                if (markersPlaced > 0)
-                    report += "\nMagenta cylinders placed and flagged hangers selected.";
-                else
-                    report += "\nNo hangers matched that Type Code.";
-
-                TaskDialog.Show("Mark Type for Review", report);
-                return Result.Succeeded;
             }
             catch (Exception ex)
             {
@@ -193,7 +181,8 @@ namespace SgRevitAddin.Commands.Hangers
 
         // ── Marker geometry ──
 
-        private void CreateMarker(Document doc, XYZ basePoint, double height, ElementId materialId)
+        private void CreateMarker(Document doc, XYZ basePoint, double height,
+            ElementId materialId, string appDataId)
         {
             var arc1 = Arc.Create(basePoint, MarkerRadius, 0, Math.PI, XYZ.BasisX, XYZ.BasisY);
             var arc2 = Arc.Create(basePoint, MarkerRadius, Math.PI, 2 * Math.PI, XYZ.BasisX, XYZ.BasisY);
@@ -205,7 +194,7 @@ namespace SgRevitAddin.Commands.Hangers
 
             var ds = DirectShape.CreateElement(doc, new ElementId(BuiltInCategory.OST_GenericModel));
             ds.ApplicationId = MarkerAppId;
-            ds.ApplicationDataId = MarkerAppDataId;
+            ds.ApplicationDataId = appDataId;
             ds.SetShape(new GeometryObject[] { cylinder });
         }
 
@@ -240,18 +229,11 @@ namespace SgRevitAddin.Commands.Hangers
             mat.Shininess = 0;
         }
 
-        private int ClearPreviousMarkers(Document doc)
+        /// <summary>Deletes the given marker ids in their own transaction. Returns count.</summary>
+        private int DeleteMarkers(Document doc, List<ElementId> ids)
         {
-            var ids = GetMarkerInstanceIds(doc);
-            if (ids.Count > 0) doc.Delete(ids);
-            return ids.Count;
-        }
-
-        private int ClearAllMarkers(Document doc)
-        {
-            var ids = GetMarkerInstanceIds(doc);
             if (ids.Count == 0) return 0;
-            using (var tx = new Transaction(doc, "Clear Type Review Markers"))
+            using (var tx = new Transaction(doc, "Delete Type Review Markers"))
             {
                 tx.Start();
                 doc.Delete(ids);
@@ -260,17 +242,57 @@ namespace SgRevitAddin.Commands.Hangers
             return ids.Count;
         }
 
-        private int CountExistingMarkers(Document doc) => GetMarkerInstanceIds(doc).Count;
-
-        private List<ElementId> GetMarkerInstanceIds(Document doc)
+        /// <summary>All review-marker DirectShapes (ApplicationDataId starts with the prefix).</summary>
+        private List<ElementId> GetAllMarkerIds(Document doc)
         {
             return new FilteredElementCollector(doc)
                 .OfClass(typeof(DirectShape))
                 .Cast<DirectShape>()
                 .Where(ds => ds.ApplicationId == MarkerAppId
-                          && ds.ApplicationDataId == MarkerAppDataId)
+                          && ds.ApplicationDataId != null
+                          && ds.ApplicationDataId.StartsWith(MarkerAppDataPrefix, StringComparison.Ordinal))
                 .Select(ds => ds.Id)
                 .ToList();
+        }
+
+        /// <summary>Marker ids whose encoded Type Code equals <paramref name="code"/>.</summary>
+        private List<ElementId> GetMarkerIdsForType(Document doc, string code)
+        {
+            return new FilteredElementCollector(doc)
+                .OfClass(typeof(DirectShape))
+                .Cast<DirectShape>()
+                .Where(ds => ds.ApplicationId == MarkerAppId
+                          && string.Equals(ParseMarkerCode(ds.ApplicationDataId), code,
+                                StringComparison.OrdinalIgnoreCase))
+                .Select(ds => ds.Id)
+                .ToList();
+        }
+
+        /// <summary>Counts existing markers grouped by their encoded Type Code.</summary>
+        private Dictionary<string, int> GetMarkerCountsByType(Document doc)
+        {
+            var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var markers = new FilteredElementCollector(doc)
+                .OfClass(typeof(DirectShape))
+                .Cast<DirectShape>()
+                .Where(ds => ds.ApplicationId == MarkerAppId
+                          && ds.ApplicationDataId != null
+                          && ds.ApplicationDataId.StartsWith(MarkerAppDataPrefix, StringComparison.Ordinal));
+
+            foreach (var ds in markers)
+            {
+                string code = ParseMarkerCode(ds.ApplicationDataId);
+                counts[code] = counts.TryGetValue(code, out int c) ? c + 1 : 1;
+            }
+            return counts;
+        }
+
+        /// <summary>Extracts the Type Code from "TypeReviewMarker|02D" → "02D" (or "" if none).</summary>
+        private string ParseMarkerCode(string appDataId)
+        {
+            if (string.IsNullOrEmpty(appDataId)) return "";
+            int bar = appDataId.IndexOf('|');
+            return bar < 0 ? "" : appDataId.Substring(bar + 1);
         }
 
         // ── Helpers ──

@@ -19,15 +19,26 @@ ApplicationDataId so the two commands' markers never collide.
 
 ## Workflow
 
-1. Pre-select hangers in the model.
+1. (To add markers) pre-select hangers in the model.
 2. Run **Hangers → Mark for Review**.
-3. Dialog:
-   - **Type Code** — dropdown, populated from codes in the selection.
-   - **Reach above/below (ft)** — how far the cylinder extends each way
-     from the hanger elevation (default 5 ft → a 10 ft tall column).
-   - **Place Markers** / **Clear Markers Only** / **Cancel**.
-4. A magenta cylinder is placed on every matching hanger, and the flagged
-   hangers are added to the selection so you can tab through them.
+3. The dialog has two groups:
+   - **Add Markers** (enabled only when hangers are selected):
+     - **Type Code** — dropdown, populated from codes in the selection.
+     - **Reach above/below (ft)** — how far the cylinder extends each way
+       from the hanger elevation (default 5 ft → a 10 ft tall column).
+     - **Place Markers** — flags every selected hanger of that Type Code.
+   - **Delete Markers** (enabled only when review markers exist):
+     - **For Type Code** — dropdown of the codes that currently have
+       markers, with counts. **Delete These** removes just those.
+     - **Delete All Markers** — removes every review marker in the project.
+   - **Close** dismisses the dialog without changes.
+4. After **Place Markers**, a magenta cylinder is placed on every matching
+   hanger and the flagged hangers are added to the selection so you can
+   tab through them.
+
+If you run the command with **no hangers selected**, the Add Markers group
+is disabled — you can still use the Delete options. Adding does nothing
+without a selection.
 
 ## Marker geometry
 
@@ -40,17 +51,18 @@ ApplicationDataId so the two commands' markers never collide.
 
 ## Re-running and clearing
 
-- Each run clears any previous **Mark for Review** markers before placing
-  new ones, so re-running with a different Type Code or reach won't
-  accumulate stale markers.
-- Running with **no hangers selected** offers to clear all existing
-  review markers.
-- **Clear Markers Only** in the dialog wipes them without placing new ones.
+- Placing markers for a Type Code first clears any previous markers for
+  that same code, so re-running with a different reach won't stack columns.
+  Markers for *other* codes are left in place.
+- **Delete by Type Code** removes only the markers for the chosen code.
+- **Delete All Markers** removes every review marker.
 
-Markers are stamped with `ApplicationId = "SgRevitAddin"` and
-`ApplicationDataId = "TypeReviewMarker"`, distinct from the Hanger Gap
-Check (`HangerGapMarker`) and resize-drift (`MatchSizesDriftedMarker`)
-markers, so each command manages only its own.
+Each marker's Type Code is encoded into its `ApplicationDataId` as
+`"TypeReviewMarker|<code>"` (e.g. `"TypeReviewMarker|02D"`), which is how
+delete-by-type targets the right ones. All review markers share the
+`ApplicationId = "SgRevitAddin"` stamp and the `TypeReviewMarker` prefix,
+distinct from the Hanger Gap Check (`HangerGapMarker`) and resize-drift
+(`MatchSizesDriftedMarker`) markers, so each command manages only its own.
 
 ## Required parameters
 
