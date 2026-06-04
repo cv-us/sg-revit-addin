@@ -162,6 +162,10 @@ namespace SgRevitAddin
                 "SgRevitAddin.Commands.Coordination.ColorCodePipesCommand",
                 "color-pipes-32.png", "color-pipes-16.png",
                 "Color-code pipes in the active view by diameter, type name, or reset overrides.");
+            AddLargeButton(coordPanel, "MarkFamilyInstances", "Mark Family\nInstances", asmPath,
+                "SgRevitAddin.Commands.Coordination.MarkFamilyInstancesCommand",
+                "modelcheck-32.png", "modelcheck-16.png",
+                "Place orange spheres at every instance of a chosen family. Searchable family list; scope is active view or whole project. Separate Delete All Markers button.");
 
             // ── Annotation panel ──
             RibbonPanel annotPanel = application.CreateRibbonPanel(tabName, "Annotation");
