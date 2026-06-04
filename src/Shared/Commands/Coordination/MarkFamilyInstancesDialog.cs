@@ -13,11 +13,17 @@ namespace SgRevitAddin.Commands.Coordination
     /// Layout:
     ///   • Search box for filtering the family list (matches family name OR
     ///     category, case-insensitive).
-    ///   • ListBox of families, formatted "Name [Category] ×count".
-    ///   • Scope radios: Active View / Whole Project.
-    ///   • Place Markers and Delete All Markers as separate explicit actions
-    ///     (Place does NOT auto-clear prior markers).
-    ///   • Existing-marker count shown next to the action buttons.
+    ///   • Side-by-side row:
+    ///       - Families ListBox showing "Name [Category] ×count", with the
+    ///         count reflecting the currently-selected worksets.
+    ///       - Worksets CheckedListBox + Select All / None buttons. Default
+    ///         all checked. Changes refresh the family list.
+    ///   • Scope radios — active view or whole project.
+    ///   • Place / Delete All / Close buttons.
+    ///
+    /// For non-workshared projects the workset section shows a hint message
+    /// and is disabled; the workset filter falls through (every instance
+    /// included).
     /// </summary>
     public class MarkFamilyInstancesDialog : Form
     {
@@ -28,10 +34,20 @@ namespace SgRevitAddin.Commands.Coordination
         public FamilyMarkerInfo SelectedFamily { get; private set; }
         public bool ActiveViewOnly { get; private set; }
 
+        /// <summary>
+        /// Workset ids checked at OK time. Null if the project isn't
+        /// workshared — the command treats null as "no workset filter".
+        /// </summary>
+        public HashSet<int> SelectedWorksetIds { get; private set; }
+
         // ── Controls ──
         private TextBox txtSearch;
         private Label lblCount;
         private ListBox lstFamilies;
+        private CheckedListBox clbWorksets;
+        private Button btnAllWorksets;
+        private Button btnNoneWorksets;
+        private Label lblNoWorksetsHint;
         private RadioButton rbView;
         private RadioButton rbProject;
         private Button btnPlace;
@@ -39,22 +55,44 @@ namespace SgRevitAddin.Commands.Coordination
         private Button btnClose;
 
         private readonly List<FamilyMarkerInfo> _allFamilies;
+        private readonly List<WorksetInfo> _allWorksets;
         private readonly int _existingMarkerCount;
+        private bool _suppressWorksetRefresh;
 
-        public MarkFamilyInstancesDialog(List<FamilyMarkerInfo> allFamilies, int existingMarkerCount)
+        /// <summary>Wraps a family with its currently-displayed count so the ListBox text reflects the workset filter.</summary>
+        private class DisplayItem
+        {
+            public FamilyMarkerInfo Info;
+            public int VisibleCount;
+            public override string ToString()
+                => $"{Info.FamilyName}    [{Info.CategoryName}]    ×{VisibleCount}";
+        }
+
+        public MarkFamilyInstancesDialog(
+            List<FamilyMarkerInfo> allFamilies,
+            List<WorksetInfo> allWorksets,
+            int existingMarkerCount)
         {
             _allFamilies = allFamilies ?? new List<FamilyMarkerInfo>();
+            _allWorksets = allWorksets ?? new List<WorksetInfo>();
             _existingMarkerCount = existingMarkerCount;
+
             InitializeComponent();
+            PopulateWorksets();
             RefreshList();
         }
 
         private void InitializeComponent()
         {
-            // Layout constants — generous spacing so nothing clips on small monitors.
+            // Layout constants — generous spacing so nothing clips.
             const int Margin = 15;
-            const int FormWidth = 640;
-            const int GroupW = FormWidth - Margin * 2;
+            const int FormWidth = 740;
+            const int FullW = FormWidth - Margin * 2;
+
+            // Side-by-side row
+            const int FamiliesW = 470;
+            const int WorksetsW = 215;
+            const int RowH = 320;
 
             Text = "Mark Family Instances";
             FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -68,15 +106,15 @@ namespace SgRevitAddin.Commands.Coordination
             var lblDesc = new Label
             {
                 Text = "Places a bright orange 12-inch sphere at the center of every " +
-                       "instance of a chosen family. Use the search box to narrow the " +
-                       "family list; choose whether to mark only the active view or " +
-                       "the whole project.",
+                       "instance of a chosen family. Search to narrow the family list, " +
+                       "pick which worksets to include, and choose whether to mark only " +
+                       "the active view or the whole project.",
                 Location = new Point(Margin, y),
-                Size = new Size(GroupW, 50),
+                Size = new Size(FullW, 50),
                 AutoSize = false
             };
             Controls.Add(lblDesc);
-            y += 60;
+            y += 58;
 
             // ── Search row ──
             var lblSearch = new Label
@@ -92,18 +130,18 @@ namespace SgRevitAddin.Commands.Coordination
             txtSearch = new TextBox
             {
                 Location = new Point(Margin + 75, y),
-                Size = new Size(GroupW - 75, 24)
+                Size = new Size(FullW - 75, 24)
             };
             txtSearch.TextChanged += (s, e) => RefreshList();
             Controls.Add(txtSearch);
             y += 32;
 
-            // ── Family list group ──
+            // ── Side-by-side: Families | Worksets ──
             var grpFamilies = new GroupBox
             {
                 Text = "Families (click to select)",
                 Location = new Point(Margin, y),
-                Size = new Size(GroupW, 320)
+                Size = new Size(FamiliesW, RowH)
             };
             Controls.Add(grpFamilies);
 
@@ -111,7 +149,7 @@ namespace SgRevitAddin.Commands.Coordination
             {
                 Text = "",
                 Location = new Point(10, 22),
-                Size = new Size(GroupW - 25, 18),
+                Size = new Size(FamiliesW - 25, 18),
                 ForeColor = SystemColors.GrayText
             };
             grpFamilies.Controls.Add(lblCount);
@@ -119,19 +157,78 @@ namespace SgRevitAddin.Commands.Coordination
             lstFamilies = new ListBox
             {
                 Location = new Point(10, 46),
-                Size = new Size(GroupW - 25, 260),
+                Size = new Size(FamiliesW - 25, RowH - 56),
                 IntegralHeight = false,
                 Font = new Font(FontFamily.GenericSansSerif, 9f)
             };
             grpFamilies.Controls.Add(lstFamilies);
-            y += 330;
+
+            var grpWorksets = new GroupBox
+            {
+                Text = "Worksets",
+                Location = new Point(Margin + FamiliesW + 15, y),
+                Size = new Size(WorksetsW, RowH)
+            };
+            Controls.Add(grpWorksets);
+
+            bool isWorkshared = _allWorksets.Count > 0;
+
+            if (isWorkshared)
+            {
+                btnAllWorksets = new Button
+                {
+                    Text = "Select All",
+                    Location = new Point(10, 22),
+                    Size = new Size(85, 26)
+                };
+                btnAllWorksets.Click += (s, e) => SetAllWorksets(true);
+                grpWorksets.Controls.Add(btnAllWorksets);
+
+                btnNoneWorksets = new Button
+                {
+                    Text = "Select None",
+                    Location = new Point(100, 22),
+                    Size = new Size(95, 26)
+                };
+                btnNoneWorksets.Click += (s, e) => SetAllWorksets(false);
+                grpWorksets.Controls.Add(btnNoneWorksets);
+
+                clbWorksets = new CheckedListBox
+                {
+                    Location = new Point(10, 56),
+                    Size = new Size(WorksetsW - 25, RowH - 70),
+                    CheckOnClick = true,
+                    IntegralHeight = false
+                };
+                clbWorksets.ItemCheck += (s, e) =>
+                {
+                    // ItemCheck fires before the new state is applied; defer
+                    // the refresh so we read the post-click state.
+                    if (_suppressWorksetRefresh) return;
+                    BeginInvoke(new Action(RefreshList));
+                };
+                grpWorksets.Controls.Add(clbWorksets);
+            }
+            else
+            {
+                lblNoWorksetsHint = new Label
+                {
+                    Text = "Project is not workshared.\n\nWorkset filter has no effect — " +
+                           "every instance is included.",
+                    Location = new Point(10, 30),
+                    Size = new Size(WorksetsW - 25, RowH - 40),
+                    ForeColor = SystemColors.GrayText
+                };
+                grpWorksets.Controls.Add(lblNoWorksetsHint);
+            }
+            y += RowH + 10;
 
             // ── Scope group ──
             var grpScope = new GroupBox
             {
                 Text = "Scope",
                 Location = new Point(Margin, y),
-                Size = new Size(GroupW, 55)
+                Size = new Size(FullW, 55)
             };
             Controls.Add(grpScope);
 
@@ -157,7 +254,7 @@ namespace SgRevitAddin.Commands.Coordination
             {
                 Text = "Markers",
                 Location = new Point(Margin, y),
-                Size = new Size(GroupW, 75)
+                Size = new Size(FullW, 75)
             };
             Controls.Add(grpMarkers);
 
@@ -166,7 +263,7 @@ namespace SgRevitAddin.Commands.Coordination
                 Text = $"Existing markers in project: {_existingMarkerCount}    " +
                        "(Place adds markers without clearing prior ones)",
                 Location = new Point(10, 22),
-                Size = new Size(GroupW - 25, 18),
+                Size = new Size(FullW - 25, 18),
                 ForeColor = SystemColors.GrayText
             });
 
@@ -209,30 +306,98 @@ namespace SgRevitAddin.Commands.Coordination
             ClientSize = new Size(FormWidth, y);
         }
 
+        // ── Workset checklist ──
+
+        private void PopulateWorksets()
+        {
+            if (clbWorksets == null) return;
+            _suppressWorksetRefresh = true;
+            try
+            {
+                foreach (var ws in _allWorksets)
+                    clbWorksets.Items.Add(ws, true); // default all checked
+            }
+            finally
+            {
+                _suppressWorksetRefresh = false;
+            }
+        }
+
+        private void SetAllWorksets(bool checkedState)
+        {
+            if (clbWorksets == null) return;
+            _suppressWorksetRefresh = true;
+            try
+            {
+                for (int i = 0; i < clbWorksets.Items.Count; i++)
+                    clbWorksets.SetItemChecked(i, checkedState);
+            }
+            finally
+            {
+                _suppressWorksetRefresh = false;
+            }
+            RefreshList();
+        }
+
+        /// <summary>
+        /// Returns the set of checked workset ids. Null if the project isn't
+        /// workshared (no filter applies).
+        /// </summary>
+        private HashSet<int> CurrentlyCheckedWorksets()
+        {
+            if (clbWorksets == null) return null;
+            var set = new HashSet<int>();
+            foreach (var item in clbWorksets.CheckedItems)
+            {
+                if (item is WorksetInfo ws)
+                    set.Add(ws.Id);
+            }
+            return set;
+        }
+
+        // ── Family list ──
+
         private void RefreshList()
         {
+            var checkedWorksets = CurrentlyCheckedWorksets();
             string filter = (txtSearch?.Text ?? "").Trim();
-            var matches = filter.Length == 0
-                ? _allFamilies
-                : _allFamilies.Where(f =>
-                    (f.FamilyName ?? "").IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0
-                 || (f.CategoryName ?? "").IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0)
-                  .ToList();
 
             lstFamilies.BeginUpdate();
             lstFamilies.Items.Clear();
-            foreach (var f in matches)
-                lstFamilies.Items.Add(f);
+
+            int totalMatch = 0;
+            foreach (var f in _allFamilies)
+            {
+                int count = f.CountInSelectedWorksets(checkedWorksets);
+                if (count == 0) continue;
+
+                if (filter.Length > 0)
+                {
+                    bool nameHit = (f.FamilyName ?? "")
+                        .IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
+                    bool catHit = (f.CategoryName ?? "")
+                        .IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
+                    if (!nameHit && !catHit) continue;
+                }
+
+                lstFamilies.Items.Add(new DisplayItem { Info = f, VisibleCount = count });
+                totalMatch++;
+            }
+
             lstFamilies.EndUpdate();
 
+            string scopeNote = checkedWorksets == null
+                ? ""
+                : "  (counts reflect selected worksets)";
+
             lblCount.Text = filter.Length == 0
-                ? $"Showing all {_allFamilies.Count} families in the project"
-                : $"Filter matches {matches.Count} of {_allFamilies.Count} families";
+                ? $"Showing {totalMatch} of {_allFamilies.Count} families{scopeNote}"
+                : $"Filter matches {totalMatch} of {_allFamilies.Count} families{scopeNote}";
         }
 
         private void BtnPlace_Click(object sender, EventArgs e)
         {
-            if (!(lstFamilies.SelectedItem is FamilyMarkerInfo info))
+            if (!(lstFamilies.SelectedItem is DisplayItem item))
             {
                 MessageBox.Show(this,
                     "Pick a family from the list.",
@@ -242,8 +407,20 @@ namespace SgRevitAddin.Commands.Coordination
                 return;
             }
 
-            SelectedFamily = info;
+            // Validate at least one workset checked (for workshared projects).
+            if (clbWorksets != null && clbWorksets.CheckedItems.Count == 0)
+            {
+                MessageBox.Show(this,
+                    "Check at least one workset, or click Select All.",
+                    "Mark Family Instances",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
+            SelectedFamily = item.Info;
             ActiveViewOnly = rbView.Checked;
+            SelectedWorksetIds = CurrentlyCheckedWorksets(); // null when not workshared
             Action = MarkAction.Place;
             DialogResult = DialogResult.OK;
         }

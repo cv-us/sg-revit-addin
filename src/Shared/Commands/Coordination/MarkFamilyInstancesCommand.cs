@@ -10,21 +10,23 @@ namespace SgRevitAddin.Commands.Coordination
     /// <summary>
     /// Places an orange DirectShape sphere at the center of every instance of
     /// a chosen family — useful for spotting where a particular family lives
-    /// in a busy model.
+    /// in a busy model. Optionally filtered by workset.
     ///
     /// Workflow:
-    ///   1. Pre-scan every FamilyInstance in the project, group by Family.
-    ///   2. Show a searchable dialog with the family list, scope choice
-    ///      (active view vs. whole project), and Place / Delete All buttons.
+    ///   1. Pre-scan every FamilyInstance in the project, group by Family and
+    ///      by Workset.
+    ///   2. Show a searchable dialog with the family list, a per-workset
+    ///      checklist, a scope choice (active view vs. whole project), and
+    ///      Place / Delete All buttons.
     ///   3. Place: sphere at the bounding-box center of each instance in
-    ///      scope. Does NOT delete prior markers — placements accumulate.
+    ///      scope that's also on a selected workset. Does NOT delete prior
+    ///      markers — placements accumulate.
     ///   4. Delete All: removes every Family Instance Marker in the project.
     ///
     /// Markers are DirectShape spheres (12" diameter), bright orange, in the
     /// Generic Models category, tagged with a distinct ApplicationDataId so
-    /// they never collide with the Hanger Gap Check (blue), resize-drift
-    /// (orange — but a different ApplicationDataId), or Type Review (magenta)
-    /// markers.
+    /// they never collide with the Hanger Gap Check (blue), resize-drift,
+    /// or Type Review (magenta) markers.
     /// </summary>
     [Transaction(TransactionMode.Manual)]
     [Regeneration(RegenerationOption.Manual)]
@@ -44,17 +46,17 @@ namespace SgRevitAddin.Commands.Coordination
 
             try
             {
-                // Pre-scan project-wide family inventory.
+                var worksets = ScanUserWorksets(doc);
                 var families = ScanProjectFamilies(doc);
 
-                // Existing marker count (for the dialog's display).
                 int existingMarkers = GetAllMarkerIds(doc).Count;
 
                 MarkFamilyInstancesDialog.MarkAction action;
                 FamilyMarkerInfo selectedFamily;
                 bool activeViewOnly;
+                HashSet<int> selectedWorksetIds;
 
-                using (var dlg = new MarkFamilyInstancesDialog(families, existingMarkers))
+                using (var dlg = new MarkFamilyInstancesDialog(families, worksets, existingMarkers))
                 {
                     if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK)
                         return Result.Cancelled;
@@ -62,6 +64,7 @@ namespace SgRevitAddin.Commands.Coordination
                     action = dlg.Action;
                     selectedFamily = dlg.SelectedFamily;
                     activeViewOnly = dlg.ActiveViewOnly;
+                    selectedWorksetIds = dlg.SelectedWorksetIds;
                 }
 
                 if (action == MarkFamilyInstancesDialog.MarkAction.DeleteAll)
@@ -86,6 +89,16 @@ namespace SgRevitAddin.Commands.Coordination
                     .Cast<FamilyInstance>()
                     .Where(fi => fi.Symbol?.Family?.Id == familyId)
                     .ToList();
+
+                // Apply workset filter (only when there are user worksets — for
+                // non-workshared docs, selectedWorksetIds is null and every
+                // instance is treated as included).
+                if (selectedWorksetIds != null)
+                {
+                    instances = instances
+                        .Where(fi => selectedWorksetIds.Contains(fi.WorksetId.IntegerValue))
+                        .ToList();
+                }
 
                 int placed = 0;
                 int skipped = 0;
@@ -115,11 +128,16 @@ namespace SgRevitAddin.Commands.Coordination
                     ? $"active view ({doc.ActiveView.Name})"
                     : "whole project";
 
+                string worksetLabel = selectedWorksetIds == null
+                    ? "(not workshared — all instances)"
+                    : $"{selectedWorksetIds.Count} of {worksets.Count} worksets";
+
                 string report =
                     $"Mark Family Instances\n\n" +
                     $"Family:           {selectedFamily.FamilyName}\n" +
                     $"Category:         {selectedFamily.CategoryName}\n" +
                     $"Scope:            {scopeLabel}\n" +
+                    $"Workset filter:   {worksetLabel}\n" +
                     $"Instances found:  {instances.Count}\n" +
                     $"Markers placed:   {placed}\n";
                 if (skipped > 0)
@@ -136,26 +154,44 @@ namespace SgRevitAddin.Commands.Coordination
             }
         }
 
-        // ── Family inventory ──
+        // ── Inventory ──
 
         /// <summary>
-        /// Lightweight DTO passed to the dialog. Made public+nested-namespace
-        /// so the dialog file can reference it without changing layout.
+        /// Family record passed to the dialog. Stores instance counts per
+        /// workset so the family list can dynamically reflect the workset
+        /// filter without re-scanning the project.
         /// </summary>
         public class FamilyMarkerInfo
         {
             public ElementId FamilyId { get; set; }
             public string FamilyName { get; set; }
             public string CategoryName { get; set; }
-            public int InstanceCount { get; set; }
+            /// <summary>Workset id (int) → count of instances on that workset.</summary>
+            public Dictionary<int, int> CountsByWorkset { get; set; } = new Dictionary<int, int>();
 
-            public override string ToString()
-                => $"{FamilyName}    [{CategoryName}]    ×{InstanceCount}";
+            public int TotalCount => CountsByWorkset.Values.Sum();
+
+            public int CountInSelectedWorksets(HashSet<int> selectedIds)
+            {
+                if (selectedIds == null) return TotalCount;
+                int sum = 0;
+                foreach (var kvp in CountsByWorkset)
+                    if (selectedIds.Contains(kvp.Key)) sum += kvp.Value;
+                return sum;
+            }
+        }
+
+        public class WorksetInfo
+        {
+            public int Id { get; set; }
+            public string Name { get; set; }
+            public override string ToString() => Name;
         }
 
         private List<FamilyMarkerInfo> ScanProjectFamilies(Document doc)
         {
-            var byFamily = new Dictionary<ElementId, (FamilyInstance sample, int count)>();
+            // First pass: tally counts keyed by (familyId, worksetId).
+            var byFamily = new Dictionary<ElementId, FamilyMarkerInfo>();
 
             foreach (var fi in new FilteredElementCollector(doc)
                 .OfClass(typeof(FamilyInstance))
@@ -163,21 +199,45 @@ namespace SgRevitAddin.Commands.Coordination
             {
                 var family = fi.Symbol?.Family;
                 if (family == null) continue;
-                if (byFamily.TryGetValue(family.Id, out var tuple))
-                    byFamily[family.Id] = (tuple.sample, tuple.count + 1);
-                else
-                    byFamily[family.Id] = (fi, 1);
+
+                if (!byFamily.TryGetValue(family.Id, out var info))
+                {
+                    info = new FamilyMarkerInfo
+                    {
+                        FamilyId = family.Id,
+                        FamilyName = family.Name,
+                        CategoryName = fi.Category?.Name ?? "(no category)"
+                    };
+                    byFamily[family.Id] = info;
+                }
+
+                int wsId = fi.WorksetId.IntegerValue;
+                info.CountsByWorkset[wsId] = info.CountsByWorkset.TryGetValue(wsId, out int c)
+                    ? c + 1
+                    : 1;
             }
 
-            return byFamily
-                .Select(kvp => new FamilyMarkerInfo
-                {
-                    FamilyId = kvp.Key,
-                    FamilyName = kvp.Value.sample.Symbol.Family.Name,
-                    CategoryName = kvp.Value.sample.Category?.Name ?? "(no category)",
-                    InstanceCount = kvp.Value.count
-                })
+            return byFamily.Values
                 .OrderBy(f => f.FamilyName, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        /// <summary>
+        /// Returns the user worksets in this project, ordered by name. Empty
+        /// list if the project is not workshared.
+        /// </summary>
+        private List<WorksetInfo> ScanUserWorksets(Document doc)
+        {
+            if (!doc.IsWorkshared) return new List<WorksetInfo>();
+
+            return new FilteredWorksetCollector(doc)
+                .OfKind(WorksetKind.UserWorkset)
+                .Select(ws => new WorksetInfo
+                {
+                    Id = ws.Id.IntegerValue,
+                    Name = ws.Name
+                })
+                .OrderBy(w => w.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
         }
 
@@ -190,14 +250,12 @@ namespace SgRevitAddin.Commands.Coordination
         /// </summary>
         private void CreateSphere(Document doc, XYZ center, double radius, ElementId materialId)
         {
-            // Half-circle in the world XZ plane: bottom pole → equator → top pole.
             var arc = Arc.Create(
                 center, radius,
                 -Math.PI / 2, Math.PI / 2,
                 XYZ.BasisX, XYZ.BasisZ);
             var top = center + new XYZ(0, 0, radius);
             var bottom = center + new XYZ(0, 0, -radius);
-            // Closing line back along the Z axis (top → bottom).
             var line = Line.CreateBound(top, bottom);
             var profile = CurveLoop.Create(new List<Curve> { arc, line });
 
@@ -277,7 +335,6 @@ namespace SgRevitAddin.Commands.Coordination
                     (bb.Min.Y + bb.Max.Y) * 0.5,
                     (bb.Min.Z + bb.Max.Z) * 0.5);
             }
-            // Fallback to LocationPoint for elements without a bounding box
             return (element.Location as LocationPoint)?.Point;
         }
     }

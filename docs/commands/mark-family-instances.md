@@ -20,12 +20,20 @@ piping, structure, and architecture.
    one instance, listed as `FamilyName [Category] ×count`.
 3. **Filter the list** by typing in the Search box — matches against
    family name or category, case-insensitive.
-4. **Pick a scope**:
+4. **Pick which worksets to include** (right-hand checklist). Every
+   workset is checked by default; **Select All** / **Select None**
+   buttons toggle them in bulk. Changing the workset selection
+   immediately refreshes the family list — families with zero instances
+   on the chosen worksets disappear, and the `×count` figures reflect
+   the selection. For non-workshared projects this section is replaced
+   with a hint and has no effect.
+5. **Pick a scope**:
    - **Active view only** — only mark instances visible in the current view.
    - **Whole project** — mark every instance in the project (default).
-5. Choose an action:
+6. Choose an action:
    - **Place Markers** — drop spheres at the center of each matching
-     instance. Does **not** clear prior markers; placements accumulate.
+     instance (family + scope + worksets). Does **not** clear prior
+     markers; placements accumulate.
    - **Delete All Markers** — remove every Family Instance Marker in the
      project (enabled only when markers exist).
    - **Close** — dismiss without changes.
