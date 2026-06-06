@@ -53,7 +53,7 @@ Master list of all SG Revit Addin commands.
 ## Annotation
 - `PipeElevationsCommand` - Calculate and write TOS/AFF elevation parameters on pipes and fittings with 4 reference methods including raybounce, slope classification
 - `FlexDropLengthsCommand` - Insert flexible drop length tags on sprinkler heads with standard pipe lengths
-- `FlexDropLengthsDalmatianCommand` - Auto-populate flex drop lengths from actual connected pipe lengths with Wet/Dry system thresholds and dynamic tag families
+- `FlexDropLengthsAutoCommand` - Auto-size flex drop tags by reading each sprinkler's connected flex pipe length against Wet/Dry threshold tables; flags pipes exceeding the system max. Companion to FlexDropLengthsCommand ("Flex Drops Set")
 - `GraphicScaleBarsCommand` - Insert graphic scale bar annotations on sheets based on view scales
 - `SleeveElevationsCommand` - Calculate AFF/BBD elevations on pipe sleeves from linked floor and deck geometry
 - `PipeSleevesAtBeamsCommand` - Auto-place NFPA-sized pipe sleeves at pipe-beam intersections with linked structural model

@@ -99,7 +99,7 @@ Make-Pair "import-sprinklers" "iS" $teal $W
 Make-Pair "annotation"        "A"  $dgray $W
 Make-Pair "pipe-elevations"   "PE" $dgray $W
 Make-Pair "flex-drop"         "FD" $dgray $W
-Make-Pair "flex-dalmatian"    "DL" $dgray $W
+Make-Pair "flex-auto"         "FA" $dgray $W
 Make-Pair "scale-bars"        "GB" $dgray $W
 Make-Pair "sleeve-elevations" "SE" $dgray $W
 Make-Pair "sleeves-beams"     "SB" $dgray $W

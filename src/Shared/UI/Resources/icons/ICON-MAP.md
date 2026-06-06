@@ -42,7 +42,7 @@ Format: PNG with transparent background. Replace any file and rebuild to update.
 | fabrication-16.png | 16x16 | PipeCutList |
 | coordination-32.png | 32x32 | ColorCodePipes |
 | coordination-16.png | 16x16 | ColorCodePipes |
-| annotation-32.png | 32x32 | PipeElevations, FlexDropLengths, FlexDropDalmatian, GraphicScaleBars, SleeveElevations, SleevesAtBeams, SleevesAtDecks, SleevesAtWalls, RoomTextNotes, BeamPenetrations, SSBSymbols, DeleteDuplicateText, ClearAnnotations |
+| annotation-32.png | 32x32 | PipeElevations, FlexDropLengths, FlexDropLengthsAuto, GraphicScaleBars, SleeveElevations, SleevesAtBeams, SleevesAtDecks, SleevesAtWalls, RoomTextNotes, BeamPenetrations, SSBSymbols, DeleteDuplicateText, ClearAnnotations |
 | annotation-16.png | 16x16 | (same as above) |
 | views-32.png | 32x32 | DuplicateViews, CreatePlanViews, CreateDependentViews, RotateScopeBox, RemoveScopeBoxes |
 | views-16.png | 16x16 | (same as above) |
@@ -93,7 +93,7 @@ No .csproj edits needed — just drop PNGs here and rebuild.
 ### Annotation panel (currently sharing annotation-32/16)
 - `pipe-elevations-32.png` / `pipe-elevations-16.png` — PipeElevations
 - `flex-drop-32.png` / `flex-drop-16.png` — FlexDropLengths
-- `flex-dalmatian-32.png` / `flex-dalmatian-16.png` — FlexDropDalmatian
+- `flex-auto-32.png` / `flex-auto-16.png` — FlexDropLengthsAuto (formerly "Flex Dalmatian")
 - `scale-bars-32.png` / `scale-bars-16.png` — GraphicScaleBars
 - `sleeve-elevations-32.png` / `sleeve-elevations-16.png` — SleeveElevations
 - `sleeves-beams-32.png` / `sleeves-beams-16.png` — SleevesAtBeams

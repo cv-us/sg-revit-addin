@@ -85,16 +85,16 @@ Each command targets a different type of structural penetration. **Use all three
 
 ---
 
-## Flex Drop Lengths — Standard vs. Dalmatian
+## Flex Drop Lengths — Set vs. Auto
 
 Both tag sprinkler heads with a flex drop length value. The difference is how the length is determined.
 
 | Situation | Command | Why |
-|-----------|---------|-----|
-| All sprinklers get the same standard length | **Flex Drop Lengths** | You pick one length (31"/36"/48"/60"/72") and it applies to all selected sprinklers |
-| Each sprinkler has a different flex pipe length | **Flex Drop Dalmatian** | Auto-reads the actual connected flex pipe length and assigns the correct standard size. Supports Wet and Dry systems with different thresholds |
+|---|---|---|
+| All sprinklers get the same standard length | **Flex Drops Set** | You pick one length (31"/36"/48"/60"/72") and it applies to every selected sprinkler |
+| Each sprinkler has its own measured flex pipe | **Flex Drops Auto** | Auto-reads each sprinkler's connected flex pipe length and assigns the matching standard. Supports Wet and Dry systems with different thresholds; flags any pipe that exceeds the system max |
 
-**Tip:** If your sprinklers already have flex pipes modeled and connected, use **Dalmatian** — it reads the actual pipe and picks the right standard length automatically. If flex pipes aren't modeled yet or you're just doing initial layout, use **Standard** with a uniform length.
+**Tip:** If your sprinklers already have flex pipes modeled and connected, use **Flex Drops Auto** — it reads the actual pipe and picks the right standard length per sprinkler. If flex pipes aren't modeled yet or you're doing initial layout, use **Flex Drops Set** with a uniform length.
 
 ---
 

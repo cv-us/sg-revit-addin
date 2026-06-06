@@ -10,40 +10,49 @@ using System.Linq;
 namespace SgRevitAddin.Commands.Annotation
 {
     /// <summary>
-    /// Inserts flexible drop length tags on sprinkler heads, automatically
-    /// calculating the standard length from the actual flex pipe connected
-    /// to each sprinkler. Supports Wet and Dry system types with different
-    /// standard length thresholds.
+    /// Auto-sizes flex drop length tags on sprinkler heads by reading each
+    /// sprinkler's actual connected flex pipe and assigning the matching
+    /// standard length from a Wet- or Dry-system threshold table.
     ///
-    /// KEY DIFFERENCE from InsertFlexDropLengthsCommand:
-    ///   Standard version: user picks one fixed length for all sprinklers
-    ///   Dalmatian version: auto-reads each sprinkler's connected flex pipe
-    ///   and assigns the correct standard length per Wet/Dry thresholds
+    /// Companion to <see cref="FlexDropLengthsCommand"/>:
+    ///   • "Flex Drops Set" (FlexDropLengthsCommand) — user picks ONE
+    ///     fixed length, applied uniformly to every selected sprinkler.
+    ///   • "Flex Drops Auto" (this command) — each sprinkler's tag is
+    ///     auto-sized to the next standard up from its measured flex pipe
+    ///     length. Different sprinklers in the same selection can end up
+    ///     with different standards.
     ///
-    /// WET thresholds:
-    ///   pipe <= 3'-6" (3.5 ft)  → "48"
-    ///   pipe <= 4'-6" (4.5 ft)  → "60"
-    ///   pipe <= 5'-6" (5.5 ft)  → "72"
-    ///   pipe > 5'-6"            → flagged "Exceeds 5.5 Ft Length"
+    /// WET thresholds (5.5 ft / 66" max):
+    ///   pipe ≤ 3'-6" → "48"
+    ///   pipe ≤ 4'-6" → "60"
+    ///   pipe ≤ 5'-6" → "72"
+    ///   pipe > 5'-6" → flagged "Exceeds 5.5 Ft Length" (selected for review)
     ///
-    /// DRY thresholds:
-    ///   pipe <= 2'-8" (32/12 ft)  → "38"
-    ///   pipe <= 3'-8" (44/12 ft)  → "50"
-    ///   pipe <= 4'-4" (52/12 ft)  → "58"
-    ///   pipe > 4'-4"              → flagged "Exceeds 4'-4\" Length"
+    /// DRY thresholds (4'-4" / 52" max):
+    ///   pipe ≤ 2'-8" → "38"
+    ///   pipe ≤ 3'-8" → "50"
+    ///   pipe ≤ 4'-4" → "58"
+    ///   pipe > 4'-4" → flagged "Exceeds 4'-4\" Length" (selected for review)
     ///
     /// WORKFLOW:
-    ///   1. User selects sprinkler heads
-    ///   2. Dialog: pick Wet or Dry system type, tag orientation
-    ///   3. For each sprinkler, find connected flex pipe and read its length
-    ///   4. Assign standard length string from threshold table
-    ///   5. Delete existing flex drop tags on selected sprinklers
-    ///   6. Write "Flex Pipe Length" parameter, create tag
-    ///   7. Flag sprinklers with too-long flex pipes
+    ///   1. User selects sprinkler heads.
+    ///   2. Dialog: choose Wet vs Dry, tag orientation.
+    ///   3. For each sprinkler, traverse connectors to find its flex pipe
+    ///      and read the Length parameter.
+    ///   4. Look up the standard length string from the threshold table.
+    ///   5. Delete any existing flex-drop tags on the selected sprinklers
+    ///      in the active view.
+    ///   6. Write "Flex Pipe Length" on the sprinkler; create the tag.
+    ///   7. Highlight sprinklers whose measured flex exceeds the system max.
+    ///
+    /// TAG FAMILY RESOLUTION:
+    ///   Tries "{Description}-Flex Drop Length Tag" first (e.g.
+    ///   "Pendant-Flex Drop Length Tag" from the sprinkler's Description
+    ///   parameter), then falls back to the generic "-Flex Drop Length Tag".
     /// </summary>
     [Transaction(TransactionMode.Manual)]
     [Regeneration(RegenerationOption.Manual)]
-    public class FlexDropLengthsDalmatianCommand : IExternalCommand
+    public class FlexDropLengthsAutoCommand : IExternalCommand
     {
         private const string FlexPipeLengthParam = "Flex Pipe Length";
 
@@ -107,7 +116,7 @@ namespace SgRevitAddin.Commands.Annotation
                 }
 
                 // ── Step 2: Show dialog ──
-                using (var dialog = new FlexDropLengthsDalmatianDialog(sprinklers.Count))
+                using (var dialog = new FlexDropLengthsAutoDialog(sprinklers.Count))
                 {
                     if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK)
                         return Result.Cancelled;
@@ -161,8 +170,10 @@ namespace SgRevitAddin.Commands.Annotation
                     }
 
                     // ── Step 4: Find tag family ──
-                    // Dalmatian style: tag family name built from sprinkler Description + "-Flex Drop Length Tag"
-                    // Fallback: use generic "-Flex Drop Length Tag" if specific not found
+                    // Tag family name is built from the sprinkler's Description
+                    // parameter (e.g. "Pendant-Flex Drop Length Tag"). Falls
+                    // back to the generic "-Flex Drop Length Tag" if no
+                    // Description-specific family is loaded.
                     var tagFamilyCache = new Dictionary<string, FamilySymbol>();
 
                     // ── Step 5: Process in transaction ──
@@ -170,7 +181,7 @@ namespace SgRevitAddin.Commands.Annotation
                     int tagsCreated = 0;
                     int paramsWritten = 0;
 
-                    using (var tw = new TransactionWrapper(doc, "Insert Flex Drop Lengths (Dalmatian)"))
+                    using (var tw = new TransactionWrapper(doc, "Insert Flex Drop Lengths (Auto)"))
                     {
                         // Delete existing flex drop tags on selected sprinklers in this view
                         var selectedIds = new HashSet<ElementId>(sprinklers.Select(s => s.Id));
@@ -274,7 +285,7 @@ namespace SgRevitAddin.Commands.Annotation
             catch (Exception ex)
             {
                 message = ex.Message;
-                TaskDialog.Show("Error", "Insert Flex Drop Lengths (Dalmatian) failed:\n" + ex.Message);
+                TaskDialog.Show("Error", "Flex Drops Auto failed:\n" + ex.Message);
                 return Result.Failed;
             }
         }
@@ -373,9 +384,9 @@ namespace SgRevitAddin.Commands.Annotation
         // ══════════════════════════════════════════════════════════════
 
         /// <summary>
-        /// Resolve the tag family symbol for a sprinkler.
-        /// Dalmatian style: tries [SprinklerDescription]-Flex Drop Length Tag first,
-        /// then falls back to generic "-Flex Drop Length Tag".
+        /// Resolves the tag family symbol for a sprinkler. Tries
+        /// "{Description}-Flex Drop Length Tag" first, then falls back to
+        /// the generic "-Flex Drop Length Tag" if not loaded.
         /// </summary>
         private FamilySymbol ResolveTagSymbol(
             Document doc, FamilyInstance sprinkler,

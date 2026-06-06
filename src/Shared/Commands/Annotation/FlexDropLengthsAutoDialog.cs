@@ -5,29 +5,24 @@ using System.Windows.Forms;
 namespace SgRevitAddin.Commands.Annotation
 {
     /// <summary>
-    /// Dialog for the Insert Flexible Drop Lengths (Dalmatian Fire Style) command.
+    /// Dialog for the Flex Drops Auto command — auto-sizes each sprinkler's
+    /// flex drop tag to the standard that fits its measured flex pipe length.
     ///
     /// Collects:
-    ///   - System type: Wet or Dry (changes length thresholds)
-    ///   - Tag orientation (N, NE, E, SE, S, SW, W, NW)
+    ///   - System type: Wet or Dry (changes length thresholds and max).
+    ///   - Tag orientation (N, NE, E, SE, S, SW, W, NW).
     ///
-    /// Unlike the standard InsertFlexDropLengthsDialog, this does NOT ask the user
-    /// to pick a length — lengths are auto-calculated from the actual flex pipe
-    /// connected to each sprinkler.
+    /// Unlike <see cref="FlexDropLengthsDialog"/> (the "Set" command), this
+    /// does NOT ask the user to pick one length — each sprinkler's tag is
+    /// auto-sized from its actual connected flex pipe.
     ///
-    /// Wet system thresholds:
-    ///   Flex pipe <= 3'-6"  → "48"
-    ///   Flex pipe <= 4'-6"  → "60"
-    ///   Flex pipe <= 5'-6"  → "72"
-    ///   Flex pipe > 5'-6"   → flagged as exceeding max
+    /// Wet thresholds (5'-6" max):
+    ///   ≤ 3'-6" → "48"   ≤ 4'-6" → "60"   ≤ 5'-6" → "72"   > flagged
     ///
-    /// Dry system thresholds:
-    ///   Flex pipe <= 2'-8"  → "38"
-    ///   Flex pipe <= 3'-8"  → "50"
-    ///   Flex pipe <= 4'-4"  → "58"
-    ///   Flex pipe > 4'-4"   → flagged as exceeding max
+    /// Dry thresholds (4'-4" max):
+    ///   ≤ 2'-8" → "38"   ≤ 3'-8" → "50"   ≤ 4'-4" → "58"   > flagged
     /// </summary>
-    public class FlexDropLengthsDalmatianDialog : Form
+    public class FlexDropLengthsAutoDialog : Form
     {
         // ── Results ──
         public bool IsWetSystem { get; private set; } = true;
@@ -40,7 +35,7 @@ namespace SgRevitAddin.Commands.Annotation
 
         private readonly int _sprinklerCount;
 
-        public FlexDropLengthsDalmatianDialog(int sprinklerCount)
+        public FlexDropLengthsAutoDialog(int sprinklerCount)
         {
             _sprinklerCount = sprinklerCount;
             InitializeComponent();
@@ -48,7 +43,7 @@ namespace SgRevitAddin.Commands.Annotation
 
         private void InitializeComponent()
         {
-            Text = "Auto-Populate Flexible Drop Lengths (Dalmatian)";
+            Text = "Flex Drops Auto — Auto-Size from Connected Flex Pipe";
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
@@ -67,8 +62,8 @@ namespace SgRevitAddin.Commands.Annotation
             };
             grpInfo.Controls.Add(new Label
             {
-                Text = "Reads the actual flex pipe length connected to each sprinkler and\n" +
-                       "assigns the correct standard drop length based on Wet or Dry thresholds.",
+                Text = "Reads each sprinkler's actual connected flex pipe and auto-sizes\n" +
+                       "its drop-length tag to the matching Wet or Dry standard.",
                 Location = new Point(10, 18),
                 Size = new Size(470, 32)
             });

@@ -177,12 +177,12 @@ namespace SgRevitAddin
                 "Calculate and write TOS/AFF elevation parameters on pipes and fittings.");
             // Small stack: flex drops + scale bars
             annotPanel.AddStackedItems(
-                MakeButton("InsertFlexDropLengths", "Flex Drops", asmPath,
+                MakeButton("InsertFlexDropLengths", "Flex Drops Set", asmPath,
                     "SgRevitAddin.Commands.Annotation.FlexDropLengthsCommand",
-                    "flex-drop-16.png", "Insert flexible drop length tags on sprinkler heads with standard pipe lengths."),
-                MakeButton("InsertFlexDropDalmatian", "Flex Dalmatian", asmPath,
-                    "SgRevitAddin.Commands.Annotation.FlexDropLengthsDalmatianCommand",
-                    "flex-dalmatian-16.png", "Auto-populate flex drop lengths from actual pipe lengths with Wet/Dry thresholds (Dalmatian style)."),
+                    "flex-drop-16.png", "Insert flex drop length tags on selected sprinklers using ONE user-picked standard length (31\"/36\"/48\"/60\"/72\") applied uniformly to every sprinkler."),
+                MakeButton("InsertFlexDropAuto", "Flex Drops Auto", asmPath,
+                    "SgRevitAddin.Commands.Annotation.FlexDropLengthsAutoCommand",
+                    "flex-auto-16.png", "Auto-size flex drop tags by reading each sprinkler's connected flex pipe and assigning the matching Wet or Dry standard. Flags pipes that exceed the system max."),
                 MakeButton("InsertScaleBars", "Scale Bars", asmPath,
                     "SgRevitAddin.Commands.Annotation.GraphicScaleBarsCommand",
                     "scale-bars-16.png", "Insert graphic scale bar annotations on sheets based on view scales."));

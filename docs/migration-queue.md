@@ -159,7 +159,7 @@ Cleared for fresh manual evaluation. User will feed scripts one at a time.
 | 38 | Custom Auto Hang - Concrete Tees (Warped) - Underside of Flange - User Locations.dyn | [=] | Duplicate of HangUserLocationsCommand — flange underside is vertical raybounce target, same algorithm |
 | 39 | Custom Auto Hang - Z Purlins - Pipes Parallel.dyn | [=] | Duplicate of HangParallelStructuralCommand |
 | 40 | Custom AutoInsert - Beam Penetration Symbols at Grids.dyn | [=] | Duplicate of BeamPenetrationSymbolsCommand |
-| 41 | Custom AutoInsert - Flexible Drop Lengths-Dalmatian Fire Style.dyn | [=] | Duplicate of FlexDropLengthsDalmatianCommand |
+| 41 | Custom AutoInsert - Flexible Drop Lengths-Dalmatian Fire Style.dyn | [=] | Duplicate of FlexDropLengthsAutoCommand (originally named "Dalmatian") |
 | 42 | Custom AutoInsert - Pipe and Fitting Elevations - Structural Framing.dyn | [=] | Duplicate of PipeElevationsCommand |
 | 43 | Custom AutoInsert - SSB Symbols Along Pipe Runs.dyn | [=] | Duplicate of SSBSymbolsCommand |
 | 44 | Custom Trapeze Hang - Dual Pipe - User Locations.dyn | [=] | Duplicate of TrapezeUserLocationsCommand |
