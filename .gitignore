@@ -47,10 +47,6 @@ Desktop.ini
 *.rvt.bak
 *.rfa.bak
 
-# Sandbox experiments are tracked, but ignore any temp outputs
-sandbox/**/*.dll
-sandbox/**/*.pdb
-
 # Installer build output (compiled .exe lands here)
 installer/Output/*
 !installer/Output/.gitkeep

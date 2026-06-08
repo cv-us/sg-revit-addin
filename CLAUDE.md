@@ -12,8 +12,14 @@
 - Use `ParameterHelpers` and `ElementFilters` from Utils instead of writing inline parameter/filter logic
 - Revit internal units are in feet — use `UnitConversion` when displaying to users
 - Model-check / read-only commands use `[Transaction(TransactionMode.ReadOnly)]`
-- **No Dynamo references** — all commands are standalone. Do NOT mention Dynamo, .dyn files, or migration origins in code comments, XML summaries, or documentation.
-- The `"Dynamo Setting - "` prefix on global parameter names is a real Revit parameter name, not a reference to Dynamo — keep those as-is.
+
+## Naming Gotcha — `"Dynamo Setting - "` global parameters
+
+A bunch of the project's global parameters (read in `SetupGlobalParamsCommand`
+and the sync commands) are named like `"Dynamo Setting - AutoSync Clash Height
+Distance"`. The `"Dynamo Setting - "` prefix is the **actual Revit parameter
+name** on the live project templates — renaming the string in code would
+break every project that already has those parameters. Keep them verbatim.
 
 ## Version-Specific Code
 - Use `#if REVIT2024` / `#if REVIT2025` preprocessor directives for API differences
@@ -53,20 +59,3 @@
 ## Build & Deploy
 - `dotnet build src/SgRevit24/SgRevit24.csproj -c Release` and `dotnet build src/SgRevit25/SgRevit25.csproj -c Release`
 - Deploy: `powershell -File tools/deploy-addin.ps1 -RevitVersion {2023|2024|2025|2026}`
-
-## Sandbox
-- `sandbox/` is for macro prototyping — files here are NOT compiled into the plugin
-
-## Dynamo Script Migration Queue
-When the user provides a .dyn file to migrate, follow this workflow:
-1. Read the .dyn JSON to understand the workflow (nodes, connections, Python scripts, code blocks)
-2. Check `docs/command-catalog.md` for existing commands that do the same thing
-3. If it's a duplicate or trivial variant of an existing command, tell the user and skip
-4. If it's new or significantly different, create the command following "Adding a New Command" above
-5. Use succinct command names, no Dynamo references anywhere
-
-### Dynamo source folders (for reference)
-- `C:\dev\Dynamo Revit\Revit 2024\` — DONE (all 36 scripts migrated)
-- `C:\dev\Dynamo Revit\Revit 2023\` — to be checked for unique scripts not in Revit 2024
-- `C:\dev\Dynamo Revit\2.3\` — oldest folder, 98 scripts, many may be older versions of already-migrated scripts but some are unique
-

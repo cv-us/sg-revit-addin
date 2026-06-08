@@ -15,7 +15,7 @@ Anyone on the team can add to this list.
 
 ## Hangers
 
-- [ ] **AutoSync Hangers to Structural Elements** — Complement to the Reference Plane sync. Use raybounce or linked structural geometry to find actual structure above each hanger and set rod length. (Dynamo version exists?)
+- [ ] **AutoSync Hangers to Structural Elements** — Complement to the Reference Plane sync. Use raybounce or linked structural geometry to find actual structure above each hanger and set rod length.
 - [ ] **Hanger schedule export** — Export hanger data (type, rod length, pipe size, location) to Excel for procurement.
 - [ ] **Hanger conflict check** — Flag hangers that conflict with ductwork, cable tray, or other trades in linked models.
 

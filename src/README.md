@@ -46,7 +46,7 @@ Only in these rare cases:
 
 2. **Ribbon layout changes** — Each version has its own `App.cs` for ribbon button setup. Usually these are identical, but they could differ if the ribbon needs version-specific tweaks.
 
-3. **Adding a new command to the .addin manifest** — When you graduate a macro to a command, you register it in BOTH `SgRevit24.addin` and `SgRevit25.addin`.
+3. **Adding a new command** — When you create a new command, register it in BOTH `SgRevit24.addin` and `SgRevit25.addin`, and wire a ribbon button in BOTH `SgRevit24/App.cs` and `SgRevit25/App.cs`.
 
 ## The .csproj Files (Build Configuration)
 
