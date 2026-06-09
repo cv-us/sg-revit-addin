@@ -228,6 +228,11 @@ namespace SgRevitAddin
                 "SgRevitAddin.Commands.ViewsAndSheets.CreatePlanViewsCommand",
                 "plan-views-32.png", "plan-views-16.png",
                 "Create floor and/or ceiling plan views for selected levels with templates and naming.");
+            // Large: legend transfer between open documents
+            AddLargeButton(viewsPanel, "LegendTransfer", "Legend\nTransfer", asmPath,
+                "SgRevitAddin.Commands.ViewsAndSheets.LegendTransferCommand",
+                "dependent-views-32.png", "dependent-views-16.png",
+                "Copy Legend views from one open document into another. Searchable list, per-legend selection, skips existing names, single-undo TransactionGroup.");
             // Small stack: dependent views + scope boxes
             viewsPanel.AddStackedItems(
                 MakeButton("CreateDependentViews", "Dependent Views", asmPath,

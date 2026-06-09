@@ -17,7 +17,7 @@ To mark one done: open the file, change its `[ ]` to `[x]`, commit. A
 single command counts as "done" only when **both** the 32×32 and 16×16
 PNGs are in place.
 
-**Status as of v0.2.2:** 0 / 55 commands have custom icons.
+**Status as of v0.2.2:** 0 / 56 commands have custom icons.
 
 ---
 
@@ -210,6 +210,7 @@ the same name when you replace them (or update `App.cs` accordingly).
 | Button | Files | Prompt | Done |
 |---|---|---|---|
 | Create Plan Views (large) | `plan-views-{16,32}.png` | A stacked stack of floor-plan rectangles representing multiple plan views per level. | [ ] |
+| Legend Transfer (large) | `legend-transfer-{16,32}.png` *(currently reuses `dependent-views-{16,32}.png` as a placeholder)* | Two stacked rectangles labeled "Legend" with a horizontal arrow between them — copying from one document to another. | [ ] |
 | Dependent Views | `dependent-views-{16,32}.png` | One parent plan rectangle with two smaller child rectangles branching down from it (tree). | [ ] |
 | Rotate Scope Box | `rotate-scopebox-{16,32}.png` | A scope-box rectangle (dashed outline) with a curved rotation arrow around it indicating angle adjustment. | [ ] |
 | Remove Scope Boxes | `remove-scopebox-{16,32}.png` | A scope-box rectangle (dashed outline) with a red "×" mark on it. | [ ] |
