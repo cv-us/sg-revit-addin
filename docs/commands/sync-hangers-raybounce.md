@@ -30,6 +30,7 @@ Calculates rod lengths for pipe hangers by shooting a ray straight up from each 
 | Roofs type code | "03" | Type Code for hangers hitting roofs |
 | Structural Framing type code | "02" | Type Code for hangers hitting framing |
 | Keep Hanger Types | unchecked | If checked, only adjusts Rod Length/Y Grip without touching Type Code or Comments |
+| Detect non-structural geometry | unchecked | If checked, the `ReferenceIntersector` category filter also matches **Generic Models** and **Masses** — covers IFC imports, STEP / SAT / Inventor imports, and other simple geometry that isn't categorized as structure. Linked Revit models are always searched regardless of this option |
 
 ## RayBounce Implementation
 

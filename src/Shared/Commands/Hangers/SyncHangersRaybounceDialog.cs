@@ -19,6 +19,12 @@ namespace SgRevitAddin.Commands.Hangers
         public string TypeCodeRoofs { get; private set; } = "03";
         public string TypeCodeFraming { get; private set; } = "02";
         public bool KeepHangerTypes { get; private set; } = false;
+        /// <summary>
+        /// When true, the raybounce filter also matches Generic Models and
+        /// Masses — covers IFC imports, STEP/SAT/Inventor imports, and other
+        /// non-structural geometry that the standard category list misses.
+        /// </summary>
+        public bool IncludeGenericGeometry { get; private set; } = false;
 
         // ── Controls ──
         private TextBox txtFloors;
@@ -26,6 +32,7 @@ namespace SgRevitAddin.Commands.Hangers
         private TextBox txtRoofs;
         private TextBox txtFraming;
         private CheckBox chkKeepTypes;
+        private CheckBox chkIncludeGeneric;
 
         private readonly int _hangerCount;
 
@@ -50,25 +57,27 @@ namespace SgRevitAddin.Commands.Hangers
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(480, 380);
+            ClientSize = new Size(500, 470);
 
             int margin = 15;
             int y = margin;
+
+            const int GroupW = 470;
 
             // ── Info ──
             var grpInfo = new GroupBox
             {
                 Text = "About",
                 Location = new Point(margin, y),
-                Size = new Size(450, 70)
+                Size = new Size(GroupW, 70)
             };
             grpInfo.Controls.Add(new Label
             {
-                Text = "Shoots a ray upward from each hanger to find the structural element above\n" +
+                Text = "Shoots a ray upward from each hanger to find the closest element above\n" +
                        "(floors, stairs, roofs, structural framing — including linked models).\n" +
-                       "Sets Rod Length to the vertical distance to the structure hit.",
+                       "Sets Rod Length to the vertical distance to the hit.",
                 Location = new Point(10, 18),
-                Size = new Size(430, 45)
+                Size = new Size(GroupW - 20, 45)
             });
             Controls.Add(grpInfo);
             y += 80;
@@ -78,28 +87,28 @@ namespace SgRevitAddin.Commands.Hangers
             {
                 Text = "Selection",
                 Location = new Point(margin, y),
-                Size = new Size(450, 50)
+                Size = new Size(GroupW, 50)
             };
             grpSummary.Controls.Add(new Label
             {
                 Text = $"{_hangerCount} pipe hanger{(_hangerCount != 1 ? "s" : "")} selected.",
                 Location = new Point(10, 20),
-                Size = new Size(430, 18),
+                Size = new Size(GroupW - 20, 18),
                 Font = new Font(Font, FontStyle.Bold)
             });
             Controls.Add(grpSummary);
             y += 60;
 
-            // ── Hanger Type Codes ──
+            // ── Hanger Type Codes (sized to fit all four rows + comfortable padding) ──
             var grpTypes = new GroupBox
             {
                 Text = "Hanger Assembly Type Codes (Hydratec)",
                 Location = new Point(margin, y),
-                Size = new Size(450, 115)
+                Size = new Size(GroupW, 140)
             };
 
-            int lx = 10, tx = 195, tw = 60, rowH = 26, labelW = 175;
-            int gy = 20;
+            int lx = 10, tx = 195, tw = 60, rowH = 28, labelW = 175;
+            int gy = 22;
             grpTypes.Controls.Add(new Label { Text = "Floors:", Location = new Point(lx, gy + 3), Size = new Size(labelW, 18) });
             txtFloors = new TextBox { Text = TypeCodeFloors, Location = new Point(tx, gy), Size = new Size(tw, 22) };
             grpTypes.Controls.Add(txtFloors);
@@ -120,14 +129,14 @@ namespace SgRevitAddin.Commands.Hangers
             grpTypes.Controls.Add(txtFraming);
 
             Controls.Add(grpTypes);
-            y += 125;
+            y += 150;
 
             // ── Keep Types ──
             chkKeepTypes = new CheckBox
             {
                 Text = "Keep existing Hanger Types and Comments — only adjust Rod Lengths",
                 Location = new Point(margin + 5, y),
-                Size = new Size(440, 20),
+                Size = new Size(GroupW - 10, 22),
                 Checked = KeepHangerTypes
             };
             chkKeepTypes.CheckedChanged += (s, e) =>
@@ -139,29 +148,43 @@ namespace SgRevitAddin.Commands.Hangers
                 txtFraming.Enabled = !disabled;
             };
             Controls.Add(chkKeepTypes);
-            y += 30;
+            y += 26;
 
-            // ── Buttons ──
-            var btnOK = new Button
+            // ── Include non-structural geometry ──
+            chkIncludeGeneric = new CheckBox
             {
-                Text = "Sync Rod Lengths",
-                DialogResult = DialogResult.OK,
-                Location = new Point(260, y),
-                Size = new Size(120, 30)
+                Text = "Also detect non-structural geometry (IFC, generic models, masses, " +
+                       "imported solids)",
+                Location = new Point(margin + 5, y),
+                Size = new Size(GroupW - 10, 36),
+                Checked = IncludeGenericGeometry,
+                AutoSize = false
             };
-            btnOK.Click += BtnOK_Click;
-            AcceptButton = btnOK;
-            Controls.Add(btnOK);
+            Controls.Add(chkIncludeGeneric);
+            y += 44;
 
+            // ── Buttons (right-aligned with 10px gap) ──
+            // Form width 500, margin 15 → Cancel right edge at 485.
             var btnCancel = new Button
             {
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
-                Location = new Point(385, y),
+                Location = new Point(410, y),
                 Size = new Size(75, 30)
             };
             CancelButton = btnCancel;
             Controls.Add(btnCancel);
+
+            var btnOK = new Button
+            {
+                Text = "Sync Rod Lengths",
+                DialogResult = DialogResult.OK,
+                Location = new Point(290, y),
+                Size = new Size(110, 30)
+            };
+            btnOK.Click += BtnOK_Click;
+            AcceptButton = btnOK;
+            Controls.Add(btnOK);
         }
 
         private void BtnOK_Click(object sender, EventArgs e)
@@ -171,6 +194,7 @@ namespace SgRevitAddin.Commands.Hangers
             TypeCodeRoofs = txtRoofs.Text.Trim();
             TypeCodeFraming = txtFraming.Text.Trim();
             KeepHangerTypes = chkKeepTypes.Checked;
+            IncludeGenericGeometry = chkIncludeGeneric.Checked;
         }
     }
 }

@@ -64,7 +64,7 @@ namespace SgRevitAddin.Commands.Hangers
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(500, 530);
+            ClientSize = new Size(500, 560);
 
             int margin = 15;
             int y = margin;
@@ -108,7 +108,7 @@ namespace SgRevitAddin.Commands.Hangers
             {
                 Text = "Search Parameters",
                 Location = new Point(margin, y),
-                Size = new Size(470, 100)
+                Size = new Size(470, 115)
             };
 
             int lx = 10, tx = 250;
@@ -164,14 +164,14 @@ namespace SgRevitAddin.Commands.Hangers
             grpSearch.Controls.Add(cboFramingSync);
 
             Controls.Add(grpSearch);
-            y += 110;
+            y += 125;
 
-            // ── Hanger Type Codes ──
+            // ── Hanger Type Codes (sized to fit four rows + comfortable padding) ──
             var grpTypes = new GroupBox
             {
                 Text = "Hanger Assembly Type Codes (Hydratec)",
                 Location = new Point(margin, y),
-                Size = new Size(470, 120)
+                Size = new Size(470, 140)
             };
 
             int tw = 60, rowH = 26, labelW2 = 175, tx2 = 195;
@@ -196,7 +196,7 @@ namespace SgRevitAddin.Commands.Hangers
             grpTypes.Controls.Add(txtFraming);
 
             Controls.Add(grpTypes);
-            y += 130;
+            y += 150;
 
             // ── Keep Types ──
             chkKeepTypes = new CheckBox

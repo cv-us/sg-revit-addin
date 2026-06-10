@@ -39,15 +39,25 @@ namespace SgRevitAddin.Commands.Hangers
             "-Basic Adjustable"
         };
 
-        /// <summary>
-        /// Target structural categories for raybounce.
-        /// </summary>
+        /// <summary>Target structural categories for raybounce.</summary>
         private static readonly BuiltInCategory[] TargetCategories = new[]
         {
             BuiltInCategory.OST_Floors,
             BuiltInCategory.OST_Stairs,
             BuiltInCategory.OST_StructuralFraming,
             BuiltInCategory.OST_Roofs
+        };
+
+        /// <summary>
+        /// Extra categories included when "Detect non-structural geometry" is
+        /// checked. Covers IFC imports (which usually land in Generic Models),
+        /// STEP / SAT / Inventor imports (Generic Models or Mass), and other
+        /// simple geometry that isn't categorized as structure.
+        /// </summary>
+        private static readonly BuiltInCategory[] NonStructuralCategories = new[]
+        {
+            BuiltInCategory.OST_GenericModel,
+            BuiltInCategory.OST_Mass
         };
 
         /// <summary>
@@ -93,6 +103,8 @@ namespace SgRevitAddin.Commands.Hangers
                 if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK)
                     return Result.Cancelled;
 
+                bool includeGeneric = dlg.IncludeGenericGeometry;
+
                 // ── Find or create 3D view for raybounce ──
                 View3D raybounceView = null;
 
@@ -120,9 +132,14 @@ namespace SgRevitAddin.Commands.Hangers
                 var hits = new List<RayHitResult>();
                 var misses = new List<FamilyInstance>();
 
-                // Build category filter for ReferenceIntersector
-                var categoryFilter = new ElementMulticategoryFilter(
-                    new List<BuiltInCategory>(TargetCategories));
+                // Build category filter for ReferenceIntersector. When the
+                // user opts in via the "Detect non-structural geometry"
+                // checkbox, the filter also matches Generic Models and
+                // Masses — that's where IFC imports and most STEP/SAT/CAD
+                // imports end up.
+                var categories = new List<BuiltInCategory>(TargetCategories);
+                if (includeGeneric) categories.AddRange(NonStructuralCategories);
+                var categoryFilter = new ElementMulticategoryFilter(categories);
 
                 foreach (var hanger in hangers)
                 {
