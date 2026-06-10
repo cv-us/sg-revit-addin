@@ -31,6 +31,7 @@ Calculates rod lengths for pipe hangers by shooting a ray straight up from each 
 | Structural Framing type code | "02" | Type Code for hangers hitting framing |
 | Keep Hanger Types | unchecked | If checked, only adjusts Rod Length/Y Grip without touching Type Code or Comments |
 | Detect non-structural geometry | unchecked | If checked, the `ReferenceIntersector` category filter also matches **Generic Models** and **Masses** — covers IFC imports, STEP / SAT / Inventor imports, and other simple geometry that isn't categorized as structure. Linked Revit models are always searched regardless of this option |
+| Detect linked CAD geometry | unchecked | If checked, the filter also matches `ImportInstance` elements (linked DWG / DGN / SAT). Two side-effects: (1) `FindReferenceTarget` switches from `Face` to `All` so the intersector returns **Mesh** hits, because Revit triangulates ACIS solids on import and Face-mode would skip them. (2) Because `All` mode also returns linear / edge references, the result list is post-filtered to skip those — the first surface-or-mesh hit (in proximity order) wins. The DWG must be **visible in the `3D-Raybounce` view** for the hit to land; if its import subcategory is hidden in V/G the ray sails right through |
 
 ## RayBounce Implementation
 

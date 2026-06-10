@@ -26,6 +26,15 @@ namespace SgRevitAddin.Commands.Hangers
         /// </summary>
         public bool IncludeGenericGeometry { get; private set; } = false;
 
+        /// <summary>
+        /// When true, the raybounce filter also matches ImportInstance
+        /// elements (linked DWG / DGN / SAT geometry that came from a CAD
+        /// import). The intersector is also switched from Face-only to All
+        /// targets so it picks up Mesh hits — Revit imports 3D CAD solids
+        /// as triangulated meshes, and Face-mode would skip them.
+        /// </summary>
+        public bool IncludeImportedCAD { get; private set; } = false;
+
         // ── Controls ──
         private TextBox txtFloors;
         private TextBox txtStairs;
@@ -33,6 +42,7 @@ namespace SgRevitAddin.Commands.Hangers
         private TextBox txtFraming;
         private CheckBox chkKeepTypes;
         private CheckBox chkIncludeGeneric;
+        private CheckBox chkIncludeCAD;
 
         private readonly int _hangerCount;
 
@@ -57,7 +67,7 @@ namespace SgRevitAddin.Commands.Hangers
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(500, 470);
+            ClientSize = new Size(500, 510);
 
             int margin = 15;
             int y = margin;
@@ -153,15 +163,24 @@ namespace SgRevitAddin.Commands.Hangers
             // ── Include non-structural geometry ──
             chkIncludeGeneric = new CheckBox
             {
-                Text = "Also detect non-structural geometry (IFC, generic models, masses, " +
-                       "imported solids)",
+                Text = "Also detect non-structural geometry (IFC, generic models, masses)",
                 Location = new Point(margin + 5, y),
-                Size = new Size(GroupW - 10, 36),
-                Checked = IncludeGenericGeometry,
-                AutoSize = false
+                Size = new Size(GroupW - 10, 22),
+                Checked = IncludeGenericGeometry
             };
             Controls.Add(chkIncludeGeneric);
-            y += 44;
+            y += 26;
+
+            // ── Include imported CAD ──
+            chkIncludeCAD = new CheckBox
+            {
+                Text = "Also detect linked CAD geometry (DWG, DGN, SAT — STEP/STP via AutoCAD)",
+                Location = new Point(margin + 5, y),
+                Size = new Size(GroupW - 10, 22),
+                Checked = IncludeImportedCAD
+            };
+            Controls.Add(chkIncludeCAD);
+            y += 30;
 
             // ── Buttons (right-aligned with 10px gap) ──
             // Form width 500, margin 15 → Cancel right edge at 485.
@@ -195,6 +214,7 @@ namespace SgRevitAddin.Commands.Hangers
             TypeCodeFraming = txtFraming.Text.Trim();
             KeepHangerTypes = chkKeepTypes.Checked;
             IncludeGenericGeometry = chkIncludeGeneric.Checked;
+            IncludeImportedCAD = chkIncludeCAD.Checked;
         }
     }
 }

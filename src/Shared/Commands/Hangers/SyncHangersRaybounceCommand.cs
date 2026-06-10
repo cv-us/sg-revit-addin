@@ -104,6 +104,7 @@ namespace SgRevitAddin.Commands.Hangers
                     return Result.Cancelled;
 
                 bool includeGeneric = dlg.IncludeGenericGeometry;
+                bool includeImportedCAD = dlg.IncludeImportedCAD;
 
                 // ── Find or create 3D view for raybounce ──
                 View3D raybounceView = null;
@@ -139,14 +140,24 @@ namespace SgRevitAddin.Commands.Hangers
                 // imports end up.
                 var categories = new List<BuiltInCategory>(TargetCategories);
                 if (includeGeneric) categories.AddRange(NonStructuralCategories);
-                var categoryFilter = new ElementMulticategoryFilter(categories);
+                ElementFilter elementFilter = new ElementMulticategoryFilter(categories);
+
+                // Linked DWG / DGN / SAT geometry lives inside ImportInstance
+                // elements whose category isn't a standard BuiltInCategory —
+                // OR a class filter in so those hits also qualify.
+                if (includeImportedCAD)
+                {
+                    elementFilter = new LogicalOrFilter(
+                        elementFilter,
+                        new ElementClassFilter(typeof(ImportInstance)));
+                }
 
                 foreach (var hanger in hangers)
                 {
                     XYZ hangerPoint = GetHangerPoint(hanger);
                     if (hangerPoint == null) { misses.Add(hanger); continue; }
 
-                    var hitResult = ShootRayUp(doc, raybounceView, hangerPoint, categoryFilter);
+                    var hitResult = ShootRayUp(doc, raybounceView, hangerPoint, elementFilter, includeImportedCAD);
                     if (hitResult == null)
                     {
                         misses.Add(hanger);
@@ -263,65 +274,112 @@ namespace SgRevitAddin.Commands.Hangers
         }
 
         /// <summary>
-        /// Shoots a ray straight up from the given point and returns the first
-        /// structural element hit, including linked models.
+        /// Shoots a ray straight up from the given point and returns the
+        /// first surface-or-mesh hit. <paramref name="includeImportedCAD"/>
+        /// flips two things:
+        ///   • The intersector's target switches from Face-only to All so
+        ///     mesh hits (from linked DWG/SAT, which Revit triangulates) are
+        ///     also returned.
+        ///   • Because All can also return linear / edge references, we
+        ///     iterate through all hits in proximity order and pick the
+        ///     first non-linear one — otherwise an edge ~3" closer than a
+        ///     face would win and the rod length would be slightly wrong.
         /// </summary>
         private (XYZ hitPoint, double distance, BuiltInCategory category, string categoryLabel)?
-            ShootRayUp(Document doc, View3D view3D, XYZ origin, ElementFilter categoryFilter)
+            ShootRayUp(Document doc, View3D view3D, XYZ origin,
+                ElementFilter elementFilter, bool includeImportedCAD)
         {
             try
             {
-                var intersector = new ReferenceIntersector(
-                    categoryFilter,
-                    FindReferenceTarget.Face,
-                    view3D);
+                FindReferenceTarget target = includeImportedCAD
+                    ? FindReferenceTarget.All
+                    : FindReferenceTarget.Face;
 
-                // Include linked models
-                intersector.FindReferencesInRevitLinks = true;
+                var intersector = new ReferenceIntersector(elementFilter, target, view3D)
+                {
+                    FindReferencesInRevitLinks = true
+                };
 
-                // Shoot ray straight up
-                ReferenceWithContext result = intersector.FindNearest(origin, XYZ.BasisZ);
-                if (result == null)
-                    return null;
+                ReferenceWithContext result;
+
+                if (includeImportedCAD)
+                {
+                    // With target=All we have to skip edges/curves ourselves.
+                    IList<ReferenceWithContext> all = intersector.Find(origin, XYZ.BasisZ);
+                    if (all == null || all.Count == 0) return null;
+
+                    result = all
+                        .OrderBy(h => h.Proximity)
+                        .FirstOrDefault(h => IsSurfaceOrMeshHit(h.GetReference()));
+                    if (result == null) return null;
+                }
+                else
+                {
+                    result = intersector.FindNearest(origin, XYZ.BasisZ);
+                    if (result == null) return null;
+                }
 
                 Reference reference = result.GetReference();
-                if (reference == null)
-                    return null;
+                if (reference == null) return null;
 
                 double distance = result.Proximity;
                 XYZ hitPoint = origin + XYZ.BasisZ * distance;
 
-                // Determine which category was hit
+                // Resolve the hit element (host or linked).
                 Element hitElement = null;
-                BuiltInCategory hitCat = BuiltInCategory.INVALID;
-
-                // Handle linked elements vs host elements
                 if (reference.LinkedElementId != ElementId.InvalidElementId)
                 {
-                    // Hit a linked element
-                    RevitLinkInstance linkInst = doc.GetElement(reference.ElementId) as RevitLinkInstance;
-                    if (linkInst != null)
-                    {
-                        Document linkDoc = linkInst.GetLinkDocument();
-                        if (linkDoc != null)
-                            hitElement = linkDoc.GetElement(reference.LinkedElementId);
-                    }
+                    var linkInst = doc.GetElement(reference.ElementId) as RevitLinkInstance;
+                    Document linkDoc = linkInst?.GetLinkDocument();
+                    if (linkDoc != null)
+                        hitElement = linkDoc.GetElement(reference.LinkedElementId);
                 }
                 else
                 {
                     hitElement = doc.GetElement(reference.ElementId);
                 }
 
-                if (hitElement?.Category != null)
-                    hitCat = (BuiltInCategory)hitElement.Category.Id.IntegerValue;
+                BuiltInCategory hitCat = BuiltInCategory.INVALID;
+                string label;
 
-                string label = GetCategoryLabel(hitCat);
+                if (hitElement is ImportInstance)
+                {
+                    // Linked CAD geometry — ImportInstance.Category is the
+                    // import's own subcategory, not a useful BuiltInCategory.
+                    label = "Imported CAD";
+                }
+                else
+                {
+                    if (hitElement?.Category != null)
+                        hitCat = (BuiltInCategory)hitElement.Category.Id.IntegerValue;
+                    label = GetCategoryLabel(hitCat);
+                }
 
                 return (hitPoint, distance, hitCat, label);
             }
             catch
             {
                 return null;
+            }
+        }
+
+        /// <summary>
+        /// Returns true when a reference looks like a face or mesh hit —
+        /// i.e. a real surface the rod is meeting. Linear / edge references
+        /// (REFERENCE_TYPE_LINEAR, REFERENCE_TYPE_CUT_EDGE) describe edges
+        /// or curves and are rejected because they'd give a slightly-too-short
+        /// rod length.
+        /// </summary>
+        private static bool IsSurfaceOrMeshHit(Reference r)
+        {
+            if (r == null) return false;
+            switch (r.ElementReferenceType)
+            {
+                case ElementReferenceType.REFERENCE_TYPE_LINEAR:
+                case ElementReferenceType.REFERENCE_TYPE_CUT_EDGE:
+                    return false;
+                default:
+                    return true;
             }
         }
 
@@ -408,6 +466,8 @@ namespace SgRevitAddin.Commands.Hangers
                 case BuiltInCategory.OST_Stairs: return "Stairs";
                 case BuiltInCategory.OST_Roofs: return "Roofs";
                 case BuiltInCategory.OST_StructuralFraming: return "Structural Framing";
+                case BuiltInCategory.OST_GenericModel: return "Generic Model";
+                case BuiltInCategory.OST_Mass: return "Mass";
                 default: return "Other";
             }
         }
