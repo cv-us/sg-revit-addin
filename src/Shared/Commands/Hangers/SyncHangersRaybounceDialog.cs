@@ -28,10 +28,12 @@ namespace SgRevitAddin.Commands.Hangers
 
         /// <summary>
         /// When true, the raybounce filter also matches ImportInstance
-        /// elements (linked DWG / DGN / SAT geometry that came from a CAD
-        /// import). The intersector is also switched from Face-only to All
-        /// targets so it picks up Mesh hits — Revit imports 3D CAD solids
-        /// as triangulated meshes, and Face-mode would skip them.
+        /// elements (linked DWG / DGN / SAT geometry — covers STEP and IFC
+        /// brought through AutoCAD into a DWG). The intersector target is
+        /// switched from Face-only to All, and the absolute closest hit of
+        /// any reference type wins — face, mesh, or edge. CAD imports
+        /// often only expose edge references (especially STEP-via-AutoCAD
+        /// wireframes), so face-only mode would miss them entirely.
         /// </summary>
         public bool IncludeImportedCAD { get; private set; } = false;
 

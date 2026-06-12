@@ -275,15 +275,21 @@ namespace SgRevitAddin.Commands.Hangers
 
         /// <summary>
         /// Shoots a ray straight up from the given point and returns the
-        /// first surface-or-mesh hit. <paramref name="includeImportedCAD"/>
-        /// flips two things:
-        ///   • The intersector's target switches from Face-only to All so
-        ///     mesh hits (from linked DWG/SAT, which Revit triangulates) are
-        ///     also returned.
-        ///   • Because All can also return linear / edge references, we
-        ///     iterate through all hits in proximity order and pick the
-        ///     first non-linear one — otherwise an edge ~3" closer than a
-        ///     face would win and the rod length would be slightly wrong.
+        /// first hit along the ray.
+        ///
+        /// When <paramref name="includeImportedCAD"/> is true the intersector
+        /// target switches from Face-only to All — CAD-imported geometry
+        /// (DWG / DGN / SAT, including STEP-via-AutoCAD and IFC-via-AutoCAD)
+        /// rarely exposes proper Face references, so Face-only mode misses
+        /// it entirely. With target=All Revit returns whatever the closest
+        /// geometric reference is — face, mesh, or edge — and `FindNearest`
+        /// picks it. We deliberately do NOT filter linear/edge references,
+        /// even though they can shave a fraction of an inch off the rod
+        /// length on native Revit floors. The whole point of the CAD mode
+        /// is "stop at the first piece of geometry the ray actually
+        /// touches, whatever its type" — so an IFC beam in the way must
+        /// win over the floor above it, even if the beam only exposes
+        /// edges and not faces.
         /// </summary>
         private (XYZ hitPoint, double distance, BuiltInCategory category, string categoryLabel)?
             ShootRayUp(Document doc, View3D view3D, XYZ origin,
@@ -300,24 +306,8 @@ namespace SgRevitAddin.Commands.Hangers
                     FindReferencesInRevitLinks = true
                 };
 
-                ReferenceWithContext result;
-
-                if (includeImportedCAD)
-                {
-                    // With target=All we have to skip edges/curves ourselves.
-                    IList<ReferenceWithContext> all = intersector.Find(origin, XYZ.BasisZ);
-                    if (all == null || all.Count == 0) return null;
-
-                    result = all
-                        .OrderBy(h => h.Proximity)
-                        .FirstOrDefault(h => IsSurfaceOrMeshHit(h.GetReference()));
-                    if (result == null) return null;
-                }
-                else
-                {
-                    result = intersector.FindNearest(origin, XYZ.BasisZ);
-                    if (result == null) return null;
-                }
+                ReferenceWithContext result = intersector.FindNearest(origin, XYZ.BasisZ);
+                if (result == null) return null;
 
                 Reference reference = result.GetReference();
                 if (reference == null) return null;
@@ -360,26 +350,6 @@ namespace SgRevitAddin.Commands.Hangers
             catch
             {
                 return null;
-            }
-        }
-
-        /// <summary>
-        /// Returns true when a reference looks like a face or mesh hit —
-        /// i.e. a real surface the rod is meeting. Linear / edge references
-        /// (REFERENCE_TYPE_LINEAR, REFERENCE_TYPE_CUT_EDGE) describe edges
-        /// or curves and are rejected because they'd give a slightly-too-short
-        /// rod length.
-        /// </summary>
-        private static bool IsSurfaceOrMeshHit(Reference r)
-        {
-            if (r == null) return false;
-            switch (r.ElementReferenceType)
-            {
-                case ElementReferenceType.REFERENCE_TYPE_LINEAR:
-                case ElementReferenceType.REFERENCE_TYPE_CUT_EDGE:
-                    return false;
-                default:
-                    return true;
             }
         }
 
