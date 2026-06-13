@@ -1,6 +1,8 @@
 using Autodesk.Revit.UI;
+using SgRevitAddin.Commands.Modify;
 using SgRevitAddin.Utils;
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 
 namespace SgRevitAddin
@@ -298,9 +300,46 @@ namespace SgRevitAddin
                     "SgRevitAddin.Commands.ModelCheck.PipesTooShortCommand",
                     "pipes-too-short-16.png", "Flag pipes shorter than the minimum fabricable nipple length for their size."));
 
+            // ── Modify-tab SG panel (placeholders) ──
+            // Tab.Modify isn't in the Revit API enum, so we inject through
+            // AdWindows. Each button just shows a scratch text dialog for
+            // now — reserved slots for future quick-edit tools.
+            var modifyButtons = new List<ModifyButton>
+            {
+                new ModifyButton
+                {
+                    Id = "SgPlaceholderOne",
+                    Label = "Placeholder\nOne",
+                    Tooltip = "Placeholder — opens a scratch text dialog.",
+                    LargeImage = IconHelper.LoadIcon("modelcheck-32.png"),
+                    SmallImage = IconHelper.LoadIcon("modelcheck-16.png"),
+                    OnClick = () =>
+                    {
+                        using (var dlg = new PlaceholderDialog("SG — Placeholder One"))
+                            dlg.ShowDialog();
+                    }
+                },
+                new ModifyButton
+                {
+                    Id = "SgPlaceholderTwo",
+                    Label = "Placeholder\nTwo",
+                    Tooltip = "Placeholder — opens a scratch text dialog.",
+                    LargeImage = IconHelper.LoadIcon("inspect-params-32.png"),
+                    SmallImage = IconHelper.LoadIcon("inspect-params-16.png"),
+                    OnClick = () =>
+                    {
+                        using (var dlg = new PlaceholderDialog("SG — Placeholder Two"))
+                            dlg.ShowDialog();
+                    }
+                }
+            };
+            RibbonStyling.InjectModifyPanel("SG", modifyButtons);
+
             // Apply the SG-brand color border around the tab title. Best-effort
             // hook into AdWindows — no-op if Revit's WPF tree shape changes.
             RibbonStyling.ApplyTabAccent(tabName);
+            // Same accent on the Modify-tab "SG" panel title bar.
+            RibbonStyling.ApplyPanelTitleAccent("SG");
 
             return Result.Succeeded;
         }

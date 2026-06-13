@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -56,9 +57,18 @@ namespace SgRevitAddin.Utils
         private static EventHandler _layoutUpdatedHandler;
         private static TextBlock _hookedTitleBlock;
         private static string _targetTabTitle;
+        private static string _targetPanelTitle;
         private static SolidColorBrush _bgBrush;
         private static SolidColorBrush _fgBrush;
         private static bool _isApplying; // re-entry guard for LayoutUpdated loops
+        private static bool _isApplyingPanel; // re-entry guard for panel-title pass
+
+        private static string _modifyPanelTitle;
+        private static IList<ModifyButton> _modifyPanelButtons;
+        private static bool _modifyPanelInjected;
+
+        /// <summary>Max ancestor height (DIPs) when walking up from a panel-title TextBlock to its title-bar container.</summary>
+        private const double PanelTitleBarMaxHeight = 32.0;
 
         /// <summary>
         /// Schedules the accent to be applied to the named tab as soon as
@@ -69,24 +79,161 @@ namespace SgRevitAddin.Utils
             try
             {
                 _targetTabTitle = tabTitle;
-                _bgBrush = new SolidColorBrush(AccentColor);
-                _bgBrush.Freeze();
-                _fgBrush = new SolidColorBrush(TextColor);
-                _fgBrush.Freeze();
-
+                EnsureBrushes();
                 TryApply();
-
-                if (_itemInitializedHandler == null)
-                {
-                    _itemInitializedHandler = (_, __) => TryApply();
-                    Adn.ComponentManager.ItemInitialized += _itemInitializedHandler;
-                }
+                HookItemInitialized();
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine(
                     $"[SgRevitAddin] RibbonStyling.ApplyTabAccent: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Schedules the accent to be applied to the title bar of every
+        /// RibbonPanel whose title equals <paramref name="panelTitle"/>.
+        /// Works across all tabs, including the contextual Modify tab —
+        /// the painted state survives panel collapse/expand because
+        /// ItemInitialized fires again when the panel rehydrates.
+        /// </summary>
+        public static void ApplyPanelTitleAccent(string panelTitle)
+        {
+            try
+            {
+                _targetPanelTitle = panelTitle;
+                EnsureBrushes();
+                TryApplyPanelTitle();
+                HookItemInitialized();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[SgRevitAddin] RibbonStyling.ApplyPanelTitleAccent: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Injects a custom panel onto Revit's built-in <b>Modify</b> tab.
+        /// The Revit <c>Tab</c> enum doesn't expose Modify, so the only
+        /// route is through AdWindows — find the tab by Id, mint a
+        /// <c>RibbonPanelSource</c> + <c>RibbonPanel</c>, and add buttons
+        /// whose CommandHandler is a plain WPF ICommand (we use
+        /// <see cref="RelayCommand"/>). Click handlers run on the UI
+        /// thread, so they can show dialogs directly — no ExternalEvent
+        /// needed unless a button needs to touch the Revit document.
+        ///
+        /// Idempotent: if a panel with the same title already exists on
+        /// the Modify tab, nothing is added. Safe to call repeatedly via
+        /// the ItemInitialized retry loop, which is what handles the
+        /// "Modify tab not built yet at OnStartup" case.
+        /// </summary>
+        public static void InjectModifyPanel(string panelTitle, IList<ModifyButton> buttons)
+        {
+            try
+            {
+                _modifyPanelTitle = panelTitle;
+                _modifyPanelButtons = buttons;
+                TryInjectModifyPanel();
+                HookItemInitialized();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[SgRevitAddin] RibbonStyling.InjectModifyPanel: {ex.Message}");
+            }
+        }
+
+        private static bool TryInjectModifyPanel()
+        {
+            if (_modifyPanelInjected) return true;
+            if (string.IsNullOrEmpty(_modifyPanelTitle) || _modifyPanelButtons == null)
+                return false;
+
+            try
+            {
+                var ribbon = Adn.ComponentManager.Ribbon;
+                if (ribbon == null) return false;
+
+                Adn.RibbonTab modifyTab = null;
+                foreach (var tab in ribbon.Tabs)
+                {
+                    if (string.Equals(tab.Id, "Modify", StringComparison.OrdinalIgnoreCase))
+                    {
+                        modifyTab = tab;
+                        break;
+                    }
+                }
+                if (modifyTab == null) return false;
+
+                // Skip if our panel already exists (e.g. on a re-init).
+                foreach (var existing in modifyTab.Panels)
+                {
+                    if (existing?.Source != null
+                        && string.Equals(existing.Source.Title, _modifyPanelTitle, StringComparison.Ordinal))
+                    {
+                        _modifyPanelInjected = true;
+                        return true;
+                    }
+                }
+
+                var panelSource = new Adn.RibbonPanelSource
+                {
+                    Title = _modifyPanelTitle,
+                    Id = "SgRevitAddin.Modify." + _modifyPanelTitle.Replace(" ", "_")
+                };
+                var panel = new Adn.RibbonPanel { Source = panelSource };
+
+                foreach (var bd in _modifyPanelButtons)
+                {
+                    var btn = new Adn.RibbonButton
+                    {
+                        Id = bd.Id,
+                        Text = bd.Label,
+                        ToolTip = bd.Tooltip,
+                        Description = bd.Tooltip,
+                        Size = Adn.RibbonItemSize.Large,
+                        ShowText = true,
+                        ShowImage = true,
+                        Orientation = Orientation.Vertical,
+                        LargeImage = bd.LargeImage,
+                        Image = bd.SmallImage,
+                        CommandHandler = new RelayCommand(_ => bd.OnClick?.Invoke())
+                    };
+                    panelSource.Items.Add(btn);
+                }
+
+                modifyTab.Panels.Add(panel);
+                _modifyPanelInjected = true;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[SgRevitAddin] RibbonStyling.TryInjectModifyPanel: {ex.Message}");
+                return false;
+            }
+        }
+
+        private static void EnsureBrushes()
+        {
+            if (_bgBrush != null) return;
+            _bgBrush = new SolidColorBrush(AccentColor);
+            _bgBrush.Freeze();
+            _fgBrush = new SolidColorBrush(TextColor);
+            _fgBrush.Freeze();
+        }
+
+        private static void HookItemInitialized()
+        {
+            if (_itemInitializedHandler != null) return;
+            _itemInitializedHandler = (_, __) =>
+            {
+                if (!string.IsNullOrEmpty(_targetTabTitle)) TryApply();
+                if (!string.IsNullOrEmpty(_targetPanelTitle)) TryApplyPanelTitle();
+                if (!_modifyPanelInjected) TryInjectModifyPanel();
+            };
+            Adn.ComponentManager.ItemInitialized += _itemInitializedHandler;
         }
 
         private static bool TryApply()
@@ -110,7 +257,11 @@ namespace SgRevitAddin.Utils
                 {
                     if (_hookedTitleBlock != null && _layoutUpdatedHandler != null)
                         _hookedTitleBlock.LayoutUpdated -= _layoutUpdatedHandler;
-                    _layoutUpdatedHandler = (_, __) => TryApply();
+                    _layoutUpdatedHandler = (_, __) =>
+                    {
+                        TryApply();
+                        if (!string.IsNullOrEmpty(_targetPanelTitle)) TryApplyPanelTitle();
+                    };
                     titleBlock.LayoutUpdated += _layoutUpdatedHandler;
                     _hookedTitleBlock = titleBlock;
                 }
@@ -170,6 +321,103 @@ namespace SgRevitAddin.Utils
             }
 
             return candidate;
+        }
+
+        /// <summary>
+        /// Finds every TextBlock in the ribbon whose Text matches
+        /// <see cref="_targetPanelTitle"/>, walks up to the small title-bar
+        /// container, and paints that subtree. There can be more than one
+        /// match (e.g. a panel of the same name on a different tab), so we
+        /// paint all of them.
+        /// </summary>
+        private static bool TryApplyPanelTitle()
+        {
+            if (_isApplyingPanel) return false;
+
+            _isApplyingPanel = true;
+            try
+            {
+                var ribbon = Adn.ComponentManager.Ribbon;
+                if (ribbon == null) return false;
+
+                var matches = new List<TextBlock>();
+                FindAllTextBlocksByText(ribbon, _targetPanelTitle, matches);
+                if (matches.Count == 0) return false;
+
+                foreach (var tb in matches)
+                {
+                    DependencyObject titleBar = FindShortAncestor(tb, PanelTitleBarMaxHeight);
+                    PaintSubtree(titleBar);
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[SgRevitAddin] RibbonStyling.TryApplyPanelTitle: {ex.Message}");
+                return false;
+            }
+            finally
+            {
+                _isApplyingPanel = false;
+            }
+        }
+
+        /// <summary>
+        /// Walks up from <paramref name="element"/> and returns the topmost
+        /// ancestor whose ActualHeight is still ≤ <paramref name="maxHeight"/>.
+        /// That's the panel title bar; one level higher is the full panel.
+        ///
+        /// Falls back to the original element if no ancestor qualifies (e.g.
+        /// during initial layout when heights are still zero — the next
+        /// LayoutUpdated will retry).
+        /// </summary>
+        private static DependencyObject FindShortAncestor(DependencyObject element, double maxHeight)
+        {
+            DependencyObject candidate = element;
+            DependencyObject current = element;
+
+            for (int depth = 0; depth < MaxWalkDepth; depth++)
+            {
+                var parent = VisualTreeHelper.GetParent(current);
+                if (parent == null) break;
+
+                if (parent is FrameworkElement fe
+                    && fe.ActualHeight > 0
+                    && fe.ActualHeight > maxHeight)
+                {
+                    // parent is the panel body — current is the title bar.
+                    break;
+                }
+
+                candidate = parent;
+                current = parent;
+            }
+
+            return candidate;
+        }
+
+        /// <summary>
+        /// Depth-first walk that collects every TextBlock whose Text equals
+        /// <paramref name="text"/>. Used for panel-title lookup since there
+        /// can be multiple panels with the same name across tabs.
+        /// </summary>
+        private static void FindAllTextBlocksByText(DependencyObject root, string text, List<TextBlock> result)
+        {
+            if (root == null) return;
+
+            int count;
+            try { count = VisualTreeHelper.GetChildrenCount(root); }
+            catch { return; }
+
+            for (int i = 0; i < count; i++)
+            {
+                var child = VisualTreeHelper.GetChild(root, i);
+                if (child is TextBlock tb && string.Equals(tb.Text, text, StringComparison.Ordinal))
+                    result.Add(tb);
+
+                FindAllTextBlocksByText(child, text, result);
+            }
         }
 
         /// <summary>
@@ -243,5 +491,22 @@ namespace SgRevitAddin.Utils
             }
             return null;
         }
+    }
+
+    /// <summary>
+    /// Lightweight description of a button to inject onto an AdWindows-built
+    /// panel (e.g. the Modify-tab SG panel). <see cref="OnClick"/> runs on
+    /// the WPF UI thread when the button is clicked, so it can show dialogs
+    /// directly. To touch the Revit document, raise an ExternalEvent from
+    /// the handler instead.
+    /// </summary>
+    public class ModifyButton
+    {
+        public string Id;
+        public string Label;
+        public string Tooltip;
+        public ImageSource LargeImage;
+        public ImageSource SmallImage;
+        public Action OnClick;
     }
 }
