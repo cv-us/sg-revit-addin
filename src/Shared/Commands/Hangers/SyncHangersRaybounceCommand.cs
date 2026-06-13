@@ -45,6 +45,9 @@ namespace SgRevitAddin.Commands.Hangers
             BuiltInCategory.OST_Floors,
             BuiltInCategory.OST_Stairs,
             BuiltInCategory.OST_StructuralFraming,
+            BuiltInCategory.OST_StructuralColumns,
+            BuiltInCategory.OST_StructuralTruss,
+            BuiltInCategory.OST_StructuralFoundation,
             BuiltInCategory.OST_Roofs
         };
 
@@ -275,21 +278,21 @@ namespace SgRevitAddin.Commands.Hangers
 
         /// <summary>
         /// Shoots a ray straight up from the given point and returns the
-        /// first hit along the ray.
+        /// absolute closest hit along the ray.
         ///
         /// When <paramref name="includeImportedCAD"/> is true the intersector
         /// target switches from Face-only to All — CAD-imported geometry
         /// (DWG / DGN / SAT, including STEP-via-AutoCAD and IFC-via-AutoCAD)
         /// rarely exposes proper Face references, so Face-only mode misses
-        /// it entirely. With target=All Revit returns whatever the closest
-        /// geometric reference is — face, mesh, or edge — and `FindNearest`
-        /// picks it. We deliberately do NOT filter linear/edge references,
-        /// even though they can shave a fraction of an inch off the rod
-        /// length on native Revit floors. The whole point of the CAD mode
-        /// is "stop at the first piece of geometry the ray actually
-        /// touches, whatever its type" — so an IFC beam in the way must
-        /// win over the floor above it, even if the beam only exposes
-        /// edges and not faces.
+        /// it entirely.
+        ///
+        /// We deliberately use <c>Find</c> instead of <c>FindNearest</c> and
+        /// then take the closest by <c>Proximity</c>. <c>FindNearest</c> has
+        /// empirically returned a further face hit over a closer mesh/edge
+        /// hit in mixed scenes (CAD ImportInstance below a Revit floor) —
+        /// taking the absolute minimum from the full hit list sidesteps
+        /// that. No reference-type filtering: the first thing the ray
+        /// physically touches wins, whatever its type.
         /// </summary>
         private (XYZ hitPoint, double distance, BuiltInCategory category, string categoryLabel)?
             ShootRayUp(Document doc, View3D view3D, XYZ origin,
@@ -306,7 +309,13 @@ namespace SgRevitAddin.Commands.Hangers
                     FindReferencesInRevitLinks = true
                 };
 
-                ReferenceWithContext result = intersector.FindNearest(origin, XYZ.BasisZ);
+                IList<ReferenceWithContext> hits = intersector.Find(origin, XYZ.BasisZ);
+                if (hits == null || hits.Count == 0) return null;
+
+                ReferenceWithContext result = hits
+                    .Where(h => h != null && h.Proximity > 1e-6) // ignore self-coincident hits
+                    .OrderBy(h => h.Proximity)
+                    .FirstOrDefault();
                 if (result == null) return null;
 
                 Reference reference = result.GetReference();
