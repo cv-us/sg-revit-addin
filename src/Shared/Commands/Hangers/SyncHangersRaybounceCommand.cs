@@ -275,6 +275,31 @@ namespace SgRevitAddin.Commands.Hangers
                 if (failedCount > 0)
                     summaryLines.Add($"{failedCount} hanger{(failedCount != 1 ? "s" : "")} failed.");
 
+                // ── CAD diagnostics ── (only when linked-CAD detection is on)
+                if (cadRaycaster != null)
+                {
+                    int cadWins = hits.Count(h => h.HitCategoryLabel == "Imported CAD");
+                    summaryLines.Add("");
+                    summaryLines.Add("── Linked CAD detection ──");
+                    summaryLines.Add($"{cadWins} hanger{(cadWins != 1 ? "s" : "")} measured to CAD geometry.");
+                    summaryLines.Add(cadRaycaster.Diagnostics);
+                    if (cadRaycaster.TriangleCount == 0)
+                    {
+                        summaryLines.Add("");
+                        summaryLines.Add("⚠ No CAD triangles were found. The DWG likely came in as " +
+                                         "2D curves / wireframe (nothing solid to bounce off), or it " +
+                                         "isn't an ImportInstance. Check that the STEP imported into " +
+                                         "AutoCAD as 3D solids before saving the DWG.");
+                    }
+                    else if (cadWins == 0)
+                    {
+                        summaryLines.Add("");
+                        summaryLines.Add("⚠ CAD triangles were cached but no ray hit one. The geometry " +
+                                         "may be offset from the hangers (transform), or it sits below " +
+                                         "the hanger rather than above.");
+                    }
+                }
+
                 TaskDialog.Show("Hanger Sync To Structural Summary:",
                     string.Join("\n", summaryLines));
 

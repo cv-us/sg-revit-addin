@@ -51,6 +51,15 @@ namespace SgRevitAddin.Utils
         private readonly View3D _view;
         private readonly List<CadImport> _imports = new List<CadImport>();
 
+        // ── Diagnostics (populated during Build) ──
+        private int _importsSeen;       // total ImportInstance elements enumerated
+        private int _importsWithGeom;   // imports that yielded ≥1 triangle
+        private int _solidObjs;         // Solid GeometryObjects encountered
+        private int _meshObjs;          // Mesh GeometryObjects encountered
+        private int _giObjs;            // nested GeometryInstance encountered
+        private int _curveObjs;         // Curve / PolyLine / Line (ignored, but tallied)
+        private int _otherObjs;         // anything else (Point, etc.)
+
         public CadMeshRaycaster(Document doc, View3D view)
         {
             _doc = doc;
@@ -62,6 +71,21 @@ namespace SgRevitAddin.Utils
 
         /// <summary>Total triangle count across all imports — useful for diagnostics.</summary>
         public int TriangleCount => _imports.Sum(i => i.Triangles.Count);
+
+        /// <summary>
+        /// Human-readable summary of what the build pass saw — append to a
+        /// command's summary dialog to diagnose "rod still overshoots".
+        ///   • importsSeen=0 → no ImportInstance in doc/links at all.
+        ///   • triangleCount=0 with solids/meshes=0 → the CAD came in as
+        ///     curves/wireframe only (nothing to ray-hit). Fix is CAD-side.
+        ///   • triangleCount&gt;0 but no hangers used CAD → geometry is
+        ///     placed wrong (transform) or off the vertical rays.
+        /// </summary>
+        public string Diagnostics =>
+            $"imports seen={_importsSeen}, with geometry={_importsWithGeom}; " +
+            $"objects → Solid={_solidObjs}, Mesh={_meshObjs}, " +
+            $"GeomInstance={_giObjs}, Curve/PolyLine={_curveObjs}, other={_otherObjs}; " +
+            $"triangles cached={TriangleCount}";
 
         /// <summary>
         /// Enumerates every <see cref="ImportInstance"/> in the host doc
@@ -103,35 +127,35 @@ namespace SgRevitAddin.Utils
 
         private void BuildOne(ImportInstance imp, Transform linkXform)
         {
-            // View-bound options so layer/category visibility in the
-            // raybounce view is respected. ComputeReferences=false: we
-            // don't need API References — we're doing distance math only.
-            Options opts;
-            try
-            {
-                opts = new Options
-                {
-                    ComputeReferences = false,
-                    IncludeNonVisibleObjects = false,
-                    View = _view
-                };
-            }
-            catch
-            {
-                // View may not support detail-level options — fall back.
-                opts = new Options { ComputeReferences = false };
-            }
+            _importsSeen++;
 
-            GeometryElement geom;
-            try { geom = imp.get_Geometry(opts); }
-            catch { return; }
-            if (geom == null) return;
-
+            // Retrieve RAW model geometry at Fine detail — NO view binding.
+            // Earlier we passed View=_view so the raybounce view's layer
+            // visibility was respected, but that meant a DWG whose layers
+            // were off in the auto-created 3D-Raybounce view returned ZERO
+            // geometry — and the rod fell through to native structure
+            // (the "still overshoots" bug). Raw geometry removes that
+            // dependency; we'd rather risk hitting a hidden layer than
+            // miss the geometry entirely.
             var tris = new List<Triangle>();
             var aabb = new MutableAabb();
-            CollectFromGeometry(geom, linkXform, tris, aabb);
+
+            // Try a few option sets — different Revit builds are picky about
+            // which combination yields geometry for a linked ImportInstance.
+            foreach (var opts in GeometryOptionVariants())
+            {
+                GeometryElement geom;
+                try { geom = imp.get_Geometry(opts); }
+                catch { continue; }
+                if (geom == null) continue;
+
+                CollectFromGeometry(geom, linkXform, tris, aabb);
+                if (tris.Count > 0) break; // got something — stop trying variants
+            }
+
             if (tris.Count == 0) return;
 
+            _importsWithGeom++;
             _imports.Add(new CadImport
             {
                 Triangles = tris,
@@ -140,7 +164,36 @@ namespace SgRevitAddin.Utils
             });
         }
 
-        private static void CollectFromGeometry(GeometryElement elem, Transform linkXform,
+        /// <summary>
+        /// Geometry option sets tried in order until one yields triangles.
+        /// Raw (no-view) Fine first; then with non-visible objects included
+        /// (catches geometry on layers Revit considers "not visible"); then
+        /// the view-bound variant as a last resort.
+        /// </summary>
+        private IEnumerable<Options> GeometryOptionVariants()
+        {
+            yield return new Options
+            {
+                ComputeReferences = false,
+                IncludeNonVisibleObjects = false,
+                DetailLevel = ViewDetailLevel.Fine
+            };
+            yield return new Options
+            {
+                ComputeReferences = false,
+                IncludeNonVisibleObjects = true,
+                DetailLevel = ViewDetailLevel.Fine
+            };
+            if (_view != null)
+                yield return new Options
+                {
+                    ComputeReferences = false,
+                    IncludeNonVisibleObjects = true,
+                    View = _view
+                };
+        }
+
+        private void CollectFromGeometry(GeometryElement elem, Transform linkXform,
             List<Triangle> tris, MutableAabb aabb)
         {
             if (elem == null) return;
@@ -151,6 +204,7 @@ namespace SgRevitAddin.Utils
 
                 if (obj is Solid solid)
                 {
+                    _solidObjs++;
                     if (solid.Faces == null || solid.Faces.Size == 0) continue;
                     foreach (Face face in solid.Faces)
                     {
@@ -163,10 +217,12 @@ namespace SgRevitAddin.Utils
                 }
                 else if (obj is Mesh mesh)
                 {
+                    _meshObjs++;
                     EmitMesh(mesh, linkXform, tris, aabb);
                 }
                 else if (obj is GeometryInstance gi)
                 {
+                    _giObjs++;
                     // Outer GeometryInstance returned by ImportInstance.get_Geometry()
                     // is ALREADY in owning-doc coords (TBC #0605 double-transform
                     // pitfall) — GetInstanceGeometry returns copies in those same
@@ -175,7 +231,14 @@ namespace SgRevitAddin.Utils
                     try { inner = gi.GetInstanceGeometry(); } catch { }
                     CollectFromGeometry(inner, linkXform, tris, aabb);
                 }
-                // Curve / PolyLine / Point: not occluding geometry — skip.
+                else if (obj is Curve || obj is PolyLine)
+                {
+                    _curveObjs++; // not occluding geometry — tallied, then skipped
+                }
+                else
+                {
+                    _otherObjs++;
+                }
             }
         }
 
