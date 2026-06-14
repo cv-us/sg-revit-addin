@@ -139,20 +139,26 @@ namespace SgRevitAddin.Commands.Hangers
                 // Build category filter for ReferenceIntersector. When the
                 // user opts in via the "Detect non-structural geometry"
                 // checkbox, the filter also matches Generic Models and
-                // Masses — that's where IFC imports and most STEP/SAT/CAD
-                // imports end up.
+                // Masses — that's where IFC imports placed directly into
+                // Revit end up (as native FamilyInstances, hit accurately
+                // by ReferenceIntersector).
                 var categories = new List<BuiltInCategory>(TargetCategories);
                 if (includeGeneric) categories.AddRange(NonStructuralCategories);
                 ElementFilter elementFilter = new ElementMulticategoryFilter(categories);
 
-                // Linked DWG / DGN / SAT geometry lives inside ImportInstance
-                // elements whose category isn't a standard BuiltInCategory —
-                // OR a class filter in so those hits also qualify.
+                // Linked CAD geometry (DWG / DGN / SAT — covers STEP and
+                // IFC routed through AutoCAD) is handled by a dedicated
+                // CadMeshRaycaster: ReferenceIntersector returns
+                // element-extent/bbox proximity for ImportInstance, not
+                // triangle proximity, which caused rods to overshoot the
+                // real geometry by feet. The custom raycaster triangulates
+                // each ImportInstance once and runs Möller-Trumbore per
+                // ray. We then take min(native, cad) per hanger.
+                CadMeshRaycaster cadRaycaster = null;
                 if (includeImportedCAD)
                 {
-                    elementFilter = new LogicalOrFilter(
-                        elementFilter,
-                        new ElementClassFilter(typeof(ImportInstance)));
+                    cadRaycaster = new CadMeshRaycaster(doc, raybounceView);
+                    cadRaycaster.Build();
                 }
 
                 foreach (var hanger in hangers)
@@ -160,7 +166,7 @@ namespace SgRevitAddin.Commands.Hangers
                     XYZ hangerPoint = GetHangerPoint(hanger);
                     if (hangerPoint == null) { misses.Add(hanger); continue; }
 
-                    var hitResult = ShootRayUp(doc, raybounceView, hangerPoint, elementFilter, includeImportedCAD);
+                    var hitResult = ShootRayUp(doc, raybounceView, hangerPoint, elementFilter, cadRaycaster);
                     if (hitResult == null)
                     {
                         misses.Add(hanger);
@@ -280,86 +286,103 @@ namespace SgRevitAddin.Commands.Hangers
         /// Shoots a ray straight up from the given point and returns the
         /// absolute closest hit along the ray.
         ///
-        /// When <paramref name="includeImportedCAD"/> is true the intersector
-        /// target switches from Face-only to All — CAD-imported geometry
-        /// (DWG / DGN / SAT, including STEP-via-AutoCAD and IFC-via-AutoCAD)
-        /// rarely exposes proper Face references, so Face-only mode misses
-        /// it entirely.
+        /// Two parallel paths, merged by <c>min</c>:
+        ///   • Native Revit elements (Floors / Roofs / Framing / etc.):
+        ///     <see cref="ReferenceIntersector"/> with target=Face. Works
+        ///     fine for native geometry — proximity is the true face hit.
+        ///   • Linked CAD <see cref="ImportInstance"/> (DWG / DGN / SAT,
+        ///     including STEP-via-AutoCAD and IFC-via-AutoCAD): handled by
+        ///     <see cref="CadMeshRaycaster"/>. ReferenceIntersector returns
+        ///     element-extent/bbox proximity (not triangle proximity) for
+        ///     CAD imports, which caused rods to overshoot the real
+        ///     geometry by feet.
         ///
-        /// We deliberately use <c>Find</c> instead of <c>FindNearest</c> and
-        /// then take the closest by <c>Proximity</c>. <c>FindNearest</c> has
-        /// empirically returned a further face hit over a closer mesh/edge
-        /// hit in mixed scenes (CAD ImportInstance below a Revit floor) —
-        /// taking the absolute minimum from the full hit list sidesteps
-        /// that. No reference-type filtering: the first thing the ray
-        /// physically touches wins, whatever its type.
+        /// We use <c>Find</c> + sort by <c>Proximity</c> on the native side
+        /// because <c>FindNearest</c> has empirically returned a further
+        /// face hit over a closer one in mixed scenes.
         /// </summary>
         private (XYZ hitPoint, double distance, BuiltInCategory category, string categoryLabel)?
             ShootRayUp(Document doc, View3D view3D, XYZ origin,
-                ElementFilter elementFilter, bool includeImportedCAD)
+                ElementFilter elementFilter, CadMeshRaycaster cadRaycaster)
         {
+            // ── Native Revit pass ──
+            double nativeDist = double.PositiveInfinity;
+            Reference nativeRef = null;
             try
             {
-                FindReferenceTarget target = includeImportedCAD
-                    ? FindReferenceTarget.All
-                    : FindReferenceTarget.Face;
-
-                var intersector = new ReferenceIntersector(elementFilter, target, view3D)
+                var intersector = new ReferenceIntersector(elementFilter, FindReferenceTarget.Face, view3D)
                 {
                     FindReferencesInRevitLinks = true
                 };
-
                 IList<ReferenceWithContext> hits = intersector.Find(origin, XYZ.BasisZ);
-                if (hits == null || hits.Count == 0) return null;
-
-                ReferenceWithContext result = hits
-                    .Where(h => h != null && h.Proximity > 1e-6) // ignore self-coincident hits
-                    .OrderBy(h => h.Proximity)
-                    .FirstOrDefault();
-                if (result == null) return null;
-
-                Reference reference = result.GetReference();
-                if (reference == null) return null;
-
-                double distance = result.Proximity;
-                XYZ hitPoint = origin + XYZ.BasisZ * distance;
-
-                // Resolve the hit element (host or linked).
-                Element hitElement = null;
-                if (reference.LinkedElementId != ElementId.InvalidElementId)
+                if (hits != null && hits.Count > 0)
                 {
-                    var linkInst = doc.GetElement(reference.ElementId) as RevitLinkInstance;
-                    Document linkDoc = linkInst?.GetLinkDocument();
-                    if (linkDoc != null)
-                        hitElement = linkDoc.GetElement(reference.LinkedElementId);
+                    var best = hits
+                        .Where(h => h != null && h.Proximity > 1e-6)
+                        .OrderBy(h => h.Proximity)
+                        .FirstOrDefault();
+                    if (best != null)
+                    {
+                        nativeDist = best.Proximity;
+                        nativeRef = best.GetReference();
+                    }
                 }
-                else
-                {
-                    hitElement = doc.GetElement(reference.ElementId);
-                }
-
-                BuiltInCategory hitCat = BuiltInCategory.INVALID;
-                string label;
-
-                if (hitElement is ImportInstance)
-                {
-                    // Linked CAD geometry — ImportInstance.Category is the
-                    // import's own subcategory, not a useful BuiltInCategory.
-                    label = "Imported CAD";
-                }
-                else
-                {
-                    if (hitElement?.Category != null)
-                        hitCat = (BuiltInCategory)hitElement.Category.Id.IntegerValue;
-                    label = GetCategoryLabel(hitCat);
-                }
-
-                return (hitPoint, distance, hitCat, label);
             }
             catch
             {
-                return null;
+                // swallow — fall back to CAD-only result if available
             }
+
+            // ── CAD ImportInstance pass ──
+            double cadDist = double.PositiveInfinity;
+            try
+            {
+                if (cadRaycaster != null)
+                {
+                    double? cad = cadRaycaster.FindClosestHit(origin, XYZ.BasisZ);
+                    if (cad.HasValue) cadDist = cad.Value;
+                }
+            }
+            catch { }
+
+            // ── Take the closer of the two ──
+            if (double.IsPositiveInfinity(nativeDist) && double.IsPositiveInfinity(cadDist))
+                return null;
+
+            double distance;
+            BuiltInCategory hitCat = BuiltInCategory.INVALID;
+            string label;
+
+            if (cadDist < nativeDist)
+            {
+                distance = cadDist;
+                label = "Imported CAD";
+            }
+            else
+            {
+                distance = nativeDist;
+                Element hitElement = null;
+                if (nativeRef != null)
+                {
+                    if (nativeRef.LinkedElementId != ElementId.InvalidElementId)
+                    {
+                        var linkInst = doc.GetElement(nativeRef.ElementId) as RevitLinkInstance;
+                        Document linkDoc = linkInst?.GetLinkDocument();
+                        if (linkDoc != null)
+                            hitElement = linkDoc.GetElement(nativeRef.LinkedElementId);
+                    }
+                    else
+                    {
+                        hitElement = doc.GetElement(nativeRef.ElementId);
+                    }
+                }
+                if (hitElement?.Category != null)
+                    hitCat = (BuiltInCategory)hitElement.Category.Id.IntegerValue;
+                label = GetCategoryLabel(hitCat);
+            }
+
+            XYZ hitPoint = origin + XYZ.BasisZ * distance;
+            return (hitPoint, distance, hitCat, label);
         }
 
         /// <summary>
