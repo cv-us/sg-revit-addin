@@ -312,6 +312,70 @@ namespace SgRevitAddin.Utils
         }
 
         /// <summary>
+        /// Diagnostic: describe what the straight-up ray from
+        /// <paramref name="origin"/> encounters. Reveals whether the cached
+        /// CAD geometry is even spatially aligned with the hanger:
+        ///   • "ray crosses 0 bbox" → the hanger's vertical column passes
+        ///     through NO import — geometry is offset in XY (transform).
+        ///   • crosses N bbox with Z-spans, but "NO triangle hit" → the
+        ///     bbox is along the ray but its triangles aren't (finer
+        ///     offset, or near surface missing).
+        ///   • "closest hit=H" → working; H is the rod length.
+        /// Also reports whether the hanger's XY falls inside the overall
+        /// CAD footprint at all.
+        /// </summary>
+        public string ProbeColumn(XYZ origin, XYZ direction)
+        {
+            // Overall footprint across all cached imports.
+            bool any = _imports.Count > 0;
+            double oxMin = double.MaxValue, oyMin = double.MaxValue, ozMin = double.MaxValue;
+            double oxMax = double.MinValue, oyMax = double.MinValue, ozMax = double.MinValue;
+            var spans = new List<double[]>();
+
+            foreach (var ci in _imports)
+            {
+                if (ci.Min.X < oxMin) oxMin = ci.Min.X;
+                if (ci.Min.Y < oyMin) oyMin = ci.Min.Y;
+                if (ci.Min.Z < ozMin) ozMin = ci.Min.Z;
+                if (ci.Max.X > oxMax) oxMax = ci.Max.X;
+                if (ci.Max.Y > oyMax) oyMax = ci.Max.Y;
+                if (ci.Max.Z > ozMax) ozMax = ci.Max.Z;
+
+                if (RayHitsAabb(origin, direction, ci.Min, ci.Max, double.PositiveInfinity))
+                    spans.Add(new[] { ci.Min.Z - origin.Z, ci.Max.Z - origin.Z });
+            }
+
+            spans.Sort((p, q) => p[0].CompareTo(q[0]));
+            double? hit = FindClosestHit(origin, direction);
+
+            var sb = new System.Text.StringBuilder();
+            sb.Append($"hanger @ ({origin.X:F1},{origin.Y:F1},{origin.Z:F1}) ft. ");
+
+            if (!any)
+            {
+                sb.Append("No CAD geometry cached.");
+                return sb.ToString();
+            }
+
+            bool xyInside = origin.X >= oxMin && origin.X <= oxMax
+                         && origin.Y >= oyMin && origin.Y <= oyMax;
+            sb.Append($"CAD footprint X[{oxMin:F0}…{oxMax:F0}] Y[{oyMin:F0}…{oyMax:F0}] Z[{ozMin:F0}…{ozMax:F0}]; ");
+            sb.Append(xyInside ? "hanger XY is INSIDE footprint. " : "hanger XY is OUTSIDE footprint (XY offset!). ");
+
+            sb.Append($"up-ray crosses {spans.Count} bbox");
+            if (spans.Count > 0)
+            {
+                sb.Append("; nearest Z-spans (ft above hanger): ");
+                int show = Math.Min(spans.Count, 4);
+                for (int i = 0; i < show; i++)
+                    sb.Append($"[{spans[i][0]:F1}…{spans[i][1]:F1}]");
+                if (spans.Count > show) sb.Append("…");
+            }
+            sb.Append(hit.HasValue ? $". Closest triangle hit = {hit.Value:F2} ft." : ". NO triangle hit.");
+            return sb.ToString();
+        }
+
+        /// <summary>
         /// Slab test — does the ray <c>origin + t * direction</c> for
         /// some <c>t in [0, maxT]</c> intersect the AABB? Used as a
         /// cheap reject before the per-triangle inner loop.

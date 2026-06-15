@@ -161,10 +161,17 @@ namespace SgRevitAddin.Commands.Hangers
                     cadRaycaster.Build();
                 }
 
+                // Capture the first few hanger points for the CAD spatial
+                // probe (diagnostics only).
+                var probePoints = new List<XYZ>();
+
                 foreach (var hanger in hangers)
                 {
                     XYZ hangerPoint = GetHangerPoint(hanger);
                     if (hangerPoint == null) { misses.Add(hanger); continue; }
+
+                    if (cadRaycaster != null && probePoints.Count < 3)
+                        probePoints.Add(hangerPoint);
 
                     var hitResult = ShootRayUp(doc, raybounceView, hangerPoint, elementFilter, cadRaycaster);
                     if (hitResult == null)
@@ -283,6 +290,15 @@ namespace SgRevitAddin.Commands.Hangers
                     summaryLines.Add("── Linked CAD detection ──");
                     summaryLines.Add($"{cadWins} hanger{(cadWins != 1 ? "s" : "")} measured to CAD geometry.");
                     summaryLines.Add(cadRaycaster.Diagnostics);
+
+                    // Per-hanger spatial probe — reveals XY/Z alignment of
+                    // the cached CAD geometry relative to the hanger.
+                    foreach (var pt in probePoints)
+                    {
+                        summaryLines.Add("");
+                        summaryLines.Add(cadRaycaster.ProbeColumn(pt, XYZ.BasisZ));
+                    }
+
                     if (cadRaycaster.TriangleCount == 0)
                     {
                         summaryLines.Add("");
