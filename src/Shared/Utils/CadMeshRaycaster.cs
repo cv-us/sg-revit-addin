@@ -93,13 +93,26 @@ namespace SgRevitAddin.Utils
         /// world coordinates, and caches AABB + triangle list per import.
         /// Idempotent if called more than once.
         /// </summary>
+        /// <summary>
+        /// When true, also triangulate ImportInstances nested in linked
+        /// Revit models. Default false: the user's STEP/IFC DWG is linked
+        /// directly into the host project, and pulling CAD from every
+        /// linked Revit model dragged in 600+ imports / 60M+ triangles of
+        /// irrelevant geometry (each with its own coordinate base + stray
+        /// AutoCAD entities at absurd coordinates), which both killed
+        /// performance and made the diagnostics unreadable.
+        /// </summary>
+        public bool IncludeLinkedDocImports { get; set; } = false;
+
         public void Build()
         {
             _imports.Clear();
 
             // Host-doc imports — no link transform.
             foreach (var imp in CollectImports(_doc))
-                BuildOne(imp, null);
+                BuildOne(imp, null, "host");
+
+            if (!IncludeLinkedDocImports) return;
 
             // Imports nested in linked Revit docs — pre-multiply by the
             // link's total transform so vertices land in host world coords.
@@ -113,8 +126,9 @@ namespace SgRevitAddin.Utils
                 Transform linkXform = rli.GetTotalTransform();
                 if (linkXform == null || linkXform.IsIdentity) linkXform = null;
 
+                string label = "link:" + (rli.Name ?? "?");
                 foreach (var imp in CollectImports(linkDoc))
-                    BuildOne(imp, linkXform);
+                    BuildOne(imp, linkXform, label);
             }
         }
 
@@ -125,7 +139,7 @@ namespace SgRevitAddin.Utils
                 .Cast<ImportInstance>();
         }
 
-        private void BuildOne(ImportInstance imp, Transform linkXform)
+        private void BuildOne(ImportInstance imp, Transform linkXform, string source)
         {
             _importsSeen++;
 
@@ -160,7 +174,8 @@ namespace SgRevitAddin.Utils
             {
                 Triangles = tris,
                 Min = aabb.Min,
-                Max = aabb.Max
+                Max = aabb.Max,
+                Source = source
             });
         }
 
@@ -348,6 +363,38 @@ namespace SgRevitAddin.Utils
             spans.Sort((p, q) => p[0].CompareTo(q[0]));
             double? hit = FindClosestHit(origin, direction);
 
+            // ── Column scan ──
+            // Count triangles whose XY-projection BBOX contains the hanger
+            // XY (i.e. roughly directly above/below). This is the decisive
+            // number: if it's 0, NO triangle sits in the hanger's vertical
+            // column → the geometry is mis-placed (transform / units), not
+            // merely "narrowly missed". If it's > 0 but FindClosestHit
+            // found nothing, the ray-triangle math or a placement skew is
+            // at fault.
+            int colTris = 0;
+            double colZNear = double.PositiveInfinity, colZFar = double.NegativeInfinity;
+            string colSource = null;
+            foreach (var ci in _imports)
+            {
+                if (origin.X < ci.Min.X || origin.X > ci.Max.X ||
+                    origin.Y < ci.Min.Y || origin.Y > ci.Max.Y) continue;
+                foreach (var tri in ci.Triangles)
+                {
+                    double txmin = Math.Min(tri.A.X, Math.Min(tri.B.X, tri.C.X));
+                    double txmax = Math.Max(tri.A.X, Math.Max(tri.B.X, tri.C.X));
+                    if (origin.X < txmin || origin.X > txmax) continue;
+                    double tymin = Math.Min(tri.A.Y, Math.Min(tri.B.Y, tri.C.Y));
+                    double tymax = Math.Max(tri.A.Y, Math.Max(tri.B.Y, tri.C.Y));
+                    if (origin.Y < tymin || origin.Y > tymax) continue;
+
+                    colTris++;
+                    double zc = (tri.A.Z + tri.B.Z + tri.C.Z) / 3.0 - origin.Z;
+                    if (zc < colZNear) colZNear = zc;
+                    if (zc > colZFar) colZFar = zc;
+                    if (colSource == null) colSource = ci.Source;
+                }
+            }
+
             var sb = new System.Text.StringBuilder();
             sb.Append($"hanger @ ({origin.X:F1},{origin.Y:F1},{origin.Z:F1}) ft. ");
 
@@ -360,18 +407,18 @@ namespace SgRevitAddin.Utils
             bool xyInside = origin.X >= oxMin && origin.X <= oxMax
                          && origin.Y >= oyMin && origin.Y <= oyMax;
             sb.Append($"CAD footprint X[{oxMin:F0}…{oxMax:F0}] Y[{oyMin:F0}…{oyMax:F0}] Z[{ozMin:F0}…{ozMax:F0}]; ");
-            sb.Append(xyInside ? "hanger XY is INSIDE footprint. " : "hanger XY is OUTSIDE footprint (XY offset!). ");
+            sb.Append(xyInside ? "XY inside footprint. " : "XY OUTSIDE footprint! ");
 
-            sb.Append($"up-ray crosses {spans.Count} bbox");
-            if (spans.Count > 0)
+            // Column-scan result is the headline.
+            if (colTris == 0)
             {
-                sb.Append("; nearest Z-spans (ft above hanger): ");
-                int show = Math.Min(spans.Count, 4);
-                for (int i = 0; i < show; i++)
-                    sb.Append($"[{spans[i][0]:F1}…{spans[i][1]:F1}]");
-                if (spans.Count > show) sb.Append("…");
+                sb.Append("NO triangle sits in the hanger's vertical column → geometry is mis-placed (transform/units).");
             }
-            sb.Append(hit.HasValue ? $". Closest triangle hit = {hit.Value:F2} ft." : ". NO triangle hit.");
+            else
+            {
+                sb.Append($"{colTris} triangle(s) in column [{colSource}], Z range {colZNear:F2}…{colZFar:F2} ft from hanger. ");
+                sb.Append(hit.HasValue ? $"Closest hit = {hit.Value:F2} ft." : "but FindClosestHit got NONE (math/skew).");
+            }
             return sb.ToString();
         }
 
@@ -450,6 +497,7 @@ namespace SgRevitAddin.Utils
             public List<Triangle> Triangles;
             public XYZ Min;
             public XYZ Max;
+            public string Source;
         }
 
         /// <summary>
