@@ -191,31 +191,36 @@ namespace SgRevitAddin.Utils
         /// </summary>
         private IEnumerable<Options> GeometryOptionVariants()
         {
+            // View-bound gives PLACED coords; IncludeNonVisibleObjects=true
+            // gives COMPLETE geometry (faces on layers hidden in the
+            // raybounce view are otherwise dropped — and the steel right
+            // above a hanger may be exactly that). So that combination is
+            // tried first.
             if (_view != null)
             {
-                yield return new Options
-                {
-                    ComputeReferences = false,
-                    IncludeNonVisibleObjects = false,
-                    View = _view
-                };
                 yield return new Options
                 {
                     ComputeReferences = false,
                     IncludeNonVisibleObjects = true,
                     View = _view
                 };
+                yield return new Options
+                {
+                    ComputeReferences = false,
+                    IncludeNonVisibleObjects = false,
+                    View = _view
+                };
             }
             yield return new Options
             {
                 ComputeReferences = false,
-                IncludeNonVisibleObjects = false,
+                IncludeNonVisibleObjects = true,
                 DetailLevel = ViewDetailLevel.Fine
             };
             yield return new Options
             {
                 ComputeReferences = false,
-                IncludeNonVisibleObjects = true,
+                IncludeNonVisibleObjects = false,
                 DetailLevel = ViewDetailLevel.Fine
             };
         }
@@ -421,12 +426,26 @@ namespace SgRevitAddin.Utils
             int colTris = 0;
             double colZNear = double.PositiveInfinity, colZFar = double.NegativeInfinity;
             string colSource = null;
+            // Nearest triangle to the hanger in PLAN (XY) — tells us whether
+            // the steel is a hair off the exact ray or genuinely not above.
+            double nearestXY = double.PositiveInfinity;
+            double nearestXYZAbove = double.NaN; // Z (from hanger) of that nearest triangle
             foreach (var ci in _imports)
             {
                 if (origin.X < ci.Min.X || origin.X > ci.Max.X ||
                     origin.Y < ci.Min.Y || origin.Y > ci.Max.Y) continue;
                 foreach (var tri in ci.Triangles)
                 {
+                    double cx = (tri.A.X + tri.B.X + tri.C.X) / 3.0;
+                    double cy = (tri.A.Y + tri.B.Y + tri.C.Y) / 3.0;
+                    double dx = cx - origin.X, dy = cy - origin.Y;
+                    double dxy = Math.Sqrt(dx * dx + dy * dy);
+                    if (dxy < nearestXY)
+                    {
+                        nearestXY = dxy;
+                        nearestXYZAbove = (tri.A.Z + tri.B.Z + tri.C.Z) / 3.0 - origin.Z;
+                    }
+
                     double txmin = Math.Min(tri.A.X, Math.Min(tri.B.X, tri.C.X));
                     double txmax = Math.Max(tri.A.X, Math.Max(tri.B.X, tri.C.X));
                     if (origin.X < txmin || origin.X > txmax) continue;
@@ -459,7 +478,13 @@ namespace SgRevitAddin.Utils
             // Column-scan result is the headline.
             if (colTris == 0)
             {
-                sb.Append("NO triangle sits in the hanger's vertical column → geometry is mis-placed (transform/units).");
+                sb.Append("NO triangle directly over hanger. ");
+                if (!double.IsPositiveInfinity(nearestXY))
+                    sb.Append($"Nearest steel is {nearestXY * 12:F1}\" away in plan, at Z {nearestXYZAbove:F2} ft from hanger. ");
+                if (nearestXY < 0.25)
+                    sb.Append("→ steel is right there but the ray just grazes past it (precision).");
+                else
+                    sb.Append("→ hanger is NOT under the steel in plan (offset, or hanger point is off).");
             }
             else
             {
