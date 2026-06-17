@@ -170,23 +170,42 @@ namespace SgRevitAddin.Utils
             if (tris.Count == 0) return;
 
             _importsWithGeom++;
+            TryPlacedWorldBox(imp, out XYZ placedMin, out XYZ placedMax);
             _imports.Add(new CadImport
             {
                 Triangles = tris,
                 Min = aabb.Min,
                 Max = aabb.Max,
-                Source = source
+                Source = source,
+                PlacedMin = placedMin,
+                PlacedMax = placedMax
             });
         }
 
         /// <summary>
         /// Geometry option sets tried in order until one yields triangles.
-        /// Raw (no-view) Fine first; then with non-visible objects included
-        /// (catches geometry on layers Revit considers "not visible"); then
-        /// the view-bound variant as a last resort.
+        /// VIEW-BOUND FIRST — view-bound geometry comes back placed (in the
+        /// coordinates the import is displayed at). The no-view variants
+        /// returned mis-placed geometry (triangles scattered to Z=-4404 ft,
+        /// nothing in the hanger's column), so they're now fallbacks only.
         /// </summary>
         private IEnumerable<Options> GeometryOptionVariants()
         {
+            if (_view != null)
+            {
+                yield return new Options
+                {
+                    ComputeReferences = false,
+                    IncludeNonVisibleObjects = false,
+                    View = _view
+                };
+                yield return new Options
+                {
+                    ComputeReferences = false,
+                    IncludeNonVisibleObjects = true,
+                    View = _view
+                };
+            }
             yield return new Options
             {
                 ComputeReferences = false,
@@ -199,13 +218,41 @@ namespace SgRevitAddin.Utils
                 IncludeNonVisibleObjects = true,
                 DetailLevel = ViewDetailLevel.Fine
             };
-            if (_view != null)
-                yield return new Options
-                {
-                    ComputeReferences = false,
-                    IncludeNonVisibleObjects = true,
-                    View = _view
-                };
+        }
+
+        /// <summary>
+        /// World-space AABB of the import as Revit places it — from
+        /// <c>get_BoundingBox</c> with its <c>Transform</c> applied. This is
+        /// the ground truth for where the import actually sits; comparing it
+        /// to the AABB of the triangles we extracted reveals any
+        /// coordinate-space error in our geometry traversal.
+        /// </summary>
+        private bool TryPlacedWorldBox(ImportInstance imp, out XYZ min, out XYZ max)
+        {
+            min = null; max = null;
+            BoundingBoxXYZ bb = null;
+            try { bb = imp.get_BoundingBox(null); } catch { }
+            if (bb == null && _view != null) { try { bb = imp.get_BoundingBox(_view); } catch { } }
+            if (bb == null) return false;
+
+            Transform t = bb.Transform ?? Transform.Identity;
+            double mnx = double.MaxValue, mny = double.MaxValue, mnz = double.MaxValue;
+            double mxx = double.MinValue, mxy = double.MinValue, mxz = double.MinValue;
+            double[] xs = { bb.Min.X, bb.Max.X };
+            double[] ys = { bb.Min.Y, bb.Max.Y };
+            double[] zs = { bb.Min.Z, bb.Max.Z };
+            foreach (double x in xs)
+                foreach (double y in ys)
+                    foreach (double z in zs)
+                    {
+                        XYZ p = t.OfPoint(new XYZ(x, y, z));
+                        if (p.X < mnx) mnx = p.X; if (p.X > mxx) mxx = p.X;
+                        if (p.Y < mny) mny = p.Y; if (p.Y > mxy) mxy = p.Y;
+                        if (p.Z < mnz) mnz = p.Z; if (p.Z > mxz) mxz = p.Z;
+                    }
+            min = new XYZ(mnx, mny, mnz);
+            max = new XYZ(mxx, mxy, mxz);
+            return true;
         }
 
         private void CollectFromGeometry(GeometryElement elem, Transform linkXform,
@@ -419,6 +466,31 @@ namespace SgRevitAddin.Utils
                 sb.Append($"{colTris} triangle(s) in column [{colSource}], Z range {colZNear:F2}…{colZFar:F2} ft from hanger. ");
                 sb.Append(hit.HasValue ? $"Closest hit = {hit.Value:F2} ft." : "but FindClosestHit got NONE (math/skew).");
             }
+
+            // ── Placed-vs-extracted comparison ──
+            // For the import whose PLACED bbox column contains the hanger,
+            // show where Revit places it vs where our triangles landed. A
+            // mismatch is the transform error, and the placed bbox is the
+            // truth we should be matching.
+            CadImport pick = null;
+            foreach (var ci in _imports)
+            {
+                if (ci.PlacedMin == null || ci.PlacedMax == null) continue;
+                if (origin.X >= ci.PlacedMin.X && origin.X <= ci.PlacedMax.X &&
+                    origin.Y >= ci.PlacedMin.Y && origin.Y <= ci.PlacedMax.Y)
+                { pick = ci; break; }
+            }
+            if (pick != null)
+            {
+                sb.Append($" │ import [{pick.Source}] PLACED Z[{pick.PlacedMin.Z:F1}…{pick.PlacedMax.Z:F1}] " +
+                          $"vs my-tris Z[{pick.Min.Z:F1}…{pick.Max.Z:F1}], " +
+                          $"PLACED X[{pick.PlacedMin.X:F0}…{pick.PlacedMax.X:F0}] " +
+                          $"vs my-tris X[{pick.Min.X:F0}…{pick.Max.X:F0}].");
+            }
+            else
+            {
+                sb.Append(" │ no import's PLACED bbox is over the hanger either.");
+            }
             return sb.ToString();
         }
 
@@ -495,8 +567,10 @@ namespace SgRevitAddin.Utils
         private class CadImport
         {
             public List<Triangle> Triangles;
-            public XYZ Min;
+            public XYZ Min;        // AABB of the triangles WE extracted
             public XYZ Max;
+            public XYZ PlacedMin;  // AABB of where Revit PLACES the import (ground truth)
+            public XYZ PlacedMax;
             public string Source;
         }
 
