@@ -143,39 +143,55 @@ namespace SgRevitAddin.Utils
         {
             _importsSeen++;
 
-            // Retrieve RAW model geometry at Fine detail — NO view binding.
-            // Earlier we passed View=_view so the raybounce view's layer
-            // visibility was respected, but that meant a DWG whose layers
-            // were off in the auto-created 3D-Raybounce view returned ZERO
-            // geometry — and the rod fell through to native structure
-            // (the "still overshoots" bug). Raw geometry removes that
-            // dependency; we'd rather risk hitting a hidden layer than
-            // miss the geometry entirely.
-            var tris = new List<Triangle>();
-            var aabb = new MutableAabb();
+            // PLACED bbox is ground truth — where Revit actually shows the
+            // import. We use it to pick the geometry variant that is both
+            // correctly placed AND most complete.
+            TryPlacedWorldBox(imp, out XYZ placedMin, out XYZ placedMax);
 
-            // Try a few option sets — different Revit builds are picky about
-            // which combination yields geometry for a linked ImportInstance.
+            List<Triangle> bestTris = null;
+            MutableAabb bestAabb = null;
+
+            // Try each option set; keep the FIRST that is correctly placed
+            // (its triangle bbox center sits within the placed bbox). If
+            // none verifies as placed, keep whichever produced the most
+            // triangles as a fallback.
             foreach (var opts in GeometryOptionVariants())
             {
+                var tris = new List<Triangle>();
+                var aabb = new MutableAabb();
+
                 GeometryElement geom;
                 try { geom = imp.get_Geometry(opts); }
                 catch { continue; }
                 if (geom == null) continue;
 
                 CollectFromGeometry(geom, linkXform, tris, aabb);
-                if (tris.Count > 0) break; // got something — stop trying variants
+                if (tris.Count == 0) continue;
+
+                if (PlacedRoughlyMatches(aabb, placedMin, placedMax))
+                {
+                    bestTris = tris;
+                    bestAabb = aabb;
+                    break; // placed + (variants ordered most-complete-first) → use it
+                }
+
+                // Not placed-correct (e.g. symbol-space coords) — remember
+                // only if richer than the current fallback.
+                if (bestTris == null || tris.Count > bestTris.Count)
+                {
+                    bestTris = tris;
+                    bestAabb = aabb;
+                }
             }
 
-            if (tris.Count == 0) return;
+            if (bestTris == null || bestTris.Count == 0) return;
 
             _importsWithGeom++;
-            TryPlacedWorldBox(imp, out XYZ placedMin, out XYZ placedMax);
             _imports.Add(new CadImport
             {
-                Triangles = tris,
-                Min = aabb.Min,
-                Max = aabb.Max,
+                Triangles = bestTris,
+                Min = bestAabb.Min,
+                Max = bestAabb.Max,
                 Source = source,
                 PlacedMin = placedMin,
                 PlacedMax = placedMax
@@ -191,11 +207,18 @@ namespace SgRevitAddin.Utils
         /// </summary>
         private IEnumerable<Options> GeometryOptionVariants()
         {
-            // View-bound gives PLACED coords; IncludeNonVisibleObjects=true
-            // gives COMPLETE geometry (faces on layers hidden in the
-            // raybounce view are otherwise dropped — and the steel right
-            // above a hanger may be exactly that). So that combination is
-            // tried first.
+            // No-view + IncludeNonVisibleObjects gives the MOST COMPLETE
+            // geometry (no view clipping, hidden-layer faces included). It
+            // sometimes comes back in symbol (un-placed) coordinates, but
+            // BuildOne verifies each variant against the PLACED bbox and
+            // falls through to the view-bound variants (which are reliably
+            // placed) if this one is mis-placed.
+            yield return new Options
+            {
+                ComputeReferences = false,
+                IncludeNonVisibleObjects = true,
+                DetailLevel = ViewDetailLevel.Fine
+            };
             if (_view != null)
             {
                 yield return new Options
@@ -214,15 +237,28 @@ namespace SgRevitAddin.Utils
             yield return new Options
             {
                 ComputeReferences = false,
-                IncludeNonVisibleObjects = true,
-                DetailLevel = ViewDetailLevel.Fine
-            };
-            yield return new Options
-            {
-                ComputeReferences = false,
                 IncludeNonVisibleObjects = false,
                 DetailLevel = ViewDetailLevel.Fine
             };
+        }
+
+        /// <summary>
+        /// True if the triangle AABB sits where Revit places the import —
+        /// its center is within one bbox-diagonal of the placed-box center.
+        /// Detects gross mis-placement (symbol-space geometry scattered to
+        /// Z=-4404 ft) while tolerating partial captures. Returns true when
+        /// no placed box is available (nothing to check against).
+        /// </summary>
+        private static bool PlacedRoughlyMatches(MutableAabb tri, XYZ placedMin, XYZ placedMax)
+        {
+            if (placedMin == null || placedMax == null) return true;
+            XYZ tMin = tri.Min, tMax = tri.Max;
+            double tcx = (tMin.X + tMax.X) * 0.5, tcy = (tMin.Y + tMax.Y) * 0.5, tcz = (tMin.Z + tMax.Z) * 0.5;
+            double pcx = (placedMin.X + placedMax.X) * 0.5, pcy = (placedMin.Y + placedMax.Y) * 0.5, pcz = (placedMin.Z + placedMax.Z) * 0.5;
+            double dx = tcx - pcx, dy = tcy - pcy, dz = tcz - pcz;
+            double dist = Math.Sqrt(dx * dx + dy * dy + dz * dz);
+            double diag = placedMax.DistanceTo(placedMin);
+            return dist <= Math.Max(diag, 50.0);
         }
 
         /// <summary>
@@ -489,7 +525,9 @@ namespace SgRevitAddin.Utils
             else
             {
                 sb.Append($"{colTris} triangle(s) in column [{colSource}], Z range {colZNear:F2}…{colZFar:F2} ft from hanger. ");
-                sb.Append(hit.HasValue ? $"Closest hit = {hit.Value:F2} ft." : "but FindClosestHit got NONE (math/skew).");
+                sb.Append(hit.HasValue ? $"Closest hit = {hit.Value:F2} ft. " : "but FindClosestHit got NONE (math/skew). ");
+                if (!double.IsPositiveInfinity(nearestXY))
+                    sb.Append($"(nearest steel in plan {nearestXY * 12:F1}\" away @ Z {nearestXYZAbove:F2} ft)");
             }
 
             // ── Placed-vs-extracted comparison ──

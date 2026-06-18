@@ -193,10 +193,27 @@ namespace SgRevitAddin.Commands.Hangers
 
                 if (hits.Count == 0 && misses.Count > 0)
                 {
-                    TaskDialog.Show("Sync Hangers to Structural",
-                        $"No structural elements found above any of the {misses.Count} selected hangers.\n\n" +
+                    var noHitLines = new List<string>
+                    {
+                        $"No structural elements found above any of the {misses.Count} selected hangers.",
+                        "",
                         "Make sure structural elements (floors, roofs, framing) exist above the hangers " +
-                        "in the model or linked models.");
+                        "in the model or linked models."
+                    };
+                    // Always surface the CAD probe here too — this is the
+                    // total-miss case we most need to diagnose.
+                    if (cadRaycaster != null)
+                    {
+                        noHitLines.Add("");
+                        noHitLines.Add("── Linked CAD detection ──");
+                        noHitLines.Add(cadRaycaster.Diagnostics);
+                        foreach (var pt in probePoints)
+                        {
+                            noHitLines.Add("");
+                            noHitLines.Add(cadRaycaster.ProbeColumn(pt, XYZ.BasisZ));
+                        }
+                    }
+                    TaskDialog.Show("Sync Hangers to Structural", string.Join("\n", noHitLines));
                     return Result.Failed;
                 }
 
