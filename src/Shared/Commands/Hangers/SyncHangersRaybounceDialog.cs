@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Hangers
 {
@@ -10,9 +11,13 @@ namespace SgRevitAddin.Commands.Hangers
     /// Collects:
     ///   - Hanger type codes per structural category (Floors, Stairs, Roofs, Framing)
     ///   - Whether to keep existing hanger types (only update rod lengths)
+    ///
+    /// All inputs persist between runs via <see cref="DialogMemory"/>.
     /// </summary>
     public class SyncHangersRaybounceDialog : Form
     {
+        private const string MemKey = "SyncRaybounce";
+
         // ── Results ──
         public string TypeCodeFloors { get; private set; } = "05";
         public string TypeCodeStairs { get; private set; } = "02";
@@ -54,11 +59,15 @@ namespace SgRevitAddin.Commands.Hangers
             bool defaultKeepTypes = false)
         {
             _hangerCount = hangerCount;
-            TypeCodeFloors = defaultFloors;
-            TypeCodeStairs = defaultStairs;
-            TypeCodeRoofs = defaultRoofs;
-            TypeCodeFraming = defaultFraming;
-            KeepHangerTypes = defaultKeepTypes;
+            // Last-used values win over the passed-in defaults so the dialog
+            // re-opens with whatever was entered/checked last time.
+            TypeCodeFloors = DialogMemory.Get(MemKey, "Floors", defaultFloors);
+            TypeCodeStairs = DialogMemory.Get(MemKey, "Stairs", defaultStairs);
+            TypeCodeRoofs = DialogMemory.Get(MemKey, "Roofs", defaultRoofs);
+            TypeCodeFraming = DialogMemory.Get(MemKey, "Framing", defaultFraming);
+            KeepHangerTypes = DialogMemory.GetBool(MemKey, "KeepTypes", defaultKeepTypes);
+            IncludeGenericGeometry = DialogMemory.GetBool(MemKey, "IncludeGeneric", false);
+            IncludeImportedCAD = DialogMemory.GetBool(MemKey, "IncludeCAD", false);
             InitializeComponent();
         }
 
@@ -217,6 +226,16 @@ namespace SgRevitAddin.Commands.Hangers
             KeepHangerTypes = chkKeepTypes.Checked;
             IncludeGenericGeometry = chkIncludeGeneric.Checked;
             IncludeImportedCAD = chkIncludeCAD.Checked;
+
+            // Remember for next time.
+            DialogMemory.Set(MemKey, "Floors", TypeCodeFloors);
+            DialogMemory.Set(MemKey, "Stairs", TypeCodeStairs);
+            DialogMemory.Set(MemKey, "Roofs", TypeCodeRoofs);
+            DialogMemory.Set(MemKey, "Framing", TypeCodeFraming);
+            DialogMemory.SetBool(MemKey, "KeepTypes", KeepHangerTypes);
+            DialogMemory.SetBool(MemKey, "IncludeGeneric", IncludeGenericGeometry);
+            DialogMemory.SetBool(MemKey, "IncludeCAD", IncludeImportedCAD);
+            DialogMemory.Flush();
         }
     }
 }

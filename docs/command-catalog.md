@@ -21,6 +21,7 @@ Master list of all SG Revit Addin commands.
 - `RingHangerSectionIDsCommand` - Adjustable-ring-hanger variant: subtracts a nominal-diameter-based ring takeout from Rod Length before writing Section_ID (Hydratec)
 - `ChangeTypeCodeCommand` - Bulk-change Type Code (Hydratec) on selected hangers from a chosen From code (dropdown of codes in selection) to a typed To code
 - `UniformRodLengthsCommand` - Sweep Rod Length on hangers of a chosen Type Code to a uniform target, only on hangers under a max-length cutoff (so longer rods on lower pipes are left alone)
+- `RoundRodLengthsCommand` - Round each selected hanger's Rod Length UP to the nearest half inch (never down). Rods already on a full/half inch are left alone; optionally keeps Y Grip in sync
 - `StripSectionIDTypeCodeCommand` - For hangers matching a chosen Type Code, strip the prefix before the first '(' in Section_ID (Hydratec). E.g. "#11T(5)" becomes "(5)"
 - `StripSectionIDHashesCommand` - Remove every '#' character from Section_ID (Hydratec) on all selected hangers. E.g. "#11T(5)" becomes "11T(5)"
 - `RingSectionIDsHardwareCommand` - Ring takeout like Ring Section IDs, then adds 1.5" back for Type Codes starting with 01 or 02; writes type(length) with no leading #. E.g. 02D rod 4" becomes 02D(4)
