@@ -6,11 +6,12 @@ Master list of all SG Revit Addin commands.
 - `ShortenFlexPipesCommand` - Replace selected flex pipes with shortest-length connections between the same endpoints
 
 ## Hangers
+- `PlaceHangersCommand` - Unified auto-placement: one dialog with a method dropdown (auto-spaced to decks, auto-spaced to parallel framing, downstream ends, or at structural steel). Settings remembered per method. **Replaces the four commands below on the ribbon** (their classes remain for the RunPlacement logic)
 - `HangAtCADLinesCommand` - Place hangers where pipes cross linked CAD structural lines
-- `HangAtStructuralCommand` - Place hangers where pipes cross structural framing members
-- `HangDownstreamCommand` - Place hangers at downstream ends of threaded branchline pipes with raybounce rod length
-- `HangTypicalSpacingCommand` - Place hangers at typical spacing along straight pipe runs with raybounce rod length to decks
-- `HangParallelStructuralCommand` - Place hangers at typical spacing, attached to parallel structural framing with clamp angle and widemouth detection
+- `HangAtStructuralCommand` - (merged into Place Hangers) Place hangers where pipes cross structural framing members
+- `HangDownstreamCommand` - (merged into Place Hangers) Place hangers at downstream ends of threaded branchline pipes with raybounce rod length
+- `HangTypicalSpacingCommand` - (merged into Place Hangers) Place hangers at typical spacing along straight pipe runs with raybounce rod length to decks
+- `HangParallelStructuralCommand` - (merged into Place Hangers) Place hangers at typical spacing, attached to parallel structural framing with clamp angle and widemouth detection
 - `HangUserLocationsCommand` - Place hangers at user-marked detail line locations with raybounce rod length to structure above
 - `TrapezeHangCommand` - Place standard pipe trapeze hangers at auto-spaced intervals with two-rod structural attachment
 - `TrapezeUserLocationsCommand` - Place trapeze hangers at user-marked detail line locations with two-rod structural attachment

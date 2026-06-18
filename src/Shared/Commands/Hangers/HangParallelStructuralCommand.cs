@@ -2,6 +2,7 @@ using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Selection;
+using SgRevitAddin.Commands.Hangers.PlaceHangers;
 using SgRevitAddin.Utils;
 using System;
 using System.Collections.Generic;
@@ -103,211 +104,245 @@ namespace SgRevitAddin.Commands.Hangers
                     if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK)
                         return Result.Cancelled;
 
-                    // ── Step 4: Filter pipes ──
-                    var filteredPipes = FilterPipes(allPipes, dialog.PipeTypeFilter);
-                    if (filteredPipes.Count == 0)
+                    var cfg = new ParallelStructuralConfig
                     {
-                        TaskDialog.Show("Auto Hang", "No qualifying pipes after filtering.");
-                        return Result.Cancelled;
-                    }
+                        SelectedFamily = dialog.SelectedFamily,
+                        PipeTypeFilter = dialog.PipeTypeFilter,
+                        EvenlyDistributed = dialog.EvenlyDistributed,
+                        MaxSpacingFeet = dialog.MaxSpacingFeet,
+                        HangerTypeCode = dialog.HangerTypeCode,
+                        WidemouthTypeCode = dialog.WidemouthTypeCode,
+                        AttachToBottom = dialog.AttachToBottom,
+                        ShowCClamp = dialog.ShowCClamp,
+                        UseLocalFraming = dialog.UseLocalFraming,
+                        SelectedLinkName = dialog.SelectedLinkName
+                    };
+                    return RunPlacement(uidoc, cfg, allPipes, ref message);
+                }
+            }
+            catch (Exception ex)
+            {
+                message = ex.Message;
+                return Result.Failed;
+            }
+        }
 
-                    // ── Step 5: Collect structural framing ──
-                    List<StructuralFramingHelpers.FramingInfo> framingList;
+        /// <summary>
+        /// Places parallel-structural hangers on the given pre-picked pipes.
+        /// Shared by this command's Execute and the unified Place Hangers
+        /// command. Everything after the dialog lives here.
+        /// </summary>
+        public Result RunPlacement(UIDocument uidoc, ParallelStructuralConfig cfg,
+            IList<Element> allPipes, ref string message)
+        {
+            Document doc = uidoc.Document;
+            try
+            {
+                // ── Step 4: Filter pipes ──
+                var filteredPipes = FilterPipes(allPipes.ToList(), cfg.PipeTypeFilter);
+                if (filteredPipes.Count == 0)
+                {
+                    TaskDialog.Show("Auto Hang", "No qualifying pipes after filtering.");
+                    return Result.Cancelled;
+                }
 
-                    if (dialog.UseLocalFraming)
+                // ── Step 5: Collect structural framing ──
+                List<StructuralFramingHelpers.FramingInfo> framingList;
+
+                if (cfg.UseLocalFraming)
+                {
+                    var localFraming = StructuralFramingHelpers.GetLocalStructuralFraming(doc);
+                    framingList = StructuralFramingHelpers.BuildFramingInfoList(localFraming);
+                }
+                else
+                {
+                    var links = StructuralFramingHelpers.GetRevitLinks(doc);
+                    RevitLinkInstance selectedLink = links.FirstOrDefault(l => l.Name == cfg.SelectedLinkName);
+                    if (selectedLink == null)
                     {
-                        var localFraming = StructuralFramingHelpers.GetLocalStructuralFraming(doc);
-                        framingList = StructuralFramingHelpers.BuildFramingInfoList(localFraming);
-                    }
-                    else
-                    {
-                        RevitLinkInstance selectedLink = links.FirstOrDefault(l => l.Name == dialog.SelectedLinkName);
-                        if (selectedLink == null)
-                        {
-                            TaskDialog.Show("Auto Hang", $"Could not find linked model '{dialog.SelectedLinkName}'.");
-                            return Result.Failed;
-                        }
-                        Document linkDoc = selectedLink.GetLinkDocument();
-                        Transform linkTransform = selectedLink.GetTotalTransform();
-
-                        var linkedFraming = new FilteredElementCollector(linkDoc)
-                            .OfCategory(BuiltInCategory.OST_StructuralFraming)
-                            .WhereElementIsNotElementType()
-                            .Cast<Element>()
-                            .Where(e => StructuralFramingHelpers.IsBeamLikeType(e))
-                            .ToList();
-
-                        framingList = StructuralFramingHelpers.BuildFramingInfoList(linkedFraming, linkTransform);
-                    }
-
-                    if (framingList.Count == 0)
-                    {
-                        TaskDialog.Show("Auto Hang", "No structural framing elements found.");
+                        TaskDialog.Show("Auto Hang", $"Could not find linked model '{cfg.SelectedLinkName}'.");
                         return Result.Failed;
                     }
+                    Document linkDoc = selectedLink.GetLinkDocument();
+                    Transform linkTransform = selectedLink.GetTotalTransform();
 
-                    // ── Step 6: Find hanger family type ──
-                    FamilySymbol hangerType = FindHangerFamilyType(doc, dialog.SelectedFamily);
-                    if (hangerType == null)
+                    var linkedFraming = new FilteredElementCollector(linkDoc)
+                        .OfCategory(BuiltInCategory.OST_StructuralFraming)
+                        .WhereElementIsNotElementType()
+                        .Cast<Element>()
+                        .Where(e => StructuralFramingHelpers.IsBeamLikeType(e))
+                        .ToList();
+
+                    framingList = StructuralFramingHelpers.BuildFramingInfoList(linkedFraming, linkTransform);
+                }
+
+                if (framingList.Count == 0)
+                {
+                    TaskDialog.Show("Auto Hang", "No structural framing elements found.");
+                    return Result.Failed;
+                }
+
+                // ── Step 6: Find hanger family type ──
+                FamilySymbol hangerType = FindHangerFamilyType(doc, cfg.SelectedFamily);
+                if (hangerType == null)
+                {
+                    TaskDialog.Show("Auto Hang", $"Could not find family type for '{cfg.SelectedFamily}'.");
+                    return Result.Failed;
+                }
+
+                // ── Step 7: Place hangers ──
+                int hangersPlaced = 0;
+                int pipesProcessed = 0;
+                int structuralHits = 0;
+                int widemouthCount = 0;
+
+                using (var tw = new TransactionWrapper(doc, "Auto Hang Parallel Structural"))
+                {
+                    if (!hangerType.IsActive)
+                        hangerType.Activate();
+
+                    foreach (Element pipe in filteredPipes)
                     {
-                        TaskDialog.Show("Auto Hang", $"Could not find family type for '{dialog.SelectedFamily}'.");
-                        return Result.Failed;
-                    }
+                        Line pipeLine = GetPipeCenterline(pipe);
+                        if (pipeLine == null) continue;
 
-                    // ── Step 7: Place hangers ──
-                    int hangersPlaced = 0;
-                    int pipesProcessed = 0;
-                    int structuralHits = 0;
-                    int widemouthCount = 0;
+                        double pipeLength = pipeLine.Length;
+                        if (pipeLength < MinPipeLengthFeet) continue;
 
-                    using (var tw = new TransactionWrapper(doc, "Auto Hang Parallel Structural"))
-                    {
-                        if (!hangerType.IsActive)
-                            hangerType.Activate();
+                        ElementId levelId = pipe.LookupParameter("Reference Level")
+                            ?.AsElementId() ?? pipe.LevelId;
+                        Level level = doc.GetElement(levelId) as Level;
+                        if (level == null) continue;
 
-                        foreach (Element pipe in filteredPipes)
+                        double pipeDiameter = ParameterHelpers.GetPipeDiameterValue(pipe);
+
+                        XYZ pipeStart = pipeLine.GetEndPoint(0);
+                        XYZ pipeEnd = pipeLine.GetEndPoint(1);
+                        XYZ pipeDir = (pipeEnd - pipeStart).Normalize();
+                        double pipeRotation = Math.Atan2(pipeDir.Y, pipeDir.X);
+
+                        // Perpendicular direction (rotated 90° about Z)
+                        XYZ perpDir = new XYZ(-pipeDir.Y, pipeDir.X, 0).Normalize();
+
+                        // ── Calculate hanger points ──
+                        List<XYZ> hangerPoints = CalculateHangerPoints(
+                            pipeStart, pipeEnd, pipeDir, pipeLength,
+                            cfg.MaxSpacingFeet, cfg.EvenlyDistributed);
+
+                        if (hangerPoints.Count == 0) continue;
+
+                        bool anyPlaced = false;
+
+                        foreach (XYZ hangerPoint in hangerPoints)
                         {
-                            Line pipeLine = GetPipeCenterline(pipe);
-                            if (pipeLine == null) continue;
+                            // ── Find nearest parallel structural member ──
+                            var nearestFraming = FindNearestParallelFraming(
+                                hangerPoint, perpDir, framingList);
 
-                            double pipeLength = pipeLine.Length;
-                            if (pipeLength < MinPipeLengthFeet) continue;
+                            double rodLength = pipeDiameter; // default
+                            double topAccessoryOffset = 0;
+                            double clampAngle = 0;
+                            string typeCode = cfg.HangerTypeCode;
+                            string structureName = "";
+                            bool isWidemouth = false;
 
-                            ElementId levelId = pipe.LookupParameter("Reference Level")
-                                ?.AsElementId() ?? pipe.LevelId;
-                            Level level = doc.GetElement(levelId) as Level;
-                            if (level == null) continue;
-
-                            double pipeDiameter = ParameterHelpers.GetPipeDiameterValue(pipe);
-
-                            XYZ pipeStart = pipeLine.GetEndPoint(0);
-                            XYZ pipeEnd = pipeLine.GetEndPoint(1);
-                            XYZ pipeDir = (pipeEnd - pipeStart).Normalize();
-                            double pipeRotation = Math.Atan2(pipeDir.Y, pipeDir.X);
-
-                            // Perpendicular direction (rotated 90° about Z)
-                            XYZ perpDir = new XYZ(-pipeDir.Y, pipeDir.X, 0).Normalize();
-
-                            // ── Calculate hanger points ──
-                            List<XYZ> hangerPoints = CalculateHangerPoints(
-                                pipeStart, pipeEnd, pipeDir, pipeLength,
-                                dialog.MaxSpacingFeet, dialog.EvenlyDistributed);
-
-                            if (hangerPoints.Count == 0) continue;
-
-                            bool anyPlaced = false;
-
-                            foreach (XYZ hangerPoint in hangerPoints)
+                            if (nearestFraming != null)
                             {
-                                // ── Find nearest parallel structural member ──
-                                var nearestFraming = FindNearestParallelFraming(
-                                    hangerPoint, perpDir, framingList);
+                                structuralHits++;
 
-                                double rodLength = pipeDiameter; // default
-                                double topAccessoryOffset = 0;
-                                double clampAngle = 0;
-                                string typeCode = dialog.HangerTypeCode;
-                                string structureName = "";
-                                bool isWidemouth = false;
+                                // Determine attachment Z
+                                double attachZ;
+                                double flangeThicknessInches = EstimateFlangeThickness(nearestFraming);
 
-                                if (nearestFraming != null)
+                                if (cfg.AttachToBottom)
                                 {
-                                    structuralHits++;
-
-                                    // Determine attachment Z
-                                    double attachZ;
-                                    double flangeThicknessInches = EstimateFlangeThickness(nearestFraming);
-
-                                    if (dialog.AttachToBottom)
-                                    {
-                                        attachZ = nearestFraming.BottomZ;
-                                        topAccessoryOffset = (BottomOffsetBase - flangeThicknessInches) / 12.0;
-                                        if (topAccessoryOffset < 0) topAccessoryOffset = 0;
-                                    }
-                                    else
-                                    {
-                                        attachZ = nearestFraming.TopZ;
-                                        topAccessoryOffset = TopAttachOffset;
-                                    }
-
-                                    // Rod length = distance from pipe to structural attachment
-                                    rodLength = Math.Abs(attachZ - hangerPoint.Z);
-                                    if (rodLength < 0.01) rodLength = pipeDiameter;
-
-                                    // Widemouth check: flange > 0.75"
-                                    isWidemouth = flangeThicknessInches > WidemouthFlangeThresholdInches;
-                                    if (isWidemouth)
-                                    {
-                                        typeCode = dialog.WidemouthTypeCode;
-                                        widemouthCount++;
-                                    }
-
-                                    // Clamp angle
-                                    clampAngle = StructuralFramingHelpers.CalculateClampAngle(
-                                        hangerPoint, pipeRotation, nearestFraming.Centerline);
-
-                                    structureName = nearestFraming.Name;
+                                    attachZ = nearestFraming.BottomZ;
+                                    topAccessoryOffset = (BottomOffsetBase - flangeThicknessInches) / 12.0;
+                                    if (topAccessoryOffset < 0) topAccessoryOffset = 0;
+                                }
+                                else
+                                {
+                                    attachZ = nearestFraming.TopZ;
+                                    topAccessoryOffset = TopAttachOffset;
                                 }
 
-                                // ── Place hanger ──
-                                FamilyInstance hanger = doc.Create.NewFamilyInstance(
-                                    hangerPoint, hangerType, level,
-                                    Autodesk.Revit.DB.Structure.StructuralType.NonStructural);
+                                // Rod length = distance from pipe to structural attachment
+                                rodLength = Math.Abs(attachZ - hangerPoint.Z);
+                                if (rodLength < 0.01) rodLength = pipeDiameter;
 
-                                if (hanger == null) continue;
-
-                                // Rotate to pipe direction
-                                Line rotAxis = Line.CreateBound(
-                                    hangerPoint,
-                                    new XYZ(hangerPoint.X, hangerPoint.Y, hangerPoint.Z + 1));
-                                ElementTransformUtils.RotateElement(
-                                    doc, hanger.Id, rotAxis, pipeRotation);
-
-                                // ── Set parameters ──
-                                SetParamSafe(hanger, "Nominal Diameter", pipeDiameter);
-                                SetParamSafe(hanger, "Rod Length", Math.Round(rodLength, 4));
-
-                                double elevFromLevel = hangerPoint.Z - level.Elevation;
-                                SetParamSafe(hanger, "Elevation from Level", elevFromLevel);
-
-                                // Top accessory offset
-                                SetParamSafe(hanger, "Top Accessory Offset", topAccessoryOffset);
+                                // Widemouth check: flange > 0.75"
+                                isWidemouth = flangeThicknessInches > WidemouthFlangeThresholdInches;
+                                if (isWidemouth)
+                                {
+                                    typeCode = cfg.WidemouthTypeCode;
+                                    widemouthCount++;
+                                }
 
                                 // Clamp angle
-                                SetParamSafe(hanger, "Clamp Angle", clampAngle);
+                                clampAngle = StructuralFramingHelpers.CalculateClampAngle(
+                                    hangerPoint, pipeRotation, nearestFraming.Centerline);
 
-                                // Hydratec parameters
-                                SetParamSafe(hanger, "Type Code (Hydratec)", typeCode);
-                                SetParamSafe(hanger, "Additional Stocklist Information (Hydratec)",
-                                    !string.IsNullOrEmpty(structureName) ? structureName : "CON1," + pipe.Id.ToString());
-
-                                // C-Clamp
-                                SetParamSafe(hanger, "C Clamp", dialog.ShowCClamp ? 1.0 : 0.0);
-
-                                // Comments
-                                SetParamSafe(hanger, "Comments", structureName);
-
-                                hangersPlaced++;
-                                anyPlaced = true;
+                                structureName = nearestFraming.Name;
                             }
 
-                            if (anyPlaced) pipesProcessed++;
+                            // ── Place hanger ──
+                            FamilyInstance hanger = doc.Create.NewFamilyInstance(
+                                hangerPoint, hangerType, level,
+                                Autodesk.Revit.DB.Structure.StructuralType.NonStructural);
+
+                            if (hanger == null) continue;
+
+                            // Rotate to pipe direction
+                            Line rotAxis = Line.CreateBound(
+                                hangerPoint,
+                                new XYZ(hangerPoint.X, hangerPoint.Y, hangerPoint.Z + 1));
+                            ElementTransformUtils.RotateElement(
+                                doc, hanger.Id, rotAxis, pipeRotation);
+
+                            // ── Set parameters ──
+                            SetParamSafe(hanger, "Nominal Diameter", pipeDiameter);
+                            SetParamSafe(hanger, "Rod Length", Math.Round(rodLength, 4));
+
+                            double elevFromLevel = hangerPoint.Z - level.Elevation;
+                            SetParamSafe(hanger, "Elevation from Level", elevFromLevel);
+
+                            // Top accessory offset
+                            SetParamSafe(hanger, "Top Accessory Offset", topAccessoryOffset);
+
+                            // Clamp angle
+                            SetParamSafe(hanger, "Clamp Angle", clampAngle);
+
+                            // Hydratec parameters
+                            SetParamSafe(hanger, "Type Code (Hydratec)", typeCode);
+                            SetParamSafe(hanger, "Additional Stocklist Information (Hydratec)",
+                                !string.IsNullOrEmpty(structureName) ? structureName : "CON1," + pipe.Id.ToString());
+
+                            // C-Clamp
+                            SetParamSafe(hanger, "C Clamp", cfg.ShowCClamp ? 1.0 : 0.0);
+
+                            // Comments
+                            SetParamSafe(hanger, "Comments", structureName);
+
+                            hangersPlaced++;
+                            anyPlaced = true;
                         }
 
-                        tw.Commit();
+                        if (anyPlaced) pipesProcessed++;
                     }
 
-                    string spacingDesc = dialog.EvenlyDistributed
-                        ? $"evenly distributed (max {dialog.MaxSpacingFeet:F1}' apart)"
-                        : $"exact spacing at {dialog.MaxSpacingFeet:F1}' intervals";
-
-                    TaskDialog.Show("Auto Hang — Complete",
-                        $"Placed {hangersPlaced} hangers across {pipesProcessed} pipes.\n" +
-                        $"Spacing: {spacingDesc}\n" +
-                        $"Structural hits: {structuralHits} (of {hangersPlaced} hangers found parallel framing)\n" +
-                        $"Widemouth hangers: {widemouthCount}\n" +
-                        $"Attach to: {(dialog.AttachToBottom ? "BOTTOM" : "TOP")} of structural.");
+                    tw.Commit();
                 }
+
+                string spacingDesc = cfg.EvenlyDistributed
+                    ? $"evenly distributed (max {cfg.MaxSpacingFeet:F1}' apart)"
+                    : $"exact spacing at {cfg.MaxSpacingFeet:F1}' intervals";
+
+                TaskDialog.Show("Auto Hang — Complete",
+                    $"Placed {hangersPlaced} hangers across {pipesProcessed} pipes.\n" +
+                    $"Spacing: {spacingDesc}\n" +
+                    $"Structural hits: {structuralHits} (of {hangersPlaced} hangers found parallel framing)\n" +
+                    $"Widemouth hangers: {widemouthCount}\n" +
+                    $"Attach to: {(cfg.AttachToBottom ? "BOTTOM" : "TOP")} of structural.");
 
                 return Result.Succeeded;
             }

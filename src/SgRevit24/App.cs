@@ -27,25 +27,19 @@ namespace SgRevitAddin
             // ── Hangers panel ──
             RibbonPanel hangersPanel = application.CreateRibbonPanel(tabName, "Hangers");
 
-            // Small stack: alternate placement methods
+            // Large: unified Place Hangers — auto-spaced (decks), auto-spaced
+            // (parallel framing), downstream ends, or at structural steel,
+            // chosen via a method dropdown. Replaces the four separate
+            // auto-placement commands.
+            AddLargeButton(hangersPanel, "PlaceHangers", "Place\nHangers", asmPath,
+                "SgRevitAddin.Commands.Hangers.PlaceHangers.PlaceHangersCommand",
+                "hang-spacing-32.png", "hang-spacing-16.png",
+                "Place hangers by one of four methods — auto-spaced to decks (raybounce), auto-spaced to parallel framing, at downstream ends of threaded lines, or at structural steel. Pick a method in the dialog; settings are remembered per method.");
+            // Small stack: detail-line / CAD placement
             hangersPanel.AddStackedItems(
                 MakeButton("AutoHangCAD", "Hang at CAD", asmPath,
                     "SgRevitAddin.Commands.Hangers.HangAtCADLinesCommand",
                     "hang-cad-16.png", "Place hangers where pipes cross linked CAD structural lines."),
-                MakeButton("AutoHangStructural", "Hang at Steel", asmPath,
-                    "SgRevitAddin.Commands.Hangers.HangAtStructuralCommand",
-                    "hang-struct-16.png", "Place hangers where pipes cross structural framing members."),
-                MakeButton("AutoHangDownstream", "Hang Downstream", asmPath,
-                    "SgRevitAddin.Commands.Hangers.HangDownstreamCommand",
-                    "hang-downstream-16.png", "Place hangers at downstream ends of threaded branchline pipes (raybounce)."));
-            // Small stack: spacing-based placement
-            hangersPanel.AddStackedItems(
-                MakeButton("AutoHangTypicalSpacing", "Hang Spaced", asmPath,
-                    "SgRevitAddin.Commands.Hangers.HangTypicalSpacingCommand",
-                    "hang-spacing-16.png", "Place hangers at typical spacing along straight pipe runs (raybounce to decks)."),
-                MakeButton("AutoHangParallelStructural", "Hang Parallel", asmPath,
-                    "SgRevitAddin.Commands.Hangers.HangParallelStructuralCommand",
-                    "hang-parallel-16.png", "Place hangers at typical spacing, attached to parallel structural framing."),
                 MakeButton("AutoHangUserLocations", "Hang User Loc", asmPath,
                     "SgRevitAddin.Commands.Hangers.HangUserLocationsCommand",
                     "hang-userloc-16.png", "Place hangers at user-marked detail line locations with raybounce rod length."));

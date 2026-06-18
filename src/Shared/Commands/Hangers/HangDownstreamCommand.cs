@@ -2,6 +2,7 @@ using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Selection;
+using SgRevitAddin.Commands.Hangers.PlaceHangers;
 using SgRevitAddin.Utils;
 using System;
 using System.Collections.Generic;
@@ -115,175 +116,208 @@ namespace SgRevitAddin.Commands.Hangers
                     if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK)
                         return Result.Cancelled;
 
-                    double distFromEndFeet = dialog.DistanceFromEndInches / 12.0;
-                    double minLengthFeet = dialog.MinPipeLengthInches / 12.0;
-
-                    // Apply minimum length filter
-                    filteredPipes = filteredPipes
-                        .Where(p => GetPipeLength(p) >= minLengthFeet)
-                        .ToList();
-
-                    if (filteredPipes.Count == 0)
+                    var cfg = new DownstreamConfig
                     {
-                        TaskDialog.Show("Auto Hang",
-                            $"No pipes meet the minimum length of {dialog.MinPipeLengthInches}\".");
-                        return Result.Cancelled;
-                    }
+                        SelectedFamily = dialog.SelectedFamily,
+                        RoofTypeCode = dialog.RoofTypeCode,
+                        FloorDeckTypeCode = dialog.FloorDeckTypeCode,
+                        FramingTypeCode = dialog.FramingTypeCode,
+                        StairsTypeCode = dialog.StairsTypeCode,
+                        DistanceFromEndInches = dialog.DistanceFromEndInches,
+                        MinPipeLengthInches = dialog.MinPipeLengthInches,
+                        ShowCClamp = dialog.ShowCClamp
+                    };
+                    return RunPlacement(uidoc, cfg, allPipes, ref message);
+                }
+            }
+            catch (Exception ex)
+            {
+                message = ex.Message;
+                return Result.Failed;
+            }
+        }
 
-                    // ── Step 4: Find hanger family type ──
-                    FamilySymbol hangerType = FindHangerFamilyType(doc, dialog.SelectedFamily);
-                    if (hangerType == null)
+        /// <summary>
+        /// Places downstream-end hangers on the given pre-picked pipes.
+        /// Shared by this command's Execute and the unified Place Hangers
+        /// command. Everything after the dialog lives here.
+        /// </summary>
+        public Result RunPlacement(UIDocument uidoc, DownstreamConfig cfg,
+            IList<Element> allPipes, ref string message)
+        {
+            Document doc = uidoc.Document;
+            try
+            {
+                var filteredPipes = FilterPipes(doc, allPipes.ToList());
+
+                double distFromEndFeet = cfg.DistanceFromEndInches / 12.0;
+                double minLengthFeet = cfg.MinPipeLengthInches / 12.0;
+
+                // Apply minimum length filter
+                filteredPipes = filteredPipes
+                    .Where(p => GetPipeLength(p) >= minLengthFeet)
+                    .ToList();
+
+                if (filteredPipes.Count == 0)
+                {
+                    TaskDialog.Show("Auto Hang",
+                        $"No pipes meet the minimum length of {cfg.MinPipeLengthInches}\".");
+                    return Result.Cancelled;
+                }
+
+                // ── Step 4: Find hanger family type ──
+                FamilySymbol hangerType = FindHangerFamilyType(doc, cfg.SelectedFamily);
+                if (hangerType == null)
+                {
+                    TaskDialog.Show("Auto Hang",
+                        $"Could not find family type for '{cfg.SelectedFamily}'.");
+                    return Result.Failed;
+                }
+
+                // ── Step 5: Process pipes and place hangers ──
+                int hangersPlaced = 0;
+                int pipesProcessed = 0;
+                int raybounceHits = 0;
+
+                using (var tw = new TransactionWrapper(doc, "Auto Hang Downstream Ends"))
+                {
+                    if (!hangerType.IsActive)
+                        hangerType.Activate();
+
+                    // Get or create the raybounce 3D view
+                    View3D rayView = RayBounceHelpers.GetOrCreateRayBounceView(doc);
+                    doc.Regenerate(); // ensure view is ready for raybounce
+
+                    foreach (Element pipe in filteredPipes)
                     {
-                        TaskDialog.Show("Auto Hang",
-                            $"Could not find family type for '{dialog.SelectedFamily}'.");
-                        return Result.Failed;
-                    }
+                        Line pipeLine = GetPipeCenterline(pipe);
+                        if (pipeLine == null) continue;
 
-                    // ── Step 5: Process pipes and place hangers ──
-                    int hangersPlaced = 0;
-                    int pipesProcessed = 0;
-                    int raybounceHits = 0;
+                        ElementId levelId = pipe.LookupParameter("Reference Level")
+                            ?.AsElementId() ?? pipe.LevelId;
+                        Level level = doc.GetElement(levelId) as Level;
+                        if (level == null) continue;
 
-                    using (var tw = new TransactionWrapper(doc, "Auto Hang Downstream Ends"))
-                    {
-                        if (!hangerType.IsActive)
-                            hangerType.Activate();
+                        double pipeDiameter = ParameterHelpers.GetPipeDiameterValue(pipe);
+                        double pipeLength = GetPipeLength(pipe);
 
-                        // Get or create the raybounce 3D view
-                        View3D rayView = RayBounceHelpers.GetOrCreateRayBounceView(doc);
-                        doc.Regenerate(); // ensure view is ready for raybounce
+                        // Determine downstream end (opposite the POL/main connection)
+                        XYZ downstreamEnd = GetDownstreamEnd(doc, pipe, pipeLine);
 
-                        foreach (Element pipe in filteredPipes)
+                        // Pipe direction from upstream to downstream
+                        XYZ upstreamEnd = pipeLine.GetEndPoint(0);
+                        if (IsCloserTo(upstreamEnd, downstreamEnd))
+                            upstreamEnd = pipeLine.GetEndPoint(1);
+
+                        XYZ pipeDir = (downstreamEnd - upstreamEnd).Normalize();
+                        double pipeRotation = Math.Atan2(pipeDir.Y, pipeDir.X);
+
+                        // ── Calculate hanger points ──
+                        var hangerPoints = new List<XYZ>();
+
+                        // Primary hanger: at specified distance from downstream end
+                        if (pipeLength > distFromEndFeet)
                         {
-                            Line pipeLine = GetPipeCenterline(pipe);
-                            if (pipeLine == null) continue;
-
-                            ElementId levelId = pipe.LookupParameter("Reference Level")
-                                ?.AsElementId() ?? pipe.LevelId;
-                            Level level = doc.GetElement(levelId) as Level;
-                            if (level == null) continue;
-
-                            double pipeDiameter = ParameterHelpers.GetPipeDiameterValue(pipe);
-                            double pipeLength = GetPipeLength(pipe);
-
-                            // Determine downstream end (opposite the POL/main connection)
-                            XYZ downstreamEnd = GetDownstreamEnd(doc, pipe, pipeLine);
-
-                            // Pipe direction from upstream to downstream
-                            XYZ upstreamEnd = pipeLine.GetEndPoint(0);
-                            if (IsCloserTo(upstreamEnd, downstreamEnd))
-                                upstreamEnd = pipeLine.GetEndPoint(1);
-
-                            XYZ pipeDir = (downstreamEnd - upstreamEnd).Normalize();
-                            double pipeRotation = Math.Atan2(pipeDir.Y, pipeDir.X);
-
-                            // ── Calculate hanger points ──
-                            var hangerPoints = new List<XYZ>();
-
-                            // Primary hanger: at specified distance from downstream end
-                            if (pipeLength > distFromEndFeet)
-                            {
-                                XYZ primaryPoint = downstreamEnd - pipeDir * distFromEndFeet;
-                                hangerPoints.Add(primaryPoint);
-                            }
-                            else
-                            {
-                                // Pipe too short for offset — place at midpoint
-                                XYZ midpoint = (upstreamEnd + downstreamEnd) / 2.0;
-                                hangerPoints.Add(midpoint);
-                            }
-
-                            // Extra midpoint hanger for small-diameter long pipes
-                            if (pipeDiameter < SmallPipeDiameterFeet && pipeLength > LongPipeLengthFeet)
-                            {
-                                XYZ midpoint = (upstreamEnd + downstreamEnd) / 2.0;
-                                // Only add if it's not too close to the primary point
-                                if (hangerPoints.Count == 0 ||
-                                    hangerPoints[0].DistanceTo(midpoint) > 1.0) // at least 1 foot apart
-                                {
-                                    hangerPoints.Add(midpoint);
-                                }
-                            }
-
-                            bool anyPlaced = false;
-
-                            foreach (XYZ hangerPoint in hangerPoints)
-                            {
-                                // ── Raybounce: shoot ray upward to find structure ──
-                                double rodLength = pipeDiameter; // default rod length = pipe diameter
-                                string typeCode = dialog.FramingTypeCode; // default
-                                string structureName = "";
-
-                                if (rayView != null)
-                                {
-                                    var hit = RayBounceHelpers.ShootRayUpward(
-                                        doc, rayView, hangerPoint);
-
-                                    if (hit != null)
-                                    {
-                                        rodLength = hit.Distance;
-                                        raybounceHits++;
-
-                                        typeCode = RayBounceHelpers.GetTypeCodeForCategory(
-                                            hit.CategoryName,
-                                            dialog.RoofTypeCode,
-                                            dialog.FloorDeckTypeCode,
-                                            dialog.FramingTypeCode,
-                                            dialog.StairsTypeCode);
-
-                                        structureName = GetElementTypeName(hit.HitElement);
-                                    }
-                                }
-
-                                // ── Place hanger ──
-                                FamilyInstance hanger = doc.Create.NewFamilyInstance(
-                                    hangerPoint, hangerType, level,
-                                    Autodesk.Revit.DB.Structure.StructuralType.NonStructural);
-
-                                if (hanger == null) continue;
-
-                                // Rotate to pipe direction
-                                Line rotAxis = Line.CreateBound(
-                                    hangerPoint,
-                                    new XYZ(hangerPoint.X, hangerPoint.Y, hangerPoint.Z + 1));
-                                ElementTransformUtils.RotateElement(
-                                    doc, hanger.Id, rotAxis, pipeRotation);
-
-                                // ── Set parameters ──
-                                SetParamSafe(hanger, "Nominal Diameter", pipeDiameter);
-                                SetParamSafe(hanger, "Rod Length", rodLength);
-
-                                // Elevation from level
-                                double elevFromLevel = hangerPoint.Z - level.Elevation;
-                                SetParamSafe(hanger, "Elevation from Level", elevFromLevel);
-
-                                // Hydratec family parameters
-                                SetParamSafe(hanger, "Type Code (Hydratec)", typeCode);
-                                if (!string.IsNullOrEmpty(structureName))
-                                    SetParamSafe(hanger, "Additional Stocklist Information (Hydratec)", structureName);
-
-                                // C-clamp visibility
-                                SetParamSafe(hanger, "C Clamp", dialog.ShowCClamp ? 1.0 : 0.0);
-
-                                // Comments — structure info (duplicated for non-Hydratec families)
-                                if (!string.IsNullOrEmpty(structureName))
-                                    SetParamSafe(hanger, "Comments", structureName);
-
-                                hangersPlaced++;
-                                anyPlaced = true;
-                            }
-
-                            if (anyPlaced) pipesProcessed++;
+                            XYZ primaryPoint = downstreamEnd - pipeDir * distFromEndFeet;
+                            hangerPoints.Add(primaryPoint);
+                        }
+                        else
+                        {
+                            // Pipe too short for offset — place at midpoint
+                            XYZ midpoint = (upstreamEnd + downstreamEnd) / 2.0;
+                            hangerPoints.Add(midpoint);
                         }
 
-                        tw.Commit();
+                        // Extra midpoint hanger for small-diameter long pipes
+                        if (pipeDiameter < SmallPipeDiameterFeet && pipeLength > LongPipeLengthFeet)
+                        {
+                            XYZ midpoint = (upstreamEnd + downstreamEnd) / 2.0;
+                            // Only add if it's not too close to the primary point
+                            if (hangerPoints.Count == 0 ||
+                                hangerPoints[0].DistanceTo(midpoint) > 1.0) // at least 1 foot apart
+                            {
+                                hangerPoints.Add(midpoint);
+                            }
+                        }
+
+                        bool anyPlaced = false;
+
+                        foreach (XYZ hangerPoint in hangerPoints)
+                        {
+                            // ── Raybounce: shoot ray upward to find structure ──
+                            double rodLength = pipeDiameter; // default rod length = pipe diameter
+                            string typeCode = cfg.FramingTypeCode; // default
+                            string structureName = "";
+
+                            if (rayView != null)
+                            {
+                                var hit = RayBounceHelpers.ShootRayUpward(
+                                    doc, rayView, hangerPoint);
+
+                                if (hit != null)
+                                {
+                                    rodLength = hit.Distance;
+                                    raybounceHits++;
+
+                                    typeCode = RayBounceHelpers.GetTypeCodeForCategory(
+                                        hit.CategoryName,
+                                        cfg.RoofTypeCode,
+                                        cfg.FloorDeckTypeCode,
+                                        cfg.FramingTypeCode,
+                                        cfg.StairsTypeCode);
+
+                                    structureName = GetElementTypeName(hit.HitElement);
+                                }
+                            }
+
+                            // ── Place hanger ──
+                            FamilyInstance hanger = doc.Create.NewFamilyInstance(
+                                hangerPoint, hangerType, level,
+                                Autodesk.Revit.DB.Structure.StructuralType.NonStructural);
+
+                            if (hanger == null) continue;
+
+                            // Rotate to pipe direction
+                            Line rotAxis = Line.CreateBound(
+                                hangerPoint,
+                                new XYZ(hangerPoint.X, hangerPoint.Y, hangerPoint.Z + 1));
+                            ElementTransformUtils.RotateElement(
+                                doc, hanger.Id, rotAxis, pipeRotation);
+
+                            // ── Set parameters ──
+                            SetParamSafe(hanger, "Nominal Diameter", pipeDiameter);
+                            SetParamSafe(hanger, "Rod Length", rodLength);
+
+                            // Elevation from level
+                            double elevFromLevel = hangerPoint.Z - level.Elevation;
+                            SetParamSafe(hanger, "Elevation from Level", elevFromLevel);
+
+                            // Hydratec family parameters
+                            SetParamSafe(hanger, "Type Code (Hydratec)", typeCode);
+                            if (!string.IsNullOrEmpty(structureName))
+                                SetParamSafe(hanger, "Additional Stocklist Information (Hydratec)", structureName);
+
+                            // C-clamp visibility
+                            SetParamSafe(hanger, "C Clamp", cfg.ShowCClamp ? 1.0 : 0.0);
+
+                            // Comments — structure info (duplicated for non-Hydratec families)
+                            if (!string.IsNullOrEmpty(structureName))
+                                SetParamSafe(hanger, "Comments", structureName);
+
+                            hangersPlaced++;
+                            anyPlaced = true;
+                        }
+
+                        if (anyPlaced) pipesProcessed++;
                     }
 
-                    TaskDialog.Show("Auto Hang — Complete",
-                        $"Placed {hangersPlaced} hangers across {pipesProcessed} pipes.\n" +
-                        $"Raybounce hits: {raybounceHits} (rod length set from structure above)\n" +
-                        $"Pipes analyzed: {filteredPipes.Count} (after filtering)");
+                    tw.Commit();
                 }
+
+                TaskDialog.Show("Auto Hang — Complete",
+                    $"Placed {hangersPlaced} hangers across {pipesProcessed} pipes.\n" +
+                    $"Raybounce hits: {raybounceHits} (rod length set from structure above)\n" +
+                    $"Pipes analyzed: {filteredPipes.Count} (after filtering)");
 
                 return Result.Succeeded;
             }
