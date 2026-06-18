@@ -41,25 +41,17 @@ select hangers first.
 ## Math
 
 For each matching hanger, the command finds the closest pipe centerline,
-reads the pipe's outside diameter (actual, not nominal), and computes:
+reads the pipe's outside diameter (actual, not nominal), and computes a single
+formula for **all** Type Codes:
 
-| Type Code | Formula |
-|---|---|
-| `01*` — any code starting with `01` (e.g. `01`, `01V`, `01W`) | `gap = rod_length − 1.0" − (pipe_OD ÷ 2)` |
-| `02*` — any code starting with `02` (e.g. `02`, `02C`, `02D`) | `gap = rod_length − 1.5" − (pipe_OD ÷ 2)` |
-| `05S*` — any code starting with `05S` (e.g. `05S`, `05SA`) | `gap = rod_length − 0.5" − (pipe_OD ÷ 2)` |
-| Everything else — `03*` (`03`, `03A`, `03B`, …), `04`, etc. | `gap = rod_length − (pipe_OD ÷ 2)` |
+```
+gap = rod_length − (pipe_OD ÷ 2)
+```
 
-The math is grouped by **Type Code prefix**, not the full code, because the
-hardware shape is the same across all variants in a family (Hydratec uses the
-trailing letter — `02C`, `02D`, `03A`, `03B`, … — to distinguish things like
-ceiling vs deck attachment that don't change the rod-to-ring geometry).
-
-The hardware offsets account for fixed pieces between the rod end and the
-pipe top (adjustable ring, retainer, etc.) that aren't captured in the
-**Rod Length** parameter. `05S` is matched **before** `05*` would otherwise
-fall through, so `05S*` codes get the 0.5" offset while any other `05`-prefixed
-code uses the baseline formula.
+> **Note:** Earlier versions subtracted per-type hardware offsets — 1.0" for
+> `01*`, 1.5" for `02*`, 0.5" for `05S*` — to account for takeout lengths that
+> were being added in the drawing. Those lengths are no longer added, so the
+> adjustments were removed and the gap math is now uniform.
 
 If `gap > threshold`, the hanger is flagged.
 
@@ -75,22 +67,32 @@ If a hanger has no `Type Code (Hydratec)` value, it's silently skipped — the
 dialog already filters available codes from the selection. If a hanger has no
 `Rod Length` value, it's reported in the "skipped" count.
 
-## Marker geometry
+## Marker geometry and color
 
 The command places a Revit `DirectShape` at each flagged hanger — a vertical
-cylinder (8" diameter × 8" tall, Generic Model category, bright sky-blue
-material) created directly in the project. No family file required, and
-visible in both plan and 3D views automatically.
+cylinder (8" diameter × 8" tall, Generic Model category) created directly in
+the project. No family file required, and visible in both plan and 3D views
+automatically.
 
-The first run creates a project-wide material named `SG_HangerGapMarker`;
-subsequent runs reuse it (and refresh its color, so projects upgraded from
-older versions of this command will recolor any leftover red markers to
-blue on the next run).
+The marker **color** flags how badly the hanger failed:
 
-Markers are stamped with `ApplicationId = "SgRevitAddin"` and
-`ApplicationDataId = "HangerGapMarker"` so the command can find and delete
-its own markers without touching unrelated DirectShape elements created by
-other tools or addins.
+| Color | Meaning | Condition |
+|---|---|---|
+| **Blue** | Clear failure | gap exceeds the threshold by **≥ 0.5"** |
+| **Green** | Near miss / possible false positive | gap exceeds the threshold by **< 0.5"** |
+
+Green markers are worth a manual look — a rod length that's off by a fraction
+of an inch (placement variables, rounding) can tip a hanger just over the 6"
+line without being a real problem.
+
+Two project-wide materials back the markers: `SG_HangerGapMarker` (blue) and
+`SG_HangerGapMarkerNear` (green). They're created on first run and reused (with
+their color refreshed) afterward.
+
+Markers of **both** colors are stamped with `ApplicationId = "SgRevitAddin"`
+and `ApplicationDataId = "HangerGapMarker"`, so "Clear Markers Only" and the
+automatic re-run cleanup remove them together, without touching unrelated
+DirectShape elements created by other tools.
 
 ## Re-running
 
@@ -105,9 +107,9 @@ won't accumulate stale markers.
 - Does not measure the actual structure-to-rod-top distance via raybounce —
   it trusts the `Rod Length` parameter. Use `Sync Hangers Raybounce` first
   to ensure rod lengths are accurate.
-- Hardcoded hardware offsets cover Type `01*` (1.0"), `02*` (1.5"), and
-  `05S*` (0.5"). If you need additional type-specific math (e.g. Type 04
-  has a 0.75" offset), add a branch in `ComputeGap()` in the command file.
+- The gap math is uniform across all Type Codes (`gap = rod_length − pipe_OD/2`).
+  If a project ever needs type-specific offsets again, add a branch in
+  `ComputeGap()` in the command file.
 
 ## See also
 

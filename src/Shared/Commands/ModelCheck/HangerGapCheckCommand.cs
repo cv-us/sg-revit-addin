@@ -17,15 +17,12 @@ namespace SgRevitAddin.Commands.ModelCheck
     /// such hangers by placing a marker family at the hanger location so
     /// they're easy to spot in plan and 3D views.
     ///
-    /// GAP MATH (by Type Code (Hydratec) prefix):
-    ///   - Type 01* (covers 01, 01V, 01W, …):
-    ///       gap = rod_length - 1.0" - (pipe_OD / 2)
-    ///   - Type 02* (adjustable ring + 1.5" hardware — covers 02, 02C, 02D, …):
-    ///       gap = rod_length - 1.5" - (pipe_OD / 2)
-    ///   - Type 05S* (covers 05S, 05SA, …):
-    ///       gap = rod_length - 0.5" - (pipe_OD / 2)
-    ///   - Type 03* and everything else (e.g. 03, 03A, 03B, 04, …):
+    /// GAP MATH (uniform for all Type Codes):
     ///       gap = rod_length - (pipe_OD / 2)
+    ///   (Earlier versions subtracted per-type hardware offsets of 1" for
+    ///   01*, 1.5" for 02*, and 0.5" for 05S* to account for takeout lengths
+    ///   added in the drawing. Those lengths are no longer added, so the
+    ///   adjustments were removed.)
     ///
     /// WORKFLOW:
     ///   1. User pre-selects hangers
@@ -33,18 +30,22 @@ namespace SgRevitAddin.Commands.ModelCheck
     ///      and the gap threshold (default 6")
     ///   3. For each matching hanger, find the closest pipe centerline,
     ///      read pipe Outside Diameter and hanger Rod Length
-    ///   4. Apply the type-code-specific math
+    ///   4. Compute gap = rod_length - pipe_OD/2
     ///   5. If gap > threshold, place a DirectShape marker (a small
     ///      vertical cylinder) at the hanger's location and add to selection
     ///   6. Report summary
     ///
-    /// MARKER GEOMETRY:
+    /// MARKER GEOMETRY / COLOR:
     ///   The marker is a Revit DirectShape — a built-in 3D shape created
     ///   directly in the project, with no family file required. It's a
     ///   vertical cylinder (~4" diameter × 4" tall) categorized as Generic
     ///   Model so it shows in both plan and 3D views. Markers are tagged
     ///   with ApplicationId/ApplicationDataId so the command can find and
     ///   delete them on re-run or via "Clear Markers Only".
+    ///   • BLUE  — a clear failure (gap exceeds the threshold by ≥ 0.5").
+    ///   • GREEN — a near miss (gap exceeds the threshold by < 0.5"), a
+    ///     possible false positive worth a manual look (rod length can be
+    ///     slightly off due to placement variables).
     /// </summary>
     [Transaction(TransactionMode.Manual)]
     [Regeneration(RegenerationOption.Manual)]
@@ -59,14 +60,12 @@ namespace SgRevitAddin.Commands.ModelCheck
         /// <summary>ApplicationDataId stamped on every marker so we can find ours specifically.</summary>
         private const string MarkerAppDataId = "HangerGapMarker";
 
-        /// <summary>Hardware offset for Type 01* hangers (01, 01V, 01W, …), in feet (1.0 inch).</summary>
-        private const double Type01HardwareOffset = 1.0 / 12.0;
-
-        /// <summary>Hardware offset for Type 02 adjustable hangers, in feet (1.5 inches).</summary>
-        private const double Type02HardwareOffset = 1.5 / 12.0;
-
-        /// <summary>Hardware offset for Type 05S* hangers, in feet (0.5 inch).</summary>
-        private const double Type05SHardwareOffset = 0.5 / 12.0;
+        /// <summary>
+        /// A flagged hanger this far or less over the threshold is a NEAR
+        /// MISS — marked green instead of blue as a possible false positive.
+        /// 0.5 inch, in feet.
+        /// </summary>
+        private const double NearMissBandFt = 0.5 / 12.0;
 
         /// <summary>Vertical offset above the hanger location for the marker base, in feet.</summary>
         private const double MarkerZOffset = 0.5; // 6 inches
@@ -84,8 +83,11 @@ namespace SgRevitAddin.Commands.ModelCheck
         /// </summary>
         private const double MaxPipeSlopeFromHorizontal = 0.5;
 
-        /// <summary>Project material name for the blue marker fill.</summary>
+        /// <summary>Project material name for the blue (clear failure) marker fill.</summary>
         private const string MarkerMaterialName = "SG_HangerGapMarker";
+
+        /// <summary>Project material name for the green (near-miss) marker fill.</summary>
+        private const string MarkerMaterialNameNear = "SG_HangerGapMarkerNear";
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
@@ -214,9 +216,10 @@ namespace SgRevitAddin.Commands.ModelCheck
                     int skippedNoPipe = 0;
                     int skippedNoRod = 0;
                     int markersPlaced = 0;
+                    int nearMissCount = 0;
                     var worstOffenders = new List<(FamilyInstance hanger, double gapInches, string typeCode)>();
 
-                    ElementId markerMaterialId;
+                    ElementId blueMaterialId, greenMaterialId;
 
                     using (var tx = new Transaction(doc, "Hanger Gap Check"))
                     {
@@ -225,9 +228,10 @@ namespace SgRevitAddin.Commands.ModelCheck
                         // Clear any previous markers (keeps re-runs clean)
                         ClearPreviousMarkers(doc);
 
-                        // Ensure the blue marker material exists (idempotent — reuses
-                        // existing one if present, creates it once otherwise)
-                        markerMaterialId = GetOrCreateMarkerMaterial(doc);
+                        // Ensure both marker materials exist (idempotent). Blue =
+                        // clear failure, green = near miss (possible false positive).
+                        blueMaterialId = GetOrCreateMaterial(doc, MarkerMaterialName, new Color(40, 130, 255));
+                        greenMaterialId = GetOrCreateMaterial(doc, MarkerMaterialNameNear, new Color(40, 200, 70));
 
                         foreach (var hanger in hangers)
                         {
@@ -262,6 +266,12 @@ namespace SgRevitAddin.Commands.ModelCheck
                                 flaggedIds.Add(hanger.Id);
                                 worstOffenders.Add((hanger, gapFt * 12.0, typeCode));
 
+                                // Near miss (over by < 0.5") → green marker, a
+                                // possible false positive worth a manual review.
+                                bool nearMiss = (gapFt - thresholdFt) < NearMissBandFt;
+                                if (nearMiss) nearMissCount++;
+                                ElementId matId = nearMiss ? greenMaterialId : blueMaterialId;
+
                                 // Place DirectShape marker at the pipe centerline, not at
                                 // the hanger's LocationPoint. SG/Hydratec hanger families
                                 // have their LocationPoint at the top of the rod (at the
@@ -273,7 +283,7 @@ namespace SgRevitAddin.Commands.ModelCheck
                                     XYZ pipePt = nearest.Value.closestPoint;
                                     XYZ markerBase = new XYZ(
                                         pipePt.X, pipePt.Y, pipePt.Z + MarkerZOffset);
-                                    CreateMarker(doc, markerBase, markerMaterialId);
+                                    CreateMarker(doc, markerBase, matId);
                                     markersPlaced++;
                                 }
                                 catch { /* non-critical, hanger still flagged via selection */ }
@@ -301,7 +311,14 @@ namespace SgRevitAddin.Commands.ModelCheck
                         report += $"\nSkipped (no rod length):  {skippedNoRod}";
 
                     if (markersPlaced > 0)
-                        report += $"\n\nMarkers placed: {markersPlaced} (blue cylinders above hangers)";
+                    {
+                        int clearFailures = markersPlaced - nearMissCount;
+                        report += $"\n\nMarkers placed: {markersPlaced}" +
+                                  $"\n  Blue (clear failures, ≥ 0.5\" over):  {clearFailures}" +
+                                  $"\n  Green (near misses, < 0.5\" over):    {nearMissCount}";
+                        if (nearMissCount > 0)
+                            report += "\n  → green markers are possible false positives — review manually.";
+                    }
 
                     if (worstOffenders.Count > 0)
                     {
@@ -328,37 +345,15 @@ namespace SgRevitAddin.Commands.ModelCheck
         // ── Math ──
 
         /// <summary>
-        /// Computes the vertical gap from top-of-pipe to bottom-of-structure.
-        /// Some type-code families have additional hardware offsets stacked
-        /// on top of the rod-minus-half-OD baseline:
-        ///   - Type 01* (01, 01V, 01W, …):  -1.0"
-        ///   - Type 02* (02, 02C, 02D, …):  -1.5"
-        ///   - Type 05S* (05S, 05SA, …):    -0.5"
-        ///   - everything else:             baseline only
-        /// Prefix match is case-insensitive. 05S is checked before 05* so it
-        /// doesn't fall through to the baseline branch.
+        /// Computes the vertical gap from top-of-pipe to bottom-of-structure:
+        /// rod length minus half the pipe outside diameter. Uniform for all
+        /// Type Codes — the old per-type hardware offsets (1"/1.5"/0.5" for
+        /// 01*/02*/05S*) were removed because those takeout lengths are no
+        /// longer added in the drawing.
         /// </summary>
         private double ComputeGap(string typeCode, double rodLengthFt, double pipeODFt)
         {
-            double gapFt = rodLengthFt - (pipeODFt / 2.0);
-
-            if (string.IsNullOrEmpty(typeCode))
-                return gapFt;
-
-            if (typeCode.StartsWith("01", StringComparison.OrdinalIgnoreCase))
-            {
-                gapFt -= Type01HardwareOffset;
-            }
-            else if (typeCode.StartsWith("02", StringComparison.OrdinalIgnoreCase))
-            {
-                gapFt -= Type02HardwareOffset;
-            }
-            else if (typeCode.StartsWith("05S", StringComparison.OrdinalIgnoreCase))
-            {
-                gapFt -= Type05SHardwareOffset;
-            }
-
-            return gapFt;
+            return rodLengthFt - (pipeODFt / 2.0);
         }
 
         // ── Helpers ──
@@ -517,9 +512,10 @@ namespace SgRevitAddin.Commands.ModelCheck
         /// Creates a DirectShape cylinder marker at the given base point.
         /// The cylinder is vertical, centered horizontally on the point,
         /// and extends MarkerHeight upward. Geometry is built with the
-        /// blue marker material so it shows blue in shaded plan and 3D.
-        /// Tagged with our ApplicationId/ApplicationDataId so the cleanup
-        /// query can find it later. Must be called inside a transaction.
+        /// supplied material (blue = clear failure, green = near miss) so it
+        /// shows that color in shaded plan and 3D. Tagged with our
+        /// ApplicationId/ApplicationDataId so the cleanup query can find it
+        /// later. Must be called inside a transaction.
         /// </summary>
         private void CreateMarker(Document doc, XYZ basePoint, ElementId materialId)
         {
@@ -543,31 +539,28 @@ namespace SgRevitAddin.Commands.ModelCheck
         }
 
         /// <summary>
-        /// Returns the ElementId of a project-wide material named MarkerMaterialName.
-        /// Creates it bright blue if missing; refreshes the color on an existing one
-        /// so projects from older versions of this command (where the material was
-        /// red) get re-colored to match the current scheme. Idempotent across runs.
-        /// Must be called inside a transaction.
+        /// Returns the ElementId of a project-wide material with the given
+        /// name and color. Creates it if missing; refreshes the color on an
+        /// existing one so re-runs (and projects from older versions) pick up
+        /// the current scheme. Idempotent. Must be called inside a transaction.
         /// </summary>
-        private ElementId GetOrCreateMarkerMaterial(Document doc)
+        private ElementId GetOrCreateMaterial(Document doc, string name, Color color)
         {
-            var blue = new Color(40, 130, 255); // bright sky-blue, very visible
-
             var existing = new FilteredElementCollector(doc)
                 .OfClass(typeof(Material))
                 .Cast<Material>()
-                .FirstOrDefault(m => string.Equals(m.Name, MarkerMaterialName,
+                .FirstOrDefault(m => string.Equals(m.Name, name,
                     StringComparison.OrdinalIgnoreCase));
 
             if (existing != null)
             {
-                ApplyMarkerMaterialProperties(existing, blue);
+                ApplyMarkerMaterialProperties(existing, color);
                 return existing.Id;
             }
 
-            ElementId newId = Material.Create(doc, MarkerMaterialName);
+            ElementId newId = Material.Create(doc, name);
             if (doc.GetElement(newId) is Material newMat)
-                ApplyMarkerMaterialProperties(newMat, blue);
+                ApplyMarkerMaterialProperties(newMat, color);
             return newId;
         }
 
