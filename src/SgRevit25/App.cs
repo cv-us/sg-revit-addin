@@ -126,17 +126,24 @@ namespace SgRevitAddin
                 "SgRevitAddin.Commands.Hangers.MarkTypeForReviewCommand",
                 "modelcheck-32.png", "modelcheck-16.png",
                 "Flag hangers of a chosen Type Code with a tall magenta cylinder that extends above and below the hanger, visible in plan and 3D.");
-            // Small stack: rod-length syncs
+            // Small stack: rod-length syncs (ref plane + surface)
             hangersPanel.AddStackedItems(
                 MakeButton("SyncHangersToRefPlane", "Sync Ref Plane", asmPath,
                     "SgRevitAddin.Commands.Hangers.SyncHangersToRefPlaneCommand",
                     "sync-refplane-16.png", "Calculate rod lengths from hangers to a named reference plane (slab underside)."),
-                MakeButton("SyncHangersToStructural", "Sync Raybounce", asmPath,
-                    "SgRevitAddin.Commands.Hangers.SyncHangersRaybounceCommand",
-                    "sync-raybounce-16.png", "Calculate rod lengths via raybounce to structural elements above (floors, roofs, framing)."),
                 MakeButton("SyncHangersToStructuralSurface", "Sync Surface", asmPath,
                     "SgRevitAddin.Commands.Hangers.SyncHangersSurfaceCommand",
                     "sync-surface-16.png", "Calculate rod lengths via surface intersection to structural elements above (no raybounce)."));
+            // Small stack: raybounce variants — Early (stable, native structure
+            // only) and Dev (under development: adds imported CAD/IFC mesh + a
+            // ray-fan, still being refined).
+            hangersPanel.AddStackedItems(
+                MakeButton("RaybounceEarly", "Raybounce Early", asmPath,
+                    "SgRevitAddin.Commands.Hangers.RaybounceEarlyCommand",
+                    "sync-raybounce-16.png", "STABLE: rod lengths via raybounce straight up to native structural elements (floors, roofs, framing), including linked models. The reliable fallback."),
+                MakeButton("SyncHangersToStructural", "Raybounce Dev", asmPath,
+                    "SgRevitAddin.Commands.Hangers.SyncHangersRaybounceCommand",
+                    "sync-raybounce-16.png", "UNDER DEVELOPMENT: raybounce that also tries imported CAD/IFC mesh geometry and a multi-ray fan. Still being refined for imported steel — use Raybounce Early if results look wrong."));
             // Small stack: trapeze utilities
             hangersPanel.AddStackedItems(
                 MakeButton("SyncTrapeze", "Sync Trapeze", asmPath,

@@ -1,8 +1,15 @@
-# AutoSync Hangers to Structural Elements (RayBounce)
+# Raybounce Dev (AutoSync Hangers to Structural — RayBounce)
 
 **Command:** `SyncHangersRaybounceCommand`
 **Domain:** Hangers
-**Ribbon:** SG Revit Addin > Hangers > Sync to Structural
+**Ribbon:** SG ♈ > Hangers > Raybounce Dev
+
+> ⚠️ **UNDER DEVELOPMENT.** This is the experimental raybounce that also tries
+> imported CAD / IFC mesh geometry (via a custom triangle raycaster) and a
+> multi-ray fan to tolerate small plan misalignment. It works for native
+> structure but is **still being refined for imported steel** (DWG-linked
+> STEP, linked IFC). If a result looks wrong, use **Raybounce Early**
+> ([raybounce-early.md](raybounce-early.md)), the stable native-only fallback.
 
 ## Purpose
 

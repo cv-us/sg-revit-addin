@@ -73,7 +73,7 @@ namespace SgRevitAddin.Commands.Hangers
 
         private void InitializeComponent()
         {
-            Text = "AutoSync Hangers to Structural (RayBounce)";
+            Text = "Raybounce Dev (under development)";
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;

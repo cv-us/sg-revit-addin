@@ -173,7 +173,7 @@ namespace SgRevitAddin.Commands.Hangers
                     if (cadRaycaster != null && probePoints.Count < 3)
                         probePoints.Add(hangerPoint);
 
-                    var hitResult = ShootRayUp(doc, raybounceView, hangerPoint, elementFilter, cadRaycaster);
+                    var hitResult = ShootRayFan(doc, raybounceView, hangerPoint, elementFilter, cadRaycaster);
                     if (hitResult == null)
                     {
                         misses.Add(hanger);
@@ -338,6 +338,41 @@ namespace SgRevitAddin.Commands.Hangers
 
                 return Result.Succeeded;
             }
+        }
+
+        /// <summary>
+        /// Ray FAN: shoots the center ray plus a ring of slightly-offset rays
+        /// around the hanger and returns the CLOSEST hit among them. A single
+        /// dead-vertical ray misses narrow steel members (beam flanges,
+        /// angles, tube edges) when the hanger is even an inch or two off in
+        /// plan — which is common with imported steel that doesn't perfectly
+        /// align with the Revit pipe. The fan samples a small neighbourhood
+        /// (rings at 2" and 4") so a near-miss still finds the member.
+        /// </summary>
+        private (XYZ hitPoint, double distance, BuiltInCategory category, string categoryLabel)?
+            ShootRayFan(Document doc, View3D view3D, XYZ origin,
+                ElementFilter elementFilter, CadMeshRaycaster cadRaycaster)
+        {
+            // Offsets in feet: center, then 8-spoke rings at 2" and 4".
+            double r1 = 2.0 / 12.0, r2 = 4.0 / 12.0;
+            var offsets = new List<XYZ> { XYZ.Zero };
+            for (int k = 0; k < 8; k++)
+            {
+                double a = k * Math.PI / 4.0;
+                double cx = Math.Cos(a), cy = Math.Sin(a);
+                offsets.Add(new XYZ(cx * r1, cy * r1, 0));
+                offsets.Add(new XYZ(cx * r2, cy * r2, 0));
+            }
+
+            (XYZ hitPoint, double distance, BuiltInCategory category, string categoryLabel)? best = null;
+            foreach (var off in offsets)
+            {
+                var hit = ShootRayUp(doc, view3D, origin + off, elementFilter, cadRaycaster);
+                if (hit == null) continue;
+                if (best == null || hit.Value.distance < best.Value.distance)
+                    best = hit;
+            }
+            return best;
         }
 
         /// <summary>
