@@ -1,5 +1,6 @@
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
+using Autodesk.Revit.DB.Plumbing;
 using Autodesk.Revit.UI;
 using System;
 using System.Collections.Generic;
@@ -10,26 +11,34 @@ namespace SgRevitAddin.Commands.Coordination
 {
     /// <summary>
     /// Colorizes pipes &amp; fittings by the construction status carried on
-    /// their workset (Existing / Demo / Modify / New), to support a
-    /// sprinkler construction-status workflow that must survive export to
-    /// Navisworks (.nwc).
+    /// their workset (Existing / Demo / Modify / New), so the color survives
+    /// export to Navisworks (.nwc).
     ///
-    /// WHY FACE PAINT: Revit view filters, workset overrides, and
-    /// view-specific element graphic overrides do NOT export to NWC. Only
-    /// MATERIAL color bakes into the geometry and survives the append on the
-    /// GC's side. So the primary path assigns a per-status material to each
-    /// element via <see cref="Document.Paint(ElementId, Face, ElementId)"/>
-    /// — the most dependable way to color both pipes (whose segment-driven
-    /// material parameter is usually read-only) and fittings (loadable
-    /// families that resist a clean material write). The view-override path
-    /// is offered too, but clearly labeled in-Revit-only.
+    /// WHY NOT FACE PAINT: Revit's Paint tool sets a per-FACE finish that the
+    /// NWC exporter ignores — Navisworks colors each object from its BODY
+    /// MATERIAL (the material's Graphics-tab shading color). View / filter /
+    /// workset overrides also don't export. So color must live on the
+    /// material the element actually resolves to:
+    ///   • Pipes: material is segment/type-driven and the instance material
+    ///     parameter is read-only, so we create a colored per-status DUPLICATE
+    ///     of each pipe type ("Welded" → "Welded - New", whose routing-
+    ///     preference segment uses a Status-colored material) and swap the
+    ///     pipe to it via ChangeTypeId. This preserves the system distinction
+    ///     (welded / threaded / grooved) while coloring it.
+    ///   • Fittings / sprinklers / accessories: loadable families — set their
+    ///     instance material parameter directly.
     ///
-    /// RELIABLE STRIP: because paint isn't cumulative and
-    /// <see cref="Document.RemovePaint(ElementId, Face)"/> is idempotent,
-    /// "Clear All Coloring" un-paints every targeted element face and clears
-    /// element graphic overrides — restoring the elements no matter how many
-    /// times the command was run. The Status-* materials are left in the
-    /// project (reused, harmless).
+    /// WORKFLOW TIP: because the colored types/segments/materials are real
+    /// model objects, run the command, export the NWC, then CLOSE WITHOUT
+    /// SAVING (and, on a workshared model, without synchronizing) to avoid
+    /// persisting them in the fab model. "Clear All Coloring" also reverts
+    /// in-session: pipes are re-typed back (the duplicate's name encodes the
+    /// original) and fitting materials reset.
+    ///
+    /// ⚠ The pipe type/segment duplication is intricate and can't be fully
+    /// validated without a live model — expect field iteration. Failures are
+    /// reported per type, never silent, and the transaction only commits
+    /// successful swaps.
     /// </summary>
     [Transaction(TransactionMode.Manual)]
     [Regeneration(RegenerationOption.Manual)]
@@ -42,29 +51,24 @@ namespace SgRevitAddin.Commands.Coordination
 
             try
             {
-                // ── Worksharing required ──
                 if (!doc.IsWorkshared)
                 {
                     TaskDialog.Show("Colorize by Workset",
-                        "This document is not workshared, so it has no worksets to read status from.\n\n" +
-                        "Enable worksharing (and put systems on status worksets) first.");
+                        "This document is not workshared, so it has no worksets to read status from.");
                     return Result.Cancelled;
                 }
 
-                // ── User worksets ──
                 var userWorksets = new FilteredWorksetCollector(doc)
                     .OfKind(WorksetKind.UserWorkset)
                     .OrderBy(w => w.Name)
                     .Select(w => (id: w.Id.IntegerValue, name: w.Name))
                     .ToList();
-
                 if (userWorksets.Count == 0)
                 {
-                    TaskDialog.Show("Colorize by Workset", "No user worksets found in this document.");
+                    TaskDialog.Show("Colorize by Workset", "No user worksets found.");
                     return Result.Cancelled;
                 }
 
-                // ── Whole-model counts per workset (for the dialog preview) ──
                 var coreCats = new List<BuiltInCategory>
                 {
                     BuiltInCategory.OST_PipeCurves, BuiltInCategory.OST_PipeFitting
@@ -78,7 +82,6 @@ namespace SgRevitAddin.Commands.Coordination
                     counts[w] = (counts.TryGetValue(w, out int c) ? c : 0) + 1;
                 }
 
-                // ── Dialog ──
                 using (var dlg = new ColorizeByWorksetDialog(userWorksets, counts))
                 {
                     if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK)
@@ -117,7 +120,6 @@ namespace SgRevitAddin.Commands.Coordination
             Document doc = uidoc.Document;
             View activeView = doc.ActiveView;
 
-            // ── Collect target elements per scope ──
             List<Element> targets = CollectTargets(uidoc, dlg.Scope, targetCats);
             if (targets.Count == 0)
             {
@@ -125,56 +127,74 @@ namespace SgRevitAddin.Commands.Coordination
                 return Result.Cancelled;
             }
 
-            int total = targets.Count;
             var perStatus = new Dictionary<StatusBucket, int>();
-            int paintedFaces = 0, viewOverrides = 0, skippedNoStatus = 0, paintFailed = 0, noGeom = 0;
+            int pipesTyped = 0, fittingsMat = 0, viewOverrides = 0;
+            int skippedNoStatus = 0, fittingNoMat = 0, pipeTypeFail = 0;
+            var typeFailNotes = new HashSet<string>();
+
+            // Per-run cache so each (origType, status) is built once.
+            var typeCache = new Dictionary<string, ElementId>();
+            var segCache = new Dictionary<string, ElementId>();
 
             using (var tx = new Transaction(doc, "Colorize by Workset"))
             {
                 tx.Start();
 
                 ElementId solidFillId = GetSolidFillPatternId(doc);
-
-                // Ensure Status-* materials exist with the chosen colors.
                 var matIds = new Dictionary<StatusBucket, ElementId>();
                 if (dlg.AssignMaterial)
-                {
                     foreach (var st in ColorizeStatusInfo.Buckets)
                         matIds[st] = GetOrCreateStatusMaterial(doc, st, dlg.StatusColors[st], solidFillId);
-                }
-
-                var geomOpt = new Options { ComputeReferences = true, DetailLevel = ViewDetailLevel.Fine };
 
                 foreach (var elem in targets)
                 {
-                    StatusBucket status;
-                    if (!dlg.WorksetStatus.TryGetValue(elem.WorksetId.IntegerValue, out status)
+                    if (!dlg.WorksetStatus.TryGetValue(elem.WorksetId.IntegerValue, out StatusBucket status)
                         || status == StatusBucket.Ignore)
                     {
                         skippedNoStatus++;
                         continue;
                     }
-
                     perStatus[status] = (perStatus.TryGetValue(status, out int c) ? c : 0) + 1;
-                    var rc = ToRevit(dlg.StatusColors[status]);
 
-                    // Material (paint faces) — the NWC-exporting path.
+                    // ── Material (NWC-exporting body color) ──
                     if (dlg.AssignMaterial)
                     {
-                        try
+                        if (elem is Pipe pipe)
                         {
-                            int faces = PaintElementFaces(doc, elem, matIds[status], geomOpt);
-                            if (faces > 0) paintedFaces += faces;
-                            else noGeom++;
+                            try
+                            {
+                                ElementId coloredTypeId = GetOrCreateColoredPipeType(
+                                    doc, pipe, status, matIds[status], typeCache, segCache, typeFailNotes);
+                                if (coloredTypeId != ElementId.InvalidElementId
+                                    && pipe.GetTypeId() != coloredTypeId)
+                                {
+                                    pipe.ChangeTypeId(coloredTypeId);
+                                    pipesTyped++;
+                                }
+                                else if (coloredTypeId == ElementId.InvalidElementId)
+                                {
+                                    pipeTypeFail++;
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                pipeTypeFail++;
+                                typeFailNotes.Add(Trunc(ex.Message));
+                            }
                         }
-                        catch { paintFailed++; }
+                        else
+                        {
+                            if (SetInstanceMaterial(elem, matIds[status], out _)) fittingsMat++;
+                            else fittingNoMat++;
+                        }
                     }
 
-                    // View graphic override — in-Revit only.
+                    // ── View override (Revit only) ──
                     if (dlg.ApplyViewOverride)
                     {
                         try
                         {
+                            var rc = ToRevit(dlg.StatusColors[status]);
                             var ogs = new OverrideGraphicSettings();
                             ogs.SetProjectionLineColor(rc);
                             ogs.SetSurfaceForegroundPatternColor(rc);
@@ -187,207 +207,233 @@ namespace SgRevitAddin.Commands.Coordination
                             activeView.SetElementOverrides(elem.Id, ogs);
                             viewOverrides++;
                         }
-                        catch { /* non-critical */ }
+                        catch { }
                     }
                 }
 
                 tx.Commit();
             }
 
-            // ── Report ──
             var lines = new List<string>
             {
-                $"Colorize by Workset — {total} element(s) in scope.",
+                $"Colorize by Workset — {targets.Count} element(s) in scope.",
                 ""
             };
             foreach (var st in ColorizeStatusInfo.Buckets)
                 lines.Add($"  {ColorizeStatusInfo.Label(st)}: {(perStatus.TryGetValue(st, out int v) ? v : 0)}");
             lines.Add("");
             if (dlg.AssignMaterial)
-                lines.Add($"Material painted onto {paintedFaces} face(s) (exports to NWC).");
-            if (dlg.ApplyViewOverride)
-                lines.Add($"View overrides applied (Revit only): {viewOverrides}.");
-            if (skippedNoStatus > 0)
-                lines.Add($"Skipped (workset Ignored / unmapped): {skippedNoStatus}.");
-            if (noGeom > 0)
-                lines.Add($"No paintable geometry (param-only/empty): {noGeom}.");
-            if (paintFailed > 0)
-                lines.Add($"Paint failed on {paintFailed} element(s) — see those individually.");
+            {
+                lines.Add($"Pipes re-typed to colored duplicates: {pipesTyped}  (exports to NWC)");
+                lines.Add($"Fittings/etc. given a material:      {fittingsMat}  (exports to NWC)");
+                if (fittingNoMat > 0) lines.Add($"Fittings with no writable material param: {fittingNoMat}");
+                if (pipeTypeFail > 0) lines.Add($"Pipes whose colored type failed: {pipeTypeFail}");
+                foreach (var n in typeFailNotes.Take(4)) lines.Add("   • " + n);
+            }
+            if (dlg.ApplyViewOverride) lines.Add($"View overrides (Revit only): {viewOverrides}");
+            if (skippedNoStatus > 0) lines.Add($"Skipped (Ignored / unmapped workset): {skippedNoStatus}");
             lines.Add("");
-            lines.Add("Run \"Clear All Coloring\" in the dialog to revert everything.");
+            lines.Add("TIP: export the NWC, then CLOSE WITHOUT SAVING / SYNCING to keep the");
+            lines.Add("colored types out of the fab model. Or use Clear All Coloring to revert.");
+            lines.Add("(Navisworks must be in Shaded render style to show the colors.)");
 
             TaskDialog.Show("Colorize by Workset", string.Join("\n", lines));
             return Result.Succeeded;
         }
 
         // ══════════════════════════════════════════════════════════════
-        //  CLEAR
+        //  CLEAR (revert)
         // ══════════════════════════════════════════════════════════════
 
         private Result ClearAll(Document doc, List<BuiltInCategory> targetCats, ref string message)
         {
-            // Reset works whole-model regardless of scope/run count: un-paint
-            // every targeted element face and clear element graphic overrides
-            // in every non-template graphical view.
-            var allTargets = new FilteredElementCollector(doc)
+            var all = new FilteredElementCollector(doc)
                 .WherePasses(new ElementMulticategoryFilter(targetCats))
                 .WhereElementIsNotElementType()
                 .ToList();
 
-            int unpainted = 0, clearedOverrides = 0;
+            int reTyped = 0, matReset = 0, clearedOverrides = 0;
+
+            // Build a name → PipeType lookup once for the stateless revert.
+            var pipeTypesByName = new FilteredElementCollector(doc).OfClass(typeof(PipeType))
+                .Cast<PipeType>().GroupBy(t => t.Name)
+                .ToDictionary(g => g.Key, g => g.First().Id, StringComparer.Ordinal);
 
             using (var tx = new Transaction(doc, "Clear Colorize by Workset"))
             {
                 tx.Start();
 
-                var geomOpt = new Options { ComputeReferences = true, DetailLevel = ViewDetailLevel.Fine };
-
-                // Un-paint.
-                foreach (var elem in allTargets)
+                foreach (var elem in all)
                 {
                     try
                     {
-                        if (RemoveElementPaint(doc, elem, geomOpt)) unpainted++;
+                        if (elem is Pipe pipe)
+                        {
+                            var t = doc.GetElement(pipe.GetTypeId()) as PipeType;
+                            string orig = ColorizeStatusInfo.OriginalTypeName(t?.Name);
+                            if (orig != null && pipeTypesByName.TryGetValue(orig, out ElementId origId))
+                            {
+                                pipe.ChangeTypeId(origId);
+                                reTyped++;
+                            }
+                        }
+                        else
+                        {
+                            // Reset instance material to "by category" (best effort).
+                            if (SetInstanceMaterial(elem, ElementId.InvalidElementId, out bool changed) && changed)
+                                matReset++;
+                        }
                     }
-                    catch { /* keep going */ }
+                    catch { }
                 }
 
-                // Clear element graphic overrides on these elements in every
-                // graphical model view.
+                // Clear element graphic overrides across graphical model views.
                 var emptyOgs = new OverrideGraphicSettings();
-                var views = new FilteredElementCollector(doc)
-                    .OfClass(typeof(View))
-                    .Cast<View>()
-                    .Where(v => !v.IsTemplate && IsGraphicalModelView(v))
-                    .ToList();
-
+                var views = new FilteredElementCollector(doc).OfClass(typeof(View)).Cast<View>()
+                    .Where(v => !v.IsTemplate && IsGraphicalModelView(v)).ToList();
                 foreach (var v in views)
-                {
-                    foreach (var elem in allTargets)
+                    foreach (var elem in all)
                     {
-                        try { v.SetElementOverrides(elem.Id, emptyOgs); clearedOverrides++; }
-                        catch { }
+                        try { v.SetElementOverrides(elem.Id, emptyOgs); clearedOverrides++; } catch { }
                     }
-                }
 
                 tx.Commit();
             }
 
             TaskDialog.Show("Colorize by Workset",
-                "Cleared all status coloring.\n\n" +
-                $"Un-painted: {unpainted} element(s).\n" +
-                $"Cleared view overrides: {clearedOverrides} (across model views).\n\n" +
-                "Status-* materials are kept in the project for reuse.");
+                "Cleared status coloring.\n\n" +
+                $"Pipes reverted to original type: {reTyped}\n" +
+                $"Fitting materials reset:         {matReset}\n" +
+                $"View overrides cleared:          {clearedOverrides}\n\n" +
+                "Colored Status-* types/materials are left in the project (reused, harmless).\n" +
+                "If you never saved, just close without saving to drop them entirely.");
             return Result.Succeeded;
         }
 
         // ══════════════════════════════════════════════════════════════
-        //  HELPERS
+        //  PIPE: colored per-status duplicate type
         // ══════════════════════════════════════════════════════════════
 
-        private List<Element> CollectTargets(UIDocument uidoc, ColorizeScope scope, List<BuiltInCategory> cats)
+        private ElementId GetOrCreateColoredPipeType(Document doc, Pipe pipe, StatusBucket status,
+            ElementId statusMatId, Dictionary<string, ElementId> typeCache,
+            Dictionary<string, ElementId> segCache, HashSet<string> failNotes)
         {
-            Document doc = uidoc.Document;
-            var filter = new ElementMulticategoryFilter(cats);
+            var origType = doc.GetElement(pipe.GetTypeId()) as PipeType;
+            if (origType == null) return ElementId.InvalidElementId;
 
-            switch (scope)
+            // If this pipe already wears a colored duplicate, re-base to the
+            // original before deciding (so re-runs with a new status work).
+            string maybeOrig = ColorizeStatusInfo.OriginalTypeName(origType.Name);
+            if (maybeOrig != null)
             {
-                case ColorizeScope.Selection:
-                    return uidoc.Selection.GetElementIds()
-                        .Select(id => doc.GetElement(id))
-                        .Where(e => e != null && e.Category != null
-                            && cats.Contains((BuiltInCategory)e.Category.Id.IntegerValue))
-                        .ToList();
+                var baseType = new FilteredElementCollector(doc).OfClass(typeof(PipeType)).Cast<PipeType>()
+                    .FirstOrDefault(t => t.Name == maybeOrig);
+                if (baseType != null) origType = baseType;
+            }
 
-                case ColorizeScope.ActiveView:
-                    return new FilteredElementCollector(doc, doc.ActiveView.Id)
-                        .WherePasses(filter)
-                        .WhereElementIsNotElementType()
-                        .ToList();
+            string newName = origType.Name + ColorizeStatusInfo.TypeSuffix(status);
+            string cacheKey = newName;
+            if (typeCache.TryGetValue(cacheKey, out ElementId cached)) return cached;
 
-                default:
-                    return new FilteredElementCollector(doc)
-                        .WherePasses(filter)
-                        .WhereElementIsNotElementType()
-                        .ToList();
+            var existing = new FilteredElementCollector(doc).OfClass(typeof(PipeType)).Cast<PipeType>()
+                .FirstOrDefault(t => t.Name == newName);
+            if (existing != null) { typeCache[cacheKey] = existing.Id; return existing.Id; }
+
+            PipeType newType;
+            try { newType = origType.Duplicate(newName) as PipeType; }
+            catch (Exception ex) { failNotes.Add($"{origType.Name}: duplicate failed ({Trunc(ex.Message)})"); return ElementId.InvalidElementId; }
+            if (newType == null) return ElementId.InvalidElementId;
+
+            // Recolor the duplicate's routing-preference segments.
+            try
+            {
+                var rpm = newType.RoutingPreferenceManager;
+                int n = rpm.GetNumberOfRules(RoutingPreferenceRuleGroupType.Segments);
+                for (int i = 0; i < n; i++)
+                {
+                    RoutingPreferenceRule rule = rpm.GetRule(RoutingPreferenceRuleGroupType.Segments, i);
+                    var origSeg = doc.GetElement(rule.MEPPartId) as PipeSegment;
+                    if (origSeg == null) continue;
+
+                    ElementId coloredSegId = GetOrCreateColoredSegment(doc, origSeg, statusMatId, segCache);
+                    if (coloredSegId == ElementId.InvalidElementId) continue;
+
+                    var newRule = new RoutingPreferenceRule(coloredSegId, rule.Description);
+                    for (int c = 0; c < rule.NumberOfCriteria; c++)
+                        newRule.AddCriterion(rule.GetCriterion(c));
+
+                    rpm.RemoveRule(RoutingPreferenceRuleGroupType.Segments, i);
+                    rpm.AddRule(RoutingPreferenceRuleGroupType.Segments, newRule, i);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Type exists but uncolored — still usable; flag it.
+                failNotes.Add($"{origType.Name}: recolor failed ({Trunc(ex.Message)})");
+            }
+
+            typeCache[cacheKey] = newType.Id;
+            return newType.Id;
+        }
+
+        private ElementId GetOrCreateColoredSegment(Document doc, PipeSegment origSeg,
+            ElementId statusMatId, Dictionary<string, ElementId> segCache)
+        {
+            ElementId scheduleId = origSeg.ScheduleTypeId;
+            string key = statusMatId.IntegerValue + ":" + scheduleId.IntegerValue;
+            if (segCache.TryGetValue(key, out ElementId cached)) return cached;
+
+            // Reuse any existing segment that already pairs this material + schedule.
+            var existing = new FilteredElementCollector(doc).OfClass(typeof(PipeSegment)).Cast<PipeSegment>()
+                .FirstOrDefault(s => s.MaterialId == statusMatId && s.ScheduleTypeId == scheduleId);
+            if (existing != null) { segCache[key] = existing.Id; return existing.Id; }
+
+            try
+            {
+                var sizes = origSeg.GetSizes().ToList();
+                PipeSegment newSeg = PipeSegment.Create(doc, statusMatId, scheduleId, sizes);
+                ElementId newSegId = newSeg?.Id ?? ElementId.InvalidElementId;
+                if (newSegId != ElementId.InvalidElementId) segCache[key] = newSegId;
+                return newSegId;
+            }
+            catch
+            {
+                return ElementId.InvalidElementId;
             }
         }
 
-        /// <summary>Paints every face of every solid in the element. Returns faces painted.</summary>
-        private int PaintElementFaces(Document doc, Element elem, ElementId matId, Options opt)
+        // ══════════════════════════════════════════════════════════════
+        //  FITTINGS: instance material parameter
+        // ══════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Sets a writable INSTANCE material parameter to <paramref name="matId"/>.
+        /// Only instance params (so coloring doesn't leak across other
+        /// instances of the same type). Returns false if none is writable.
+        /// </summary>
+        private bool SetInstanceMaterial(Element elem, ElementId matId, out bool changed)
         {
-            GeometryElement ge = elem.get_Geometry(opt);
-            if (ge == null) return 0;
-            return PaintGeometry(doc, elem.Id, ge, matId);
+            changed = false;
+            Parameter p = elem.get_Parameter(BuiltInParameter.MATERIAL_ID_PARAM)
+                          ?? elem.LookupParameter("Material");
+            if (p == null || p.IsReadOnly || p.StorageType != StorageType.ElementId) return false;
+            if (p.AsElementId() == matId) return true; // already set
+            p.Set(matId);
+            changed = true;
+            return true;
         }
 
-        private int PaintGeometry(Document doc, ElementId id, GeometryElement ge, ElementId matId)
-        {
-            int painted = 0;
-            foreach (GeometryObject go in ge)
-            {
-                if (go is Solid s && s.Faces.Size > 0)
-                {
-                    foreach (Face f in s.Faces)
-                    {
-                        try { doc.Paint(id, f, matId); painted++; } catch { }
-                    }
-                }
-                else if (go is GeometryInstance gi)
-                {
-                    GeometryElement inner = null;
-                    try { inner = gi.GetInstanceGeometry(); } catch { }
-                    if (inner != null) painted += PaintGeometry(doc, id, inner, matId);
-                }
-            }
-            return painted;
-        }
+        // ══════════════════════════════════════════════════════════════
+        //  MATERIAL + HELPERS
+        // ══════════════════════════════════════════════════════════════
 
-        /// <summary>Removes paint from every face of the element. Returns true if any face was painted.</summary>
-        private bool RemoveElementPaint(Document doc, Element elem, Options opt)
-        {
-            GeometryElement ge = elem.get_Geometry(opt);
-            if (ge == null) return false;
-            return RemoveGeometryPaint(doc, elem.Id, ge);
-        }
-
-        private bool RemoveGeometryPaint(Document doc, ElementId id, GeometryElement ge)
-        {
-            bool any = false;
-            foreach (GeometryObject go in ge)
-            {
-                if (go is Solid s && s.Faces.Size > 0)
-                {
-                    foreach (Face f in s.Faces)
-                    {
-                        try
-                        {
-                            if (doc.IsPainted(id, f)) { doc.RemovePaint(id, f); any = true; }
-                        }
-                        catch { }
-                    }
-                }
-                else if (go is GeometryInstance gi)
-                {
-                    GeometryElement inner = null;
-                    try { inner = gi.GetInstanceGeometry(); } catch { }
-                    if (inner != null) any |= RemoveGeometryPaint(doc, id, inner);
-                }
-            }
-            return any;
-        }
-
-        /// <summary>Find-or-create a project material named "Status-{X}" set to the given color.</summary>
         private ElementId GetOrCreateStatusMaterial(Document doc, StatusBucket status, WinColor color, ElementId solidFillId)
         {
             string name = ColorizeStatusInfo.MaterialName(status);
             var rc = ToRevit(color);
 
-            Material mat = new FilteredElementCollector(doc)
-                .OfClass(typeof(Material))
-                .Cast<Material>()
+            Material mat = new FilteredElementCollector(doc).OfClass(typeof(Material)).Cast<Material>()
                 .FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase));
-
             if (mat == null)
             {
                 ElementId id = Material.Create(doc, name);
@@ -395,7 +441,7 @@ namespace SgRevitAddin.Commands.Coordination
             }
             if (mat == null) return ElementId.InvalidElementId;
 
-            // Shading color is what exports to NWC as object color.
+            // Shading color is what the NWC exporter reads.
             mat.Color = rc;
             mat.SurfaceForegroundPatternColor = rc;
             mat.CutForegroundPatternColor = rc;
@@ -409,11 +455,28 @@ namespace SgRevitAddin.Commands.Coordination
             return mat.Id;
         }
 
+        private List<Element> CollectTargets(UIDocument uidoc, ColorizeScope scope, List<BuiltInCategory> cats)
+        {
+            Document doc = uidoc.Document;
+            var filter = new ElementMulticategoryFilter(cats);
+            switch (scope)
+            {
+                case ColorizeScope.Selection:
+                    return uidoc.Selection.GetElementIds().Select(id => doc.GetElement(id))
+                        .Where(e => e?.Category != null && cats.Contains((BuiltInCategory)e.Category.Id.IntegerValue))
+                        .ToList();
+                case ColorizeScope.ActiveView:
+                    return new FilteredElementCollector(doc, doc.ActiveView.Id)
+                        .WherePasses(filter).WhereElementIsNotElementType().ToList();
+                default:
+                    return new FilteredElementCollector(doc)
+                        .WherePasses(filter).WhereElementIsNotElementType().ToList();
+            }
+        }
+
         private ElementId GetSolidFillPatternId(Document doc)
         {
-            var solid = new FilteredElementCollector(doc)
-                .OfClass(typeof(FillPatternElement))
-                .Cast<FillPatternElement>()
+            var solid = new FilteredElementCollector(doc).OfClass(typeof(FillPatternElement)).Cast<FillPatternElement>()
                 .FirstOrDefault(f => f.GetFillPattern() != null && f.GetFillPattern().IsSolidFill);
             return solid?.Id ?? ElementId.InvalidElementId;
         }
@@ -436,5 +499,6 @@ namespace SgRevitAddin.Commands.Coordination
         }
 
         private static Color ToRevit(WinColor c) => new Color(c.R, c.G, c.B);
+        private static string Trunc(string s) => string.IsNullOrEmpty(s) ? "" : (s.Length > 80 ? s.Substring(0, 80) : s);
     }
 }

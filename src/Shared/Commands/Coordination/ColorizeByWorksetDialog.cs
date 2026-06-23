@@ -67,7 +67,7 @@ namespace SgRevitAddin.Commands.Coordination
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(620, 640);
+            ClientSize = new Size(620, 672);
 
             const int M = 15, W = 590;
             int y = M;
@@ -75,15 +75,17 @@ namespace SgRevitAddin.Commands.Coordination
             // ── Info ──
             var lblInfo = new Label
             {
-                Text = "Colors pipes & fittings by the construction status carried on their workset.\n" +
-                       "• Assign material → bakes color into geometry, EXPORTS to Navisworks (recommended).\n" +
-                       "• View graphic override → in-Revit visualization only, does NOT export.",
+                Text = "Colors pipes & fittings by the construction status on their workset, so it EXPORTS to NWC.\n" +
+                       "• Assign material → pipes get a colored per-status duplicate type (e.g. \"Welded - New\"),\n" +
+                       "   fittings get a material. Bakes into the body → survives NWC. (Face paint does NOT export.)\n" +
+                       "• View graphic override → in-Revit visualization only, does NOT export.\n" +
+                       "TIP: export the NWC, then close WITHOUT saving/syncing to keep colored types out of the fab model.",
                 Location = new Point(M, y),
-                Size = new Size(W, 48),
+                Size = new Size(W, 76),
                 ForeColor = SystemColors.GrayText
             };
             Controls.Add(lblInfo);
-            y += 54;
+            y += 82;
 
             // ── Workset → Status grid ──
             var grpMap = new GroupBox { Text = "Workset → Status", Location = new Point(M, y), Size = new Size(W, 220) };
@@ -179,7 +181,7 @@ namespace SgRevitAddin.Commands.Coordination
             var grpMode = new GroupBox { Text = "Apply", Location = new Point(M, y), Size = new Size(W, 78) };
             _chkMaterial = new CheckBox
             {
-                Text = "Assign material — paints faces, EXPORTS to Navisworks (recommended)",
+                Text = "Assign material — colored pipe-type swap + fitting materials, EXPORTS to NWC (recommended)",
                 Location = new Point(12, 22), Size = new Size(W - 24, 20),
                 Checked = DialogMemory.GetBool(MemKey, "Material", true)
             };

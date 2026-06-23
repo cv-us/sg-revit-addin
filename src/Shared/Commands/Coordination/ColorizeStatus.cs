@@ -52,6 +52,29 @@ namespace SgRevitAddin.Commands.Coordination
         /// <summary>Material name used for a status (e.g. "Status-New").</summary>
         public static string MaterialName(StatusBucket s) => "Status-" + s;
 
+        /// <summary>
+        /// Suffix appended to a pipe type name to make its colored per-status
+        /// duplicate, e.g. "Welded" → "Welded - New". The suffix encodes the
+        /// status so Clear can strip it and revert statelessly.
+        /// </summary>
+        public static string TypeSuffix(StatusBucket s) => " - " + s;
+
+        /// <summary>
+        /// If <paramref name="typeName"/> is one of our colored duplicates
+        /// (ends with " - {Status}"), returns the original type name; else null.
+        /// </summary>
+        public static string OriginalTypeName(string typeName)
+        {
+            if (string.IsNullOrEmpty(typeName)) return null;
+            foreach (var s in Buckets)
+            {
+                string suf = TypeSuffix(s);
+                if (typeName.EndsWith(suf, StringComparison.Ordinal) && typeName.Length > suf.Length)
+                    return typeName.Substring(0, typeName.Length - suf.Length);
+            }
+            return null;
+        }
+
         /// <summary>Display label.</summary>
         public static string Label(StatusBucket s)
         {

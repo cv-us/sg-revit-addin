@@ -6,66 +6,51 @@
 
 ## Purpose
 
-Color-codes pipes and fittings by the **construction status** carried on their workset (Existing / Demo / Modify / New), for a sprinkler construction-status workflow. The headline goal is color that **survives export to Navisworks (.nwc)**.
+Color-codes pipes and fittings by the **construction status** carried on their workset (Existing / Demo / Modify / New), for a sprinkler construction-status workflow whose color must **survive export to Navisworks (.nwc)**.
 
-## Why face paint (the NWC constraint)
+## What survives NWC (the hard-won facts)
 
-These Revit mechanisms do **NOT** export to NWC:
+Navisworks colors each object from its **body material's Graphics-tab *shading* color**. These do **NOT** export to NWC and were dead ends:
 
-- View filters
-- Workset graphic overrides
-- View-specific element graphic overrides (`OverrideGraphicSettings`)
+- View filters, workset overrides, view-specific element graphic overrides (`OverrideGraphicSettings`).
+- **Face paint** (`Document.Paint`) — it's a per-face *finish* the exporter ignores. (This was the v1 approach; it looked right in Revit's shaded view but vanished on export.)
 
-Only **material color bakes into the geometry** and survives the GC's append. So the command's primary path assigns a per-status material and writes it onto elements via **`Document.Paint`** (face paint). Paint is used rather than the material *parameter* because:
+So color must live on the **material the element actually resolves to**:
 
-- Pipe material (`RBS_PIPE_MATERIAL_PARAM`) is segment-driven and usually **read-only** per instance.
-- Fitting material is inconsistent across loadable families.
-- Paint reliably overrides display **and** export color for both, and is trivially reversible.
+| Category | Mechanism | Why |
+|----------|-----------|-----|
+| **Pipes** (`OST_PipeCurves`) | colored per-status **duplicate pipe type** + `ChangeTypeId` | A pipe's material is segment/type-driven; the instance material parameter is **read-only**. |
+| **Fittings / sprinklers / accessories** | set the **instance material parameter** | Loadable families accept a writable material. |
 
-The view-graphic-override path is also offered for in-Revit visualization, but is clearly labeled **does NOT export**.
+### Pipe type duplication
+
+For each pipe being colored, the command finds-or-creates `"{OriginalType} - {Status}"` (e.g. **`Welded - New`**): it duplicates the pipe type, and repoints the duplicate's routing-preference **segment(s)** at a segment that uses the `Status-{X}` material (a colored segment is created per material+schedule and reused). The pipe is then swapped with `ChangeTypeId`. This **preserves the system distinction** (welded / threaded / grooved) while coloring it — the NWC keeps the real type name *and* shows the status color.
+
+## Recommended workflow (keep the fab model clean)
+
+The colored types/segments/materials are real model objects. To avoid persisting them in your fabrication model:
+
+> **Run the command → export the NWC → close the model WITHOUT saving** (and, on a workshared model, **without synchronizing**).
+
+Everything the command created is discarded on close. Nothing reaches the central model. (In-session, **Clear All Coloring** also reverts.)
 
 ## Dialog
 
-1. **Workset → Status grid** — every user workset, with its whole-model pipe/fitting count and a status dropdown (Existing / Demo / Modify / New / Ignore). Because worksets encode system *and* status (e.g. "Sys A - New"), multiple worksets can map to the same status. **Auto-suggest from names** sets each row by keyword (new / demo / modif / exist); every row is still editable.
-2. **Status Colors** — a color swatch per status (defaults: Existing gray, Demo red, Modify amber, New green). Click to change; remembered between runs.
-3. **Apply** — check one or both:
-   - *Assign material* (recommended) — paints faces, exports to NWC.
-   - *Apply view graphic override* — active view only, Revit visualization only.
-4. **Scope** — Entire model / Active view's visible elements / Current selection.
-5. **Also include sprinklers & pipe accessories** — extends the category set.
-6. **Preview Count** — per-status element totals from the current mapping.
-7. Buttons: **Apply**, **Clear All Coloring**, **Cancel**.
+- **Workset → Status grid** — every user workset, its whole-model pipe/fitting count, and a status dropdown. **Auto-suggest from names** (new / demo / modif / exist); fully editable; multiple worksets can map to one status.
+- **Status Colors** — a swatch per status (defaults: Existing gray, Demo red, Modify amber, New green; remembered between runs).
+- **Apply** — *Assign material* (the NWC path: pipe-type swap + fitting materials) and/or *Apply view graphic override* (active view, Revit-only).
+- **Scope** — entire model / active view / selection. **Include sprinklers & accessories** toggle.
+- **Preview Count**, **Apply**, **Clear All Coloring**, **Cancel**.
 
-## Processing
+## Clear All Coloring (revert)
 
-- Collects `OST_PipeCurves` + `OST_PipeFitting` (+ `OST_Sprinklers` + `OST_PipeAccessory` if checked) per scope, `WhereElementIsNotElementType`.
-- For each element: reads `WorksetId`, looks up the status; **Ignore / unmapped → skipped**.
-- Ensures a `Status-{X}` material exists (creates if missing, updates its shading + surface-pattern color to the chosen color, solid fill, no transparency — shading color is what NWC reads).
-- Material mode: paints every face of every solid (recurses into family `GeometryInstance` for fittings).
-- View-override mode: sets surface/cut foreground (solid fill) + projection line color in the active view.
-- All in a single transaction (one undo).
-- Per-element try/catch so one bad element never aborts the batch.
+- **Pipes:** the colored type name encodes the original, so each pipe is `ChangeTypeId`'d **back to its original type** — stateless, reliable across any number of runs.
+- **Fittings/etc.:** instance material reset to "by category" (best effort).
+- **View overrides:** cleared on the target categories across graphical model views.
+- Colored `Status-*` materials/segments/types are left in the project (reused, harmless). If you never saved, just close without saving to drop them.
 
-## Clear All Coloring (reset)
+## Notes / caveats
 
-The **Clear All Coloring** button reverts everything the command applied, **no matter how many times it was run**:
-
-- `RemovePaint` on every face of every targeted element (idempotent — paint isn't cumulative).
-- Clears element graphic overrides on the targeted categories across all graphical model views.
-- Leaves the `Status-*` materials in the project (reused, harmless).
-
-## Edge cases handled
-
-- Non-workshared document → detected up front, clear message, exits.
-- Element with no mapped/Ignored workset → skipped (counted).
-- Element with no geometry/faces → skipped for paint (counted as "no paintable geometry").
-- Re-running is idempotent: materials are reused (color refreshed), paint is replaced not stacked.
-
-## Reporting
-
-After Apply: per-status counts, faces painted, view overrides applied, and counts of skipped / no-geometry / failed elements.
-
-## Notes / future
-
-- Material assignment via the writable material *parameter* (instead of paint) was considered; paint was chosen as the dependable mechanism for both pipes and fittings and for clean reversal. If a project needs the parameter path, it can be added with original-material tracking for revert.
-- For very large models the paint loop touches many faces; it collects once and avoids regeneration inside the loop.
+- **Shading color** is what NWC reads (set on the `Status-*` materials). In Navisworks, set the viewpoint render style to **Shaded** to see it. (Full Render mode reads the appearance asset, which this v1 does not set — a documented limitation.)
+- Each head/element is wrapped in try/catch; the transaction commits only successful swaps. The summary reports pipes re-typed, fittings colored, and any types whose colored duplicate failed (with the reason) — never silent.
+- **Field testing pending** for the pipe type/segment duplication (intricate, can't be validated without a live model). If a pipe's colored type fails it's reported and the pipe is left unchanged.
