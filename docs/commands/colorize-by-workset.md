@@ -19,8 +19,11 @@ So color must live on the **material the element actually resolves to**:
 
 | Category | Mechanism | Why |
 |----------|-----------|-----|
-| **Pipes** (`OST_PipeCurves`) | colored per-status **duplicate pipe type** + `ChangeTypeId` | A pipe's material is segment/type-driven; the instance material parameter is **read-only**. |
-| **Fittings / sprinklers / accessories** | set the **instance material parameter** | Loadable families accept a writable material. |
+| **Pipes** (`OST_PipeCurves`) | colored per-status **duplicate pipe type** + `ChangeTypeId` | Material is segment/type-driven; instance material param is **read-only**. |
+| **Flex pipes** (`OST_FlexPipeCurves`) | colored per-status **duplicate FlexPipeType** + `ChangeTypeId` | Same as rigid pipe — type/segment-driven, instance param read-only. |
+| **Fittings / accessories / sprinklers** | writable **instance** material param if present, else **duplicate the symbol** with all its material params set + reassign `Symbol` | There is **no** per-instance material override API for family geometry; a type with the material set is the only route. |
+
+> **Hard limit (honest):** a loadable family can only be recolored if it was **authored with a Material parameter wired to its solids**. Families whose solids are **"By Category"** or hardcoded (common for fab fittings and many sprinklers) **cannot** be recolored for NWC by any API call — they're counted and reported as "couldn't color," and the one-time fix is editing the `.rfa` to bind a Material parameter to the solids. Pipes and flex always work (type/segment route).
 
 ### Pipe type duplication
 

@@ -206,9 +206,9 @@ namespace SgRevitAddin.Commands.Coordination
             grpScope.Controls.AddRange(new Control[] { _rbModel, _rbView, _rbSel });
             _chkExtra = new CheckBox
             {
-                Text = "Also include sprinklers & pipe accessories",
+                Text = "Also include sprinklers & pipe accessories (flex pipes are always included)",
                 Location = new Point(12, 48), Size = new Size(W - 24, 20),
-                Checked = DialogMemory.GetBool(MemKey, "Extra", false)
+                Checked = DialogMemory.GetBool(MemKey, "Extra", true)
             };
             grpScope.Controls.Add(_chkExtra);
             Controls.Add(grpScope);

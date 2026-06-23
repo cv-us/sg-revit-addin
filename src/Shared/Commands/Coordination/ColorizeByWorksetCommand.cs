@@ -89,7 +89,9 @@ namespace SgRevitAddin.Commands.Coordination
 
                     var targetCats = new List<BuiltInCategory>
                     {
-                        BuiltInCategory.OST_PipeCurves, BuiltInCategory.OST_PipeFitting
+                        BuiltInCategory.OST_PipeCurves,
+                        BuiltInCategory.OST_PipeFitting,
+                        BuiltInCategory.OST_FlexPipeCurves
                     };
                     if (dlg.IncludeExtraCategories)
                     {
@@ -135,6 +137,7 @@ namespace SgRevitAddin.Commands.Coordination
             // Per-run cache so each (origType, status) is built once.
             var typeCache = new Dictionary<string, ElementId>();
             var segCache = new Dictionary<string, ElementId>();
+            var symCache = new Dictionary<string, ElementId>();
 
             using (var tx = new Transaction(doc, "Colorize by Workset"))
             {
@@ -159,16 +162,21 @@ namespace SgRevitAddin.Commands.Coordination
                     // ── Material (NWC-exporting body color) ──
                     if (dlg.AssignMaterial)
                     {
-                        if (elem is Pipe pipe)
+                        // Pipes AND flex pipes: colored per-status duplicate type
+                        // (material is segment/type-driven, instance param is
+                        // read-only) → ChangeTypeId.
+                        if (elem is Pipe || elem is FlexPipe)
                         {
                             try
                             {
-                                ElementId coloredTypeId = GetOrCreateColoredPipeType(
-                                    doc, pipe, status, matIds[status], typeCache, segCache, typeFailNotes);
-                                if (coloredTypeId != ElementId.InvalidElementId
-                                    && pipe.GetTypeId() != coloredTypeId)
+                                var curve = (MEPCurve)elem;
+                                var origType = doc.GetElement(curve.GetTypeId()) as MEPCurveType;
+                                ElementId coloredTypeId = origType == null
+                                    ? ElementId.InvalidElementId
+                                    : GetOrCreateColoredMepType(doc, origType, status, matIds[status], typeCache, segCache, typeFailNotes);
+                                if (coloredTypeId != ElementId.InvalidElementId && curve.GetTypeId() != coloredTypeId)
                                 {
-                                    pipe.ChangeTypeId(coloredTypeId);
+                                    curve.ChangeTypeId(coloredTypeId);
                                     pipesTyped++;
                                 }
                                 else if (coloredTypeId == ElementId.InvalidElementId)
@@ -182,10 +190,22 @@ namespace SgRevitAddin.Commands.Coordination
                                 typeFailNotes.Add(Trunc(ex.Message));
                             }
                         }
-                        else
+                        // Loadable families (fittings / accessories / sprinklers):
+                        // duplicate the symbol with its material params set to the
+                        // status color, reassign Symbol. Works only if the family
+                        // exposes a material param wired to its solids.
+                        else if (elem is FamilyInstance fi)
                         {
-                            if (SetInstanceMaterial(elem, matIds[status], out _)) fittingsMat++;
-                            else fittingNoMat++;
+                            try
+                            {
+                                if (ColorLoadableInstance(doc, fi, status, matIds[status], symCache)) fittingsMat++;
+                                else fittingNoMat++;
+                            }
+                            catch (Exception ex)
+                            {
+                                fittingNoMat++;
+                                typeFailNotes.Add(Trunc(ex.Message));
+                            }
                         }
                     }
 
@@ -224,10 +244,15 @@ namespace SgRevitAddin.Commands.Coordination
             lines.Add("");
             if (dlg.AssignMaterial)
             {
-                lines.Add($"Pipes re-typed to colored duplicates: {pipesTyped}  (exports to NWC)");
-                lines.Add($"Fittings/etc. given a material:      {fittingsMat}  (exports to NWC)");
-                if (fittingNoMat > 0) lines.Add($"Fittings with no writable material param: {fittingNoMat}");
-                if (pipeTypeFail > 0) lines.Add($"Pipes whose colored type failed: {pipeTypeFail}");
+                lines.Add($"Pipes + flex re-typed to colored duplicates: {pipesTyped}  (exports to NWC)");
+                lines.Add($"Fittings/sprinklers/accessories colored:     {fittingsMat}  (exports to NWC)");
+                if (fittingNoMat > 0)
+                {
+                    lines.Add($"Couldn't color (no material parameter):      {fittingNoMat}");
+                    lines.Add("   → those families have \"By Category\"/hardcoded solids; they");
+                    lines.Add("     need a Material parameter wired to their solids in the .rfa.");
+                }
+                if (pipeTypeFail > 0) lines.Add($"Pipes/flex whose colored type failed: {pipeTypeFail}");
                 foreach (var n in typeFailNotes.Take(4)) lines.Add("   • " + n);
             }
             if (dlg.ApplyViewOverride) lines.Add($"View overrides (Revit only): {viewOverrides}");
@@ -254,9 +279,9 @@ namespace SgRevitAddin.Commands.Coordination
 
             int reTyped = 0, matReset = 0, clearedOverrides = 0;
 
-            // Build a name → PipeType lookup once for the stateless revert.
-            var pipeTypesByName = new FilteredElementCollector(doc).OfClass(typeof(PipeType))
-                .Cast<PipeType>().GroupBy(t => t.Name)
+            // Name → type lookups for the stateless revert (pipe + flex types).
+            var mepTypesByName = new FilteredElementCollector(doc).OfClass(typeof(MEPCurveType))
+                .Cast<MEPCurveType>().GroupBy(t => t.Name)
                 .ToDictionary(g => g.Key, g => g.First().Id, StringComparer.Ordinal);
 
             using (var tx = new Transaction(doc, "Clear Colorize by Workset"))
@@ -267,21 +292,43 @@ namespace SgRevitAddin.Commands.Coordination
                 {
                     try
                     {
-                        if (elem is Pipe pipe)
+                        if (elem is Pipe || elem is FlexPipe)
                         {
-                            var t = doc.GetElement(pipe.GetTypeId()) as PipeType;
+                            var curve = (MEPCurve)elem;
+                            var t = doc.GetElement(curve.GetTypeId()) as MEPCurveType;
                             string orig = ColorizeStatusInfo.OriginalTypeName(t?.Name);
-                            if (orig != null && pipeTypesByName.TryGetValue(orig, out ElementId origId))
+                            if (orig != null && mepTypesByName.TryGetValue(orig, out ElementId origId))
                             {
-                                pipe.ChangeTypeId(origId);
+                                curve.ChangeTypeId(origId);
                                 reTyped++;
                             }
                         }
-                        else
+                        else if (elem is FamilyInstance fi)
                         {
-                            // Reset instance material to "by category" (best effort).
-                            if (SetInstanceMaterial(elem, ElementId.InvalidElementId, out bool changed) && changed)
+                            // If the symbol is a colored duplicate, swap it back.
+                            var sym = fi.Symbol;
+                            string origSym = ColorizeStatusInfo.OriginalTypeName(sym?.Name);
+                            if (origSym != null && sym != null)
+                            {
+                                var baseSym = sym.Family.GetFamilySymbolIds()
+                                    .Select(id => doc.GetElement(id) as FamilySymbol)
+                                    .FirstOrDefault(s => s != null && s.Name == origSym);
+                                if (baseSym != null)
+                                {
+                                    if (!baseSym.IsActive) baseSym.Activate();
+                                    fi.Symbol = baseSym;
+                                    reTyped++;
+                                    continue;
+                                }
+                            }
+                            // Else reset a writable instance material to by-category.
+                            Parameter ip = fi.get_Parameter(BuiltInParameter.MATERIAL_ID_PARAM) ?? fi.LookupParameter("Material");
+                            if (ip != null && !ip.IsReadOnly && ip.StorageType == StorageType.ElementId
+                                && ip.AsElementId() != ElementId.InvalidElementId)
+                            {
+                                ip.Set(ElementId.InvalidElementId);
                                 matReset++;
+                            }
                         }
                     }
                     catch { }
@@ -311,22 +358,22 @@ namespace SgRevitAddin.Commands.Coordination
         }
 
         // ══════════════════════════════════════════════════════════════
-        //  PIPE: colored per-status duplicate type
+        //  PIPE + FLEX: colored per-status duplicate type
         // ══════════════════════════════════════════════════════════════
 
-        private ElementId GetOrCreateColoredPipeType(Document doc, Pipe pipe, StatusBucket status,
+        private ElementId GetOrCreateColoredMepType(Document doc, MEPCurveType origType, StatusBucket status,
             ElementId statusMatId, Dictionary<string, ElementId> typeCache,
             Dictionary<string, ElementId> segCache, HashSet<string> failNotes)
         {
-            var origType = doc.GetElement(pipe.GetTypeId()) as PipeType;
             if (origType == null) return ElementId.InvalidElementId;
+            Type typeClass = origType.GetType(); // PipeType or FlexPipeType
 
-            // If this pipe already wears a colored duplicate, re-base to the
+            // If this curve already wears a colored duplicate, re-base to the
             // original before deciding (so re-runs with a new status work).
             string maybeOrig = ColorizeStatusInfo.OriginalTypeName(origType.Name);
             if (maybeOrig != null)
             {
-                var baseType = new FilteredElementCollector(doc).OfClass(typeof(PipeType)).Cast<PipeType>()
+                var baseType = new FilteredElementCollector(doc).OfClass(typeClass).Cast<MEPCurveType>()
                     .FirstOrDefault(t => t.Name == maybeOrig);
                 if (baseType != null) origType = baseType;
             }
@@ -335,12 +382,12 @@ namespace SgRevitAddin.Commands.Coordination
             string cacheKey = newName;
             if (typeCache.TryGetValue(cacheKey, out ElementId cached)) return cached;
 
-            var existing = new FilteredElementCollector(doc).OfClass(typeof(PipeType)).Cast<PipeType>()
+            var existing = new FilteredElementCollector(doc).OfClass(typeClass).Cast<MEPCurveType>()
                 .FirstOrDefault(t => t.Name == newName);
             if (existing != null) { typeCache[cacheKey] = existing.Id; return existing.Id; }
 
-            PipeType newType;
-            try { newType = origType.Duplicate(newName) as PipeType; }
+            MEPCurveType newType;
+            try { newType = origType.Duplicate(newName) as MEPCurveType; }
             catch (Exception ex) { failNotes.Add($"{origType.Name}: duplicate failed ({Trunc(ex.Message)})"); return ElementId.InvalidElementId; }
             if (newType == null) return ElementId.InvalidElementId;
 
@@ -403,24 +450,99 @@ namespace SgRevitAddin.Commands.Coordination
         }
 
         // ══════════════════════════════════════════════════════════════
-        //  FITTINGS: instance material parameter
+        //  LOADABLE FAMILIES: fittings / accessories / sprinklers
         // ══════════════════════════════════════════════════════════════
 
         /// <summary>
-        /// Sets a writable INSTANCE material parameter to <paramref name="matId"/>.
-        /// Only instance params (so coloring doesn't leak across other
-        /// instances of the same type). Returns false if none is writable.
+        /// Colors a loadable family instance for NWC by (1) trying a writable
+        /// INSTANCE material param, else (2) duplicating the symbol with all of
+        /// its material params set to the status color and reassigning the
+        /// instance to that symbol. Returns false if the family exposes no
+        /// material parameter wired to its solids (e.g. "By Category" /
+        /// hardcoded) — those cannot be recolored without editing the .rfa.
         /// </summary>
-        private bool SetInstanceMaterial(Element elem, ElementId matId, out bool changed)
+        private bool ColorLoadableInstance(Document doc, FamilyInstance fi, StatusBucket status,
+            ElementId matId, Dictionary<string, ElementId> symCache)
         {
-            changed = false;
-            Parameter p = elem.get_Parameter(BuiltInParameter.MATERIAL_ID_PARAM)
-                          ?? elem.LookupParameter("Material");
-            if (p == null || p.IsReadOnly || p.StorageType != StorageType.ElementId) return false;
-            if (p.AsElementId() == matId) return true; // already set
-            p.Set(matId);
-            changed = true;
+            // (1) Writable instance material param — colors just this instance.
+            Parameter ip = fi.get_Parameter(BuiltInParameter.MATERIAL_ID_PARAM) ?? fi.LookupParameter("Material");
+            if (ip != null && !ip.IsReadOnly && ip.StorageType == StorageType.ElementId)
+            {
+                if (ip.AsElementId() != matId) ip.Set(matId);
+                return true;
+            }
+
+            // (2) Symbol-duplicate fallback (isolated per status, reversible by
+            //     the name suffix). Works only if the symbol has a material param.
+            FamilySymbol sym = fi.Symbol;
+            if (sym == null) return false;
+
+            // Re-base if the instance already wears a colored duplicate.
+            string maybeOrig = ColorizeStatusInfo.OriginalTypeName(sym.Name);
+            FamilySymbol baseSym = sym;
+            if (maybeOrig != null)
+            {
+                var fam = sym.Family;
+                var sibling = fam.GetFamilySymbolIds().Select(id => doc.GetElement(id) as FamilySymbol)
+                    .FirstOrDefault(s => s != null && s.Name == maybeOrig);
+                if (sibling != null) baseSym = sibling;
+            }
+
+            string newName = baseSym.Name + ColorizeStatusInfo.TypeSuffix(status);
+            string cacheKey = baseSym.Family.Id.IntegerValue + ":" + newName;
+
+            FamilySymbol dup = null;
+            if (symCache.TryGetValue(cacheKey, out ElementId cachedId))
+                dup = doc.GetElement(cachedId) as FamilySymbol;
+            if (dup == null)
+            {
+                var fam = baseSym.Family;
+                dup = fam.GetFamilySymbolIds().Select(id => doc.GetElement(id) as FamilySymbol)
+                    .FirstOrDefault(s => s != null && s.Name == newName);
+            }
+            if (dup == null)
+            {
+                try { dup = baseSym.Duplicate(newName) as FamilySymbol; }
+                catch { return false; }
+            }
+            if (dup == null) return false;
+
+            int set = SetAllTypeMaterials(doc, dup, matId);
+            symCache[cacheKey] = dup.Id;
+            if (set == 0) return false; // no material param on the family → can't color
+
+            if (!dup.IsActive) dup.Activate();
+            if (fi.Symbol.Id != dup.Id) fi.Symbol = dup;
             return true;
+        }
+
+        /// <summary>
+        /// Sets every writable Material-type parameter on the symbol to
+        /// <paramref name="matId"/> (covers multi-material bodies — valve
+        /// body/handle/trim, etc.). Returns how many were set.
+        /// </summary>
+        private int SetAllTypeMaterials(Document doc, FamilySymbol sym, ElementId matId)
+        {
+            int n = 0;
+            foreach (Parameter p in sym.Parameters)
+            {
+                if (p == null || p.IsReadOnly || p.StorageType != StorageType.ElementId) continue;
+                if (!IsMaterialParam(doc, p)) continue;
+                try { p.Set(matId); n++; } catch { }
+            }
+            return n;
+        }
+
+        /// <summary>True if the ElementId parameter is a Material parameter.</summary>
+        private bool IsMaterialParam(Document doc, Parameter p)
+        {
+            // The built-in material id param is always material.
+            if (p.Id.IntegerValue == (int)BuiltInParameter.MATERIAL_ID_PARAM) return true;
+            // Otherwise: its current value resolves to a Material, or its name says so.
+            ElementId cur = p.AsElementId();
+            if (cur != ElementId.InvalidElementId && doc.GetElement(cur) is Material) return true;
+            string nm = p.Definition?.Name ?? "";
+            return nm.IndexOf("material", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         // ══════════════════════════════════════════════════════════════
