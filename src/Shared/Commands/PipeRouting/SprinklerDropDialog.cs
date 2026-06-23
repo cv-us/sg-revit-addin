@@ -7,20 +7,22 @@ using SgRevitAddin.Utils;
 namespace SgRevitAddin.Commands.PipeRouting
 {
     /// <summary>
-    /// Configuration dialog for the Sprinkler Drops command (hard-pipe
-    /// up-over-down drop ending in a real elbow at the drop base, with a
-    /// flex hose to the pendent head). Generous spacing; all numerics are
-    /// inches with a units suffix and validation; settings persist via
-    /// <see cref="DialogMemory"/>.
+    /// Configuration dialog for the Sprinkler Drops command. Generous
+    /// spacing; numerics are inches with a units suffix; settings persist
+    /// via <see cref="DialogMemory"/> and are restored on reopen.
     /// </summary>
     public class SprinklerDropDialog : Form
     {
         private const string MemKey = "SprinklerDrops";
 
+        public enum ConnectionMode { Continuous, Batch }
+
         // ── Results ──
+        public ConnectionMode Mode { get; private set; } = ConnectionMode.Continuous;
         public int DropPipeTypeId { get; private set; }
         public int ArmPipeTypeId { get; private set; }
         public int FlexTypeId { get; private set; }
+        public double SizeInches { get; private set; }
         public double RiseInches { get; private set; }
         public double TermHeightInches { get; private set; }
         public double StubInches { get; private set; }
@@ -29,15 +31,19 @@ namespace SgRevitAddin.Commands.PipeRouting
 
         private readonly List<(int id, string name)> _pipeTypes;
         private readonly List<(int id, string name)> _flexTypes;
+        private readonly int _defaultPipeTypeId;
 
+        private RadioButton _rbContinuous, _rbBatch;
         private ComboBox _cboDrop, _cboArm, _cboFlex;
-        private NumericUpDown _numRise, _numTerm, _numStub, _numMaxFlex;
+        private NumericUpDown _numSize, _numRise, _numTerm, _numStub, _numMaxFlex;
         private CheckBox _chkSwallow;
 
-        public SprinklerDropDialog(List<(int id, string name)> pipeTypes, List<(int id, string name)> flexTypes)
+        public SprinklerDropDialog(List<(int id, string name)> pipeTypes, List<(int id, string name)> flexTypes,
+            int defaultPipeTypeId)
         {
             _pipeTypes = pipeTypes ?? new List<(int, string)>();
             _flexTypes = flexTypes ?? new List<(int, string)>();
+            _defaultPipeTypeId = defaultPipeTypeId;
             InitializeComponent();
         }
 
@@ -48,46 +54,63 @@ namespace SgRevitAddin.Commands.PipeRouting
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(560, 530);
+            ClientSize = new Size(580, 610);
 
-            const int M = 18, W = 524, LblW = 250, InX = 280, InW = 246;
+            const int M = 18, W = 544;
             int y = M;
 
             var lblInfo = new Label
             {
-                Text = "Builds a hard-pipe up-over-down drop that ends in a REAL elbow at the\n" +
-                       "drop base (a short stub forces a genuine 90° turn, so the BOM lists an\n" +
-                       "elbow, not a union), then runs a flex hose from the elbow to the head.",
+                Text = "Hard-pipe drop ending in a REAL elbow at the base (a stub forces the 90° turn so\n" +
+                       "the BOM lists an elbow, not a union), then a flex hose to the head. Each head gets\n" +
+                       "its own perpendicular armover + connection.",
                 Location = new Point(M, y), Size = new Size(W, 50), ForeColor = SystemColors.GrayText
             };
             Controls.Add(lblInfo);
-            y += 58;
+            y += 56;
 
-            // ── Pipe / flex types ──
+            // ── Mode ──
+            var grpMode = new GroupBox { Text = "Connection Mode", Location = new Point(M, y), Size = new Size(W, 72) };
+            _rbContinuous = new RadioButton
+            {
+                Text = "Continuous — click a head, then its pipe; repeat until Esc",
+                Location = new Point(12, 22), Size = new Size(W - 24, 20)
+            };
+            _rbBatch = new RadioButton
+            {
+                Text = "Batch — select heads first, then click one pipe (each head gets its own perpendicular tie-in)",
+                Location = new Point(12, 44), Size = new Size(W - 24, 20)
+            };
+            grpMode.Controls.AddRange(new Control[] { _rbContinuous, _rbBatch });
+            Controls.Add(grpMode);
+            y += 80;
+            bool batch = DialogMemory.GetInt(MemKey, "Mode", 0) == 1;
+            _rbBatch.Checked = batch; _rbContinuous.Checked = !batch;
+
+            // ── Types ──
             var grpTypes = new GroupBox { Text = "Pipe & Flex Types", Location = new Point(M, y), Size = new Size(W, 120) };
             int gy = 26;
-            AddCombo(grpTypes, "Drop pipe type:", ref gy, out _cboDrop, _pipeTypes, LblW: 160, inX: 175, inW: 335);
-            AddCombo(grpTypes, "Armover pipe type:", ref gy, out _cboArm, _pipeTypes, LblW: 160, inX: 175, inW: 335);
-            AddCombo(grpTypes, "Flex pipe type:", ref gy, out _cboFlex, _flexTypes, LblW: 160, inX: 175, inW: 335);
+            AddCombo(grpTypes, "Drop pipe type:", ref gy, out _cboDrop, _pipeTypes);
+            AddCombo(grpTypes, "Armover pipe type:", ref gy, out _cboArm, _pipeTypes);
+            AddCombo(grpTypes, "Flex pipe type:", ref gy, out _cboFlex, _flexTypes);
             Controls.Add(grpTypes);
             y += 128;
 
-            // restore type selections
-            SelectById(_cboDrop, DialogMemory.GetInt(MemKey, "DropType", -1));
-            SelectById(_cboArm, DialogMemory.GetInt(MemKey, "ArmType", -1));
+            SelectById(_cboDrop, DialogMemory.GetInt(MemKey, "DropType", _defaultPipeTypeId));
+            SelectById(_cboArm, DialogMemory.GetInt(MemKey, "ArmType", _defaultPipeTypeId));
             SelectById(_cboFlex, DialogMemory.GetInt(MemKey, "FlexType", -1));
 
             // ── Geometry ──
-            var grpGeo = new GroupBox { Text = "Drop Geometry (inches)", Location = new Point(M, y), Size = new Size(W, 168) };
+            var grpGeo = new GroupBox { Text = "Geometry (inches)", Location = new Point(M, y), Size = new Size(W, 196) };
             gy = 28;
-            _numRise = AddNum(grpGeo, "Return-bend rise above branch:", ref gy, 0, 240, DialogMemory.GetDouble(MemKey, "Rise", 12));
-            _numTerm = AddNum(grpGeo, "Hard-pipe termination above head:", ref gy, 0, 120, DialogMemory.GetDouble(MemKey, "Term", 12));
-            _numStub = AddNum(grpGeo, "Elbow stub length (forces the turn):", ref gy, 1, 24, DialogMemory.GetDouble(MemKey, "Stub", 3));
-            _numMaxFlex = AddNum(grpGeo, "Max flex length (0 = no check):", ref gy, 0, 120, DialogMemory.GetDouble(MemKey, "MaxFlex", 0));
+            _numSize = AddNum(grpGeo, "Drop / armover pipe size:", ref gy, 0.25m, 12, DialogMemory.GetDouble(MemKey, "Size", 1.0), 0.25m);
+            _numRise = AddNum(grpGeo, "Return-bend rise above branch (0 = none):", ref gy, 0, 240, DialogMemory.GetDouble(MemKey, "Rise", 0), 0.5m);
+            _numTerm = AddNum(grpGeo, "Hard-pipe termination above head:", ref gy, 0, 120, DialogMemory.GetDouble(MemKey, "Term", 12), 0.5m);
+            _numStub = AddNum(grpGeo, "Elbow stub length (forces the turn):", ref gy, 1, 24, DialogMemory.GetDouble(MemKey, "Stub", 3), 0.5m);
+            _numMaxFlex = AddNum(grpGeo, "Max flex length (0 = no check):", ref gy, 0, 120, DialogMemory.GetDouble(MemKey, "MaxFlex", 0), 1m);
             Controls.Add(grpGeo);
-            y += 176;
+            y += 204;
 
-            // ── Options ──
             _chkSwallow = new CheckBox
             {
                 Text = "Swallow recoverable warnings during placement",
@@ -97,39 +120,37 @@ namespace SgRevitAddin.Commands.PipeRouting
             Controls.Add(_chkSwallow);
             y += 32;
 
-            // ── Buttons ──
-            var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(560 - M - 90, y), Size = new Size(90, 32) };
+            var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(580 - M - 90, y), Size = new Size(90, 32) };
             CancelButton = btnCancel;
             Controls.Add(btnCancel);
-            var btnOK = new Button { Text = "Place Drops", Location = new Point(560 - M - 90 - 10 - 120, y), Size = new Size(120, 32) };
+            var btnOK = new Button { Text = "Start Placing", Location = new Point(580 - M - 90 - 10 - 120, y), Size = new Size(120, 32) };
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
             Controls.Add(btnOK);
         }
 
-        private void AddCombo(GroupBox grp, string label, ref int gy, out ComboBox cbo,
-            List<(int id, string name)> items, int LblW, int inX, int inW)
+        private void AddCombo(GroupBox grp, string label, ref int gy, out ComboBox cbo, List<(int id, string name)> items)
         {
-            grp.Controls.Add(new Label { Text = label, Location = new Point(12, gy + 3), Size = new Size(LblW, 18) });
-            cbo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(inX, gy), Size = new Size(inW, 24) };
+            grp.Controls.Add(new Label { Text = label, Location = new Point(12, gy + 3), Size = new Size(160, 18) });
+            cbo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(178, gy), Size = new Size(350, 24) };
             foreach (var it in items) cbo.Items.Add(new Item(it.id, it.name));
             if (cbo.Items.Count > 0) cbo.SelectedIndex = 0;
             grp.Controls.Add(cbo);
             gy += 30;
         }
 
-        private NumericUpDown AddNum(GroupBox grp, string label, ref int gy, decimal min, decimal max, double val)
+        private NumericUpDown AddNum(GroupBox grp, string label, ref int gy, decimal min, decimal max, double val, decimal inc)
         {
-            grp.Controls.Add(new Label { Text = label, Location = new Point(12, gy + 3), Size = new Size(290, 18) });
+            grp.Controls.Add(new Label { Text = label, Location = new Point(12, gy + 3), Size = new Size(320, 18) });
             var num = new NumericUpDown
             {
-                Location = new Point(310, gy), Size = new Size(80, 24),
-                Minimum = min, Maximum = max, DecimalPlaces = 2, Increment = 0.5m,
+                Location = new Point(340, gy), Size = new Size(80, 24),
+                Minimum = min, Maximum = max, DecimalPlaces = 2, Increment = inc,
                 Value = (decimal)Math.Max((double)min, Math.Min((double)max, val))
             };
             grp.Controls.Add(num);
-            grp.Controls.Add(new Label { Text = "in", Location = new Point(396, gy + 3), Size = new Size(20, 18) });
-            gy += 34;
+            grp.Controls.Add(new Label { Text = "in", Location = new Point(426, gy + 3), Size = new Size(20, 18) });
+            gy += 32;
             return num;
         }
 
@@ -144,18 +165,22 @@ namespace SgRevitAddin.Commands.PipeRouting
             }
             var arm = _cboArm.SelectedItem as Item ?? drop;
 
+            Mode = _rbBatch.Checked ? ConnectionMode.Batch : ConnectionMode.Continuous;
             DropPipeTypeId = drop.Id;
             ArmPipeTypeId = arm.Id;
             FlexTypeId = flex.Id;
+            SizeInches = (double)_numSize.Value;
             RiseInches = (double)_numRise.Value;
             TermHeightInches = (double)_numTerm.Value;
             StubInches = (double)_numStub.Value;
             MaxFlexInches = (double)_numMaxFlex.Value;
             SwallowWarnings = _chkSwallow.Checked;
 
+            DialogMemory.SetInt(MemKey, "Mode", Mode == ConnectionMode.Batch ? 1 : 0);
             DialogMemory.SetInt(MemKey, "DropType", DropPipeTypeId);
             DialogMemory.SetInt(MemKey, "ArmType", ArmPipeTypeId);
             DialogMemory.SetInt(MemKey, "FlexType", FlexTypeId);
+            DialogMemory.SetDouble(MemKey, "Size", SizeInches);
             DialogMemory.SetDouble(MemKey, "Rise", RiseInches);
             DialogMemory.SetDouble(MemKey, "Term", TermHeightInches);
             DialogMemory.SetDouble(MemKey, "Stub", StubInches);

@@ -56,130 +56,154 @@ namespace SgRevitAddin.Commands.PipeRouting
 
             try
             {
-                // ── Gather heads + branch from selection (or pick) ──
-                var sel = uidoc.Selection.GetElementIds().Select(id => doc.GetElement(id)).Where(e => e != null).ToList();
-                var heads = sel.OfType<FamilyInstance>()
-                    .Where(fi => fi.Category?.Id.IntegerValue == (int)BuiltInCategory.OST_Sprinklers)
-                    .ToList();
-                Pipe branch = sel.OfType<Pipe>().FirstOrDefault();
-
-                if (heads.Count == 0)
-                {
-                    try
-                    {
-                        var refs = uidoc.Selection.PickObjects(ObjectType.Element,
-                            new CategoryFilter(BuiltInCategory.OST_Sprinklers),
-                            "Select pendent sprinkler heads to drop to, then Finish.");
-                        heads = refs.Select(r => doc.GetElement(r)).OfType<FamilyInstance>().ToList();
-                    }
-                    catch (Autodesk.Revit.Exceptions.OperationCanceledException) { return Result.Cancelled; }
-                }
-                if (heads.Count == 0)
-                {
-                    TaskDialog.Show("Sprinkler Drops", "No sprinkler heads selected.");
-                    return Result.Cancelled;
-                }
-
-                if (branch == null)
-                {
-                    try
-                    {
-                        var r = uidoc.Selection.PickObject(ObjectType.Element,
-                            new CategoryFilter(BuiltInCategory.OST_PipeCurves),
-                            "Select the BRANCH LINE pipe to connect the drops to.");
-                        branch = doc.GetElement(r) as Pipe;
-                    }
-                    catch (Autodesk.Revit.Exceptions.OperationCanceledException) { return Result.Cancelled; }
-                }
-                if (branch == null)
-                {
-                    TaskDialog.Show("Sprinkler Drops", "No branch-line pipe selected.");
-                    return Result.Cancelled;
-                }
-
-                // ── Dialog ──
+                // ── Collect types + sensible default (hcad3 threaded) ──
                 var pipeTypes = new FilteredElementCollector(doc).OfClass(typeof(PipeType)).Cast<PipeType>()
                     .OrderBy(p => p.Name).Select(p => (id: p.Id.IntegerValue, name: p.Name)).ToList();
                 var flexTypes = new FilteredElementCollector(doc).OfClass(typeof(FlexPipeType)).Cast<FlexPipeType>()
                     .OrderBy(p => p.Name)
                     .Select(p => (id: p.Id.IntegerValue, name: $"{p.FamilyName} : {p.Name}")).ToList();
-
                 if (pipeTypes.Count == 0 || flexTypes.Count == 0)
                 {
                     TaskDialog.Show("Sprinkler Drops",
                         "Need at least one Pipe Type and one Flex Pipe Type loaded in the project.");
                     return Result.Cancelled;
                 }
+                int defaultPipeTypeId = DefaultThreadedPipeType(pipeTypes);
 
-                int dropTypeId, armTypeId, flexTypeId;
-                double riseFt, termFt, stubFt, maxFlexFt;
-                bool swallow;
-                using (var dlg = new SprinklerDropDialog(pipeTypes, flexTypes))
+                // ── Dialog (settings only; picking happens after, per mode) ──
+                Cfg cfg;
+                SprinklerDropDialog.ConnectionMode mode;
+                using (var dlg = new SprinklerDropDialog(pipeTypes, flexTypes, defaultPipeTypeId))
                 {
                     if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK)
                         return Result.Cancelled;
-                    dropTypeId = dlg.DropPipeTypeId; armTypeId = dlg.ArmPipeTypeId; flexTypeId = dlg.FlexTypeId;
-                    riseFt = dlg.RiseInches / 12.0; termFt = dlg.TermHeightInches / 12.0;
-                    stubFt = dlg.StubInches / 12.0; maxFlexFt = dlg.MaxFlexInches / 12.0;
-                    swallow = dlg.SwallowWarnings;
-                }
-
-                // ── Resolve system + level from the branch ──
-                ElementId sysTypeId = branch.MEPSystem?.GetTypeId() ?? FirstPipingSystemTypeId(doc);
-                ElementId levelId = branch.ReferenceLevel?.Id ?? FirstLevelId(doc);
-                if (sysTypeId == ElementId.InvalidElementId || levelId == ElementId.InvalidElementId)
-                {
-                    TaskDialog.Show("Sprinkler Drops", "Could not resolve a piping system type or level from the branch.");
-                    return Result.Failed;
-                }
-
-                Line branchLine = (branch.Location as LocationCurve)?.Curve as Line;
-                if (branchLine == null)
-                {
-                    TaskDialog.Show("Sprinkler Drops", "The selected branch is not a straight pipe.");
-                    return Result.Cancelled;
+                    mode = dlg.Mode;
+                    cfg = new Cfg
+                    {
+                        DropType = new ElementId(dlg.DropPipeTypeId),
+                        ArmType = new ElementId(dlg.ArmPipeTypeId),
+                        FlexType = new ElementId(dlg.FlexTypeId),
+                        SizeFt = dlg.SizeInches / 12.0,
+                        RiseFt = dlg.RiseInches / 12.0,
+                        TermFt = dlg.TermHeightInches / 12.0,
+                        StubFt = dlg.StubInches / 12.0,
+                        MaxFlexFt = dlg.MaxFlexInches / 12.0,
+                        Swallow = dlg.SwallowWarnings
+                    };
                 }
 
                 int done = 0, failed = 0;
                 var failReasons = new List<string>();
 
-                using (var tx = new Transaction(doc, "Place Sprinkler Drops"))
+                if (mode == SprinklerDropDialog.ConnectionMode.Continuous)
                 {
-                    tx.Start();
-                    if (swallow)
+                    // Click a head, then its pipe; repeat until Esc.
+                    while (true)
                     {
-                        var fho = tx.GetFailureHandlingOptions();
-                        fho.SetFailuresPreprocessor(new WarningSwallower());
-                        fho.SetClearAfterRollback(true);
-                        tx.SetFailureHandlingOptions(fho);
-                    }
-
-                    foreach (var head in heads)
-                    {
+                        FamilyInstance head; Pipe pipe;
                         try
                         {
-                            string err = PlaceOne(doc, head, branch, branchLine, sysTypeId, levelId,
-                                new ElementId(dropTypeId), new ElementId(armTypeId), new ElementId(flexTypeId),
-                                riseFt, termFt, stubFt, maxFlexFt);
+                            var hRef = uidoc.Selection.PickObject(ObjectType.Element,
+                                new CategoryFilter(BuiltInCategory.OST_Sprinklers),
+                                "Pick a sprinkler head (Esc to finish).");
+                            head = doc.GetElement(hRef) as FamilyInstance;
+                            var pRef = uidoc.Selection.PickObject(ObjectType.Element,
+                                new CategoryFilter(BuiltInCategory.OST_PipeCurves),
+                                "Pick the pipe to connect it to (Esc to finish).");
+                            pipe = doc.GetElement(pRef) as Pipe;
+                        }
+                        catch (Autodesk.Revit.Exceptions.OperationCanceledException) { break; }
+                        if (head == null || pipe == null) continue;
+
+                        using (var tx = new Transaction(doc, "Sprinkler Drop"))
+                        {
+                            tx.Start();
+                            ApplySwallow(tx, cfg.Swallow);
+                            string err = ConnectForHead(doc, head, pipe, cfg, out _);
+                            tx.Commit();
                             if (err == null) done++;
                             else { failed++; failReasons.Add($"  {head.Id}: {err}"); }
                         }
-                        catch (Exception ex)
-                        {
-                            failed++;
-                            failReasons.Add($"  {head.Id}: {ex.Message}");
-                        }
                     }
+                }
+                else
+                {
+                    // Batch: heads from selection (or pick), then ONE pipe.
+                    var heads = uidoc.Selection.GetElementIds().Select(id => doc.GetElement(id))
+                        .OfType<FamilyInstance>()
+                        .Where(fi => fi.Category?.Id.IntegerValue == (int)BuiltInCategory.OST_Sprinklers)
+                        .ToList();
+                    if (heads.Count == 0)
+                    {
+                        try
+                        {
+                            var refs = uidoc.Selection.PickObjects(ObjectType.Element,
+                                new CategoryFilter(BuiltInCategory.OST_Sprinklers),
+                                "Select sprinkler heads, then Finish.");
+                            heads = refs.Select(r => doc.GetElement(r)).OfType<FamilyInstance>().ToList();
+                        }
+                        catch (Autodesk.Revit.Exceptions.OperationCanceledException) { return Result.Cancelled; }
+                    }
+                    if (heads.Count == 0) { TaskDialog.Show("Sprinkler Drops", "No heads selected."); return Result.Cancelled; }
 
-                    tx.Commit();
+                    Pipe pipe;
+                    try
+                    {
+                        var pRef = uidoc.Selection.PickObject(ObjectType.Element,
+                            new CategoryFilter(BuiltInCategory.OST_PipeCurves),
+                            "Pick the one pipe to connect all selected heads to.");
+                        pipe = doc.GetElement(pRef) as Pipe;
+                    }
+                    catch (Autodesk.Revit.Exceptions.OperationCanceledException) { return Result.Cancelled; }
+                    if (pipe == null) { TaskDialog.Show("Sprinkler Drops", "No pipe selected."); return Result.Cancelled; }
+
+                    using (var tx = new Transaction(doc, "Place Sprinkler Drops"))
+                    {
+                        tx.Start();
+                        ApplySwallow(tx, cfg.Swallow);
+
+                        // Teeing onto the pipe splits it; track the pieces so each
+                        // head ties into whichever piece sits under its location.
+                        var pieceIds = new List<ElementId> { pipe.Id };
+                        foreach (var head in heads)
+                        {
+                            try
+                            {
+                                Connector inlet = InletConnector(head);
+                                if (inlet == null) { failed++; failReasons.Add($"  {head.Id}: no open inlet"); continue; }
+                                XYZ H = inlet.Origin;
+
+                                Pipe target = null;
+                                foreach (var pid in pieceIds)
+                                {
+                                    var pp = doc.GetElement(pid) as Pipe;
+                                    var ln = (pp?.Location as LocationCurve)?.Curve as Line;
+                                    if (ln != null && FootWithinSegment(ln, H)) { target = pp; break; }
+                                }
+                                if (target == null)
+                                {
+                                    failed++;
+                                    failReasons.Add($"  {head.Id}: not in-line/perpendicular to the pipe run");
+                                    continue;
+                                }
+
+                                string err = ConnectForHead(doc, head, target, cfg, out ElementId newPiece);
+                                if (newPiece != ElementId.InvalidElementId) pieceIds.Add(newPiece);
+                                if (err == null) done++;
+                                else { failed++; failReasons.Add($"  {head.Id}: {err}"); }
+                            }
+                            catch (Exception ex)
+                            {
+                                failed++;
+                                failReasons.Add($"  {head.Id}: {ex.Message}");
+                            }
+                        }
+
+                        tx.Commit();
+                    }
                 }
 
-                var lines = new List<string>
-                {
-                    $"Sprinkler Drops — {heads.Count} head(s).",
-                    $"Placed: {done}",
-                    $"Failed/skipped: {failed}"
-                };
+                var lines = new List<string> { $"Sprinkler Drops — placed: {done}, failed/skipped: {failed}." };
                 if (failReasons.Count > 0)
                 {
                     lines.Add("");
@@ -197,11 +221,33 @@ namespace SgRevitAddin.Commands.PipeRouting
             }
         }
 
+        /// <summary>
+        /// Connects one head to the given pipe: resolves system/level, then
+        /// places the drop. Returns null on success or a short reason string.
+        /// <paramref name="newPiece"/> receives the new pipe element the branch
+        /// split created (for batch piece tracking), else Invalid.
+        /// </summary>
+        private string ConnectForHead(Document doc, FamilyInstance head, Pipe pipe, Cfg cfg, out ElementId newPiece)
+        {
+            newPiece = ElementId.InvalidElementId;
+            var line = (pipe.Location as LocationCurve)?.Curve as Line;
+            if (line == null) return "pipe is not straight";
+            ElementId sysId = pipe.MEPSystem?.GetTypeId() ?? FirstPipingSystemTypeId(doc);
+            ElementId lvlId = pipe.ReferenceLevel?.Id ?? FirstLevelId(doc);
+            if (sysId == ElementId.InvalidElementId || lvlId == ElementId.InvalidElementId)
+                return "no system/level on the pipe";
+            return PlaceOne(doc, head, pipe, line, sysId, lvlId,
+                cfg.DropType, cfg.ArmType, cfg.FlexType,
+                cfg.SizeFt, cfg.RiseFt, cfg.TermFt, cfg.StubFt, cfg.MaxFlexFt, out newPiece);
+        }
+
         /// <summary>Places one drop. Returns null on success, or a short reason string on failure.</summary>
         private string PlaceOne(Document doc, FamilyInstance head, Pipe branch, Line branchLine,
             ElementId sysTypeId, ElementId levelId, ElementId dropTypeId, ElementId armTypeId, ElementId flexTypeId,
-            double riseFt, double termFt, double stubFt, double maxFlexFt)
+            double sizeFt, double riseFt, double termFt, double stubFt, double maxFlexFt,
+            out ElementId newBranchPiece)
         {
+            newBranchPiece = ElementId.InvalidElementId;
             const double MinSeg = 0.01;   // ~1/8"
             const double MinArm = 0.08;   // ~1" — below this the up-over has no real horizontal turn
 
@@ -249,12 +295,14 @@ namespace SgRevitAddin.Commands.PipeRouting
             if (haveRise)
             {
                 first = Pipe.Create(doc, sysTypeId, armTypeId, levelId, T, R1);
+                SetDiameter(first, sizeFt);
                 flowEnd = EndConnectorNear(first, R1);
             }
             else
             {
                 // No rise: arm starts at branch height directly to over-head.
                 first = Pipe.Create(doc, sysTypeId, armTypeId, levelId, T, R2);
+                SetDiameter(first, sizeFt);
                 flowEnd = EndConnectorNear(first, R2);
             }
             if (first == null || flowEnd == null) return "failed to create first segment";
@@ -262,16 +310,19 @@ namespace SgRevitAddin.Commands.PipeRouting
             if (haveRise && haveArm)
             {
                 Pipe arm = Pipe.Create(doc, armTypeId, levelId, flowEnd, R2); // elbow at R1
+                SetDiameter(arm, sizeFt);
                 flowEnd = EndConnectorNear(arm, R2);
             }
 
             // Drop (vertical) from R2 to R3 — elbow at R2.
             Pipe drop = Pipe.Create(doc, dropTypeId, levelId, flowEnd, R3);
+            SetDiameter(drop, sizeFt);
             Connector dropEnd = EndConnectorNear(drop, R3);
             if (dropEnd == null) return "failed to create drop";
 
             // Stub (horizontal) from R3 to R4 — REAL 90° elbow at R3 (drop base).
             Pipe stub = Pipe.Create(doc, dropTypeId, levelId, dropEnd, R4);
+            SetDiameter(stub, sizeFt);
             Connector stubEnd = EndConnectorNear(stub, R4);
             if (stubEnd == null) return "failed to create stub";
 
@@ -282,6 +333,7 @@ namespace SgRevitAddin.Commands.PipeRouting
                 if (tapConn != null && !tapConn.IsConnected)
                 {
                     ElementId newBranchId = PlumbingUtils.BreakCurve(doc, branch.Id, T);
+                    newBranchPiece = newBranchId;
                     var branchPiece2 = doc.GetElement(newBranchId) as Pipe;
                     Connector b1 = EndConnectorNear(branch, T);
                     Connector b2 = branchPiece2 != null ? EndConnectorNear(branchPiece2, T) : null;
@@ -320,6 +372,59 @@ namespace SgRevitAddin.Commands.PipeRouting
             }
 
             return null;
+        }
+
+        /// <summary>Bundle of dialog-chosen settings passed to placement.</summary>
+        private class Cfg
+        {
+            public ElementId DropType, ArmType, FlexType;
+            public double SizeFt, RiseFt, TermFt, StubFt, MaxFlexFt;
+            public bool Swallow;
+        }
+
+        private static void ApplySwallow(Transaction tx, bool swallow)
+        {
+            if (!swallow) return;
+            var fho = tx.GetFailureHandlingOptions();
+            fho.SetFailuresPreprocessor(new WarningSwallower());
+            fho.SetClearAfterRollback(true);
+            tx.SetFailureHandlingOptions(fho);
+        }
+
+        /// <summary>Pick a sensible default drop/armover pipe type: hcad3 + threaded, else any threaded, else first.</summary>
+        private static int DefaultThreadedPipeType(List<(int id, string name)> types)
+        {
+            foreach (var t in types)
+                if (t.name.IndexOf("hcad3", StringComparison.OrdinalIgnoreCase) >= 0
+                    && t.name.IndexOf("thread", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return t.id;
+            foreach (var t in types)
+                if (t.name.IndexOf("thread", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return t.id;
+            return types.Count > 0 ? types[0].id : -1;
+        }
+
+        /// <summary>True if <paramref name="pt"/>'s projection lands within the pipe segment (±6").</summary>
+        private static bool FootWithinSegment(Line line, XYZ pt)
+        {
+            XYZ p0 = line.GetEndPoint(0), p1 = line.GetEndPoint(1);
+            XYZ dir = p1 - p0;
+            double len = dir.GetLength();
+            if (len < 1e-9) return false;
+            dir = dir.Normalize();
+            double t = (pt - p0).DotProduct(dir);
+            return t >= -0.5 && t <= len + 0.5;
+        }
+
+        private static void SetDiameter(Pipe pipe, double sizeFt)
+        {
+            if (pipe == null || sizeFt <= 0) return;
+            try
+            {
+                var d = pipe.get_Parameter(BuiltInParameter.RBS_PIPE_DIAMETER_PARAM);
+                if (d != null && !d.IsReadOnly) d.Set(sizeFt);
+            }
+            catch { }
         }
 
         /// <summary>Horizontal unit vector perpendicular to the branch line.</summary>
