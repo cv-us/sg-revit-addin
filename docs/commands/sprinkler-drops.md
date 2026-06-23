@@ -32,16 +32,16 @@ Per head, in feet internally:
 | `R2` | `(head.XY, R1.Z)` | arm (horizontal) | armover |
 | `R3` | `(head.XY, head.Z + termHeight)` | drop (vertical) | drop |
 | `R4` | `R3 + aim × stub` | stub (horizontal) | drop |
-| — | `R4 → head inlet` | flex hose | flex |
+| — | `head inlet → R4` | flex hose | flex |
 
-Elbows auto-resolve at **R1**, **R2**, and **R3** (the drop base) because each is a 90° turn. If `rise` is ~0 the riser is skipped; if the head sits directly over the branch the arm is skipped and the stub aims perpendicular to the branch.
+Real elbows are inserted at **R1**, **R2**, and **R3** (the drop base) because each is a 90° turn. If `rise` is ~0 the riser is skipped; if the head sits directly over the branch the arm is skipped and the stub aims perpendicular to the branch.
 
 ## How the pipes are built (reliability)
 
-- The **first** segment is a free `Pipe.Create(doc, systemTypeId, pipeTypeId, levelId, p0, p1)`.
-- **Each subsequent** segment is created with the **connector overload** `Pipe.Create(doc, pipeTypeId, levelId, previousFreeEndConnector, endPoint)` — which inserts the routing-preference fitting **at creation**. This is more dependable than a post-hoc `Connector.ConnectTo`.
+- **Every hard segment is a free `Pipe.Create(doc, systemTypeId, pipeTypeId, levelId, a, b)`** sharing endpoints with its neighbours (degenerate <½" segments are dropped).
+- At **each interior joint** the command then calls **`doc.Create.NewElbowFitting(c1, c2)`** between the two coincident free end connectors — this *guarantees* a real BOM elbow (the earlier connector-overload approach connected the pipes but left some joints with no fitting). If an elbow can't resolve (collinear runs, or the type has no elbow rule) it falls back to a bare `ConnectTo`.
 - **Branch tee:** `PlumbingUtils.BreakCurve(doc, branchId, T)` splits the branch at the tap point, then `doc.Create.NewTeeFitting(b1, b2, riserConnector)`.
-- **Flex:** `FlexPipe.Create(doc, systemTypeId, flexTypeId, levelId, {R4, head})` then `ConnectTo` each end (to the stub's open connector and the head inlet).
+- **Flex:** `FlexPipe.Create(doc, systemTypeId, flexTypeId, levelId, {head, R4})` — **head-first on purpose.** The flex family's first connector carries the **reducing nipple + bracket**, which belongs at the **sprinkler head**; the plain threaded end then lands on the hard pipe. Both ends `ConnectTo`, then the flex diameter is set **last** (so a connect-time auto-resize doesn't override the chosen flex size).
 - All in one transaction with an `IFailuresPreprocessor` that deletes recoverable **warnings** (errors still roll back). Each head is wrapped in try/catch and reported individually.
 
 ## Dialog
@@ -53,6 +53,7 @@ Elbows auto-resolve at **R1**, **R2**, and **R3** (the drop base) because each i
 | Armover pipe type | — | defaults to the same |
 | Flex pipe type | — | from loaded `FlexPipeType` (family : type) |
 | Drop / armover pipe size | in | default **1"** |
+| Flex pipe size | in | default **1"** — set explicitly so flex doesn't come in at its type's nominal (often 4") |
 | Return-bend rise above branch | in | **0 = simple perpendicular armover** (drop from branch height); >0 = up-over-down |
 | Hard-pipe termination above head | in | where the hard pipe ends / flex takes over |
 | Elbow stub length | in | the short turn that forces a real elbow (e.g. 3") |
@@ -70,7 +71,7 @@ Per head: project the head perpendicular onto the pipe → arm over → drop →
 
 ## Known risk areas (for field iteration)
 
-1. **Elbow resolves as union/coupling** — if a join ends up near-collinear or the drop pipe type's *Elbows* routing group lacks a rule for the size. Fallback: explicit `NewElbowFitting`, or place + rotate the elbow `FamilySymbol`.
+1. **No elbow at a joint** — `NewElbowFitting` can throw if the drop pipe type's *Elbows* routing group lacks a rule for the size, or the two runs are near-collinear; the command then falls back to a bare `ConnectTo` (pipes joined, no fitting). Check the type's routing preferences if elbows are missing.
 2. **Branch tee fails** — if the tap point lands at a branch end, or the branch's system doesn't match. The hard pipe is still placed; the message flags it.
 3. **Flex won't join** — size/domain mismatch; the flex is created but a `ConnectTo` may need a transition. Reported per head.
 4. **Wrong inlet picked** on multi-connector heads — filtered to open piping End connectors.

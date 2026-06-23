@@ -20,7 +20,7 @@ So color must live on the **material the element actually resolves to**:
 | Category | Mechanism | Why |
 |----------|-----------|-----|
 | **Pipes** (`OST_PipeCurves`) | colored per-status **duplicate pipe type** + `ChangeTypeId` | Material is segment/type-driven; instance material param is **read-only**. |
-| **Flex pipes** (`OST_FlexPipeCurves`) | colored per-status **duplicate FlexPipeType** + `ChangeTypeId` | Same as rigid pipe — type/segment-driven, instance param read-only. |
+| **Flex pipes** (`OST_FlexPipeCurves`) | colored per-status **duplicate FlexPipeType** whose **type-level Material parameter** is set + `ChangeTypeId` | Flex has **no** routing-preference segments — its body material is a Material *type parameter*, so it's set directly (not via segments like rigid pipe). |
 | **Fittings / accessories / sprinklers** | writable **instance** material param if present, else **duplicate the symbol** with all its material params set + reassign `Symbol` | There is **no** per-instance material override API for family geometry; a type with the material set is the only route. |
 
 > **Hard limit (honest):** a loadable family can only be recolored if it was **authored with a Material parameter wired to its solids**. Families whose solids are **"By Category"** or hardcoded (common for fab fittings and many sprinklers) **cannot** be recolored for NWC by any API call — they're counted and reported as "couldn't color," and the one-time fix is editing the `.rfa` to bind a Material parameter to the solids. Pipes and flex always work (type/segment route).
@@ -56,4 +56,5 @@ Everything the command created is discarded on close. Nothing reaches the centra
 
 - **Shading color** is what NWC reads (set on the `Status-*` materials). In Navisworks, set the viewpoint render style to **Shaded** to see it. (Full Render mode reads the appearance asset, which this v1 does not set — a documented limitation.)
 - Each head/element is wrapped in try/catch; the transaction commits only successful swaps. The summary reports pipes re-typed, fittings colored, and any types whose colored duplicate failed (with the reason) — never silent.
+- **The summary names the families.** It lists the fitting/accessory/sprinkler **families it recolored** (✓) and the families it **couldn't** (✗ — no bindable material parameter, i.e. "By Category"/hardcoded solids). Use the ✗ list to know exactly which `.rfa` files need a Material parameter wired to their solids. If a family is in the ✓ list but still shows uncolored in the NWC, its material parameter exists but isn't wired to the visible solids — also a `.rfa` fix.
 - **Field testing pending** for the pipe type/segment duplication (intricate, can't be validated without a live model). If a pipe's colored type fails it's reported and the pipe is left unchanged.

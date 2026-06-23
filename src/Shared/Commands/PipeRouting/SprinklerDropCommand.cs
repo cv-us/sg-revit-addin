@@ -84,6 +84,7 @@ namespace SgRevitAddin.Commands.PipeRouting
                         ArmType = new ElementId(dlg.ArmPipeTypeId),
                         FlexType = new ElementId(dlg.FlexTypeId),
                         SizeFt = dlg.SizeInches / 12.0,
+                        FlexSizeFt = dlg.FlexSizeInches / 12.0,
                         RiseFt = dlg.RiseInches / 12.0,
                         TermFt = dlg.TermHeightInches / 12.0,
                         StubFt = dlg.StubInches / 12.0,
@@ -238,17 +239,17 @@ namespace SgRevitAddin.Commands.PipeRouting
                 return "no system/level on the pipe";
             return PlaceOne(doc, head, pipe, line, sysId, lvlId,
                 cfg.DropType, cfg.ArmType, cfg.FlexType,
-                cfg.SizeFt, cfg.RiseFt, cfg.TermFt, cfg.StubFt, cfg.MaxFlexFt, out newPiece);
+                cfg.SizeFt, cfg.FlexSizeFt, cfg.RiseFt, cfg.TermFt, cfg.StubFt, cfg.MaxFlexFt, out newPiece);
         }
 
         /// <summary>Places one drop. Returns null on success, or a short reason string on failure.</summary>
         private string PlaceOne(Document doc, FamilyInstance head, Pipe branch, Line branchLine,
             ElementId sysTypeId, ElementId levelId, ElementId dropTypeId, ElementId armTypeId, ElementId flexTypeId,
-            double sizeFt, double riseFt, double termFt, double stubFt, double maxFlexFt,
+            double sizeFt, double flexSizeFt, double riseFt, double termFt, double stubFt, double maxFlexFt,
             out ElementId newBranchPiece)
         {
             newBranchPiece = ElementId.InvalidElementId;
-            const double MinSeg = 0.01;   // ~1/8"
+            const double MinSeg = 0.04;   // ~1/2" — below this a segment is dropped (collinear/degenerate)
             const double MinArm = 0.08;   // ~1" — below this the up-over has no real horizontal turn
 
             Connector inlet = InletConnector(head);
@@ -270,9 +271,9 @@ namespace SgRevitAddin.Commands.PipeRouting
             // Horizontal aim for the stub (and thus the elbow rotation): along
             // the arm if there is one, else perpendicular to the branch.
             XYZ armXY = new XYZ(R2.X - R1.X, R2.Y - R1.Y, 0);
-            XYZ aim = armXY.GetLength() > MinArm
-                ? armXY.Normalize()
-                : Perp(branchLine);
+            bool haveRise = (R1.Z - T.Z) > MinArm;
+            bool haveArm = armXY.GetLength() > MinArm;
+            XYZ aim = haveArm ? armXY.Normalize() : Perp(branchLine);
             XYZ R4 = R3 + aim * stubFt;                            // stub end — flex starts here
 
             // Optional flex-length sanity check.
@@ -283,48 +284,51 @@ namespace SgRevitAddin.Commands.PipeRouting
                     return $"flex would need {flexNeed * 12:F1}\" > max {maxFlexFt * 12:F0}\"";
             }
 
-            bool haveRise = (R1.Z - T.Z) > MinArm;
-            bool haveArm = armXY.GetLength() > MinArm;
+            // ── Build the hard-pipe run as a polyline of FREE pipes that share
+            //    endpoints, then insert a REAL elbow at every interior joint.
+            //    (The connector overload of Pipe.Create connected the segments
+            //    but did not insert BOM elbows; explicit NewElbowFitting does.)
+            //
+            //    Points, branch → stub end:  T → [R1] → [R2] → R3 → R4
+            //      • R1 only when there's a rise
+            //      • R2 only when the head is offset from the branch (an arm)
+            //    Segments ending at or starting from R3 are the DROP type; the
+            //    rest are the ARMOVER type.
+            var pts = new List<XYZ> { T };
+            if (haveRise) pts.Add(R1);
+            if (haveArm) pts.Add(R2);
+            pts.Add(R3);
+            pts.Add(R4);
+            DedupeConsecutive(pts, MinSeg);
+            if (pts.Count < 2) return "degenerate geometry (no segments to build)";
 
-            // ── Build the hard-pipe run. First segment is a free XYZ pipe;
-            //    subsequent segments use the connector overload so the
-            //    routing-preference elbow inserts at creation. ──
-            Pipe first = null;     // segment whose start connector taps the branch (at T)
-            Connector flowEnd;     // free connector that feeds the next segment
-
-            if (haveRise)
+            var segPipes = new List<Pipe>();
+            for (int i = 0; i < pts.Count - 1; i++)
             {
-                first = Pipe.Create(doc, sysTypeId, armTypeId, levelId, T, R1);
-                SetDiameter(first, sizeFt);
-                flowEnd = EndConnectorNear(first, R1);
-            }
-            else
-            {
-                // No rise: arm starts at branch height directly to over-head.
-                first = Pipe.Create(doc, sysTypeId, armTypeId, levelId, T, R2);
-                SetDiameter(first, sizeFt);
-                flowEnd = EndConnectorNear(first, R2);
-            }
-            if (first == null || flowEnd == null) return "failed to create first segment";
-
-            if (haveRise && haveArm)
-            {
-                Pipe arm = Pipe.Create(doc, armTypeId, levelId, flowEnd, R2); // elbow at R1
-                SetDiameter(arm, sizeFt);
-                flowEnd = EndConnectorNear(arm, R2);
+                XYZ a = pts[i], b = pts[i + 1];
+                // Drop type for the vertical drop into R3 and the stub off R3.
+                bool isDropOrStub = a.IsAlmostEqualTo(R3) || b.IsAlmostEqualTo(R3);
+                ElementId segType = isDropOrStub ? dropTypeId : armTypeId;
+                Pipe p = Pipe.Create(doc, sysTypeId, segType, levelId, a, b);
+                if (p == null) return $"failed to create pipe segment {i + 1}";
+                SetDiameter(p, sizeFt);
+                segPipes.Add(p);
             }
 
-            // Drop (vertical) from R2 to R3 — elbow at R2.
-            Pipe drop = Pipe.Create(doc, dropTypeId, levelId, flowEnd, R3);
-            SetDiameter(drop, sizeFt);
-            Connector dropEnd = EndConnectorNear(drop, R3);
-            if (dropEnd == null) return "failed to create drop";
-
-            // Stub (horizontal) from R3 to R4 — REAL 90° elbow at R3 (drop base).
-            Pipe stub = Pipe.Create(doc, dropTypeId, levelId, dropEnd, R4);
-            SetDiameter(stub, sizeFt);
+            Pipe first = segPipes[0];                       // taps the branch at T
+            Pipe stub = segPipes[segPipes.Count - 1];      // open end at R4 feeds the flex
             Connector stubEnd = EndConnectorNear(stub, R4);
-            if (stubEnd == null) return "failed to create stub";
+            if (stubEnd == null) return "failed to resolve stub end connector";
+
+            // Interior joints: elbow between each consecutive pair (fallback to a
+            // bare connection if an elbow can't resolve, e.g. collinear).
+            for (int i = 0; i < segPipes.Count - 1; i++)
+            {
+                XYZ joint = pts[i + 1];
+                Connector c1 = EndConnectorNear(segPipes[i], joint);
+                Connector c2 = EndConnectorNear(segPipes[i + 1], joint);
+                JoinWithElbow(doc, c1, c2);
+            }
 
             // ── Tee onto the branch at T. ──
             try
@@ -350,19 +354,24 @@ namespace SgRevitAddin.Commands.PipeRouting
                 return "drop placed but branch tee failed: " + ex.Message;
             }
 
-            // ── Flex: stub open end (R4) → head inlet (H). ──
+            // ── Flex: head inlet (H) → stub open end (R4). Points are ordered
+            //    HEAD-FIRST on purpose: the flex family's first connector carries
+            //    the reducing nipple + bracket, which belongs at the SPRINKLER
+            //    HEAD; the plain threaded end then lands on the hard pipe. ──
             try
             {
-                var pts = new List<XYZ> { R4, H };
-                FlexPipe flex = FlexPipe.Create(doc, sysTypeId, flexTypeId, levelId, pts);
+                var fpts = new List<XYZ> { H, R4 };
+                FlexPipe flex = FlexPipe.Create(doc, sysTypeId, flexTypeId, levelId, fpts);
                 if (flex != null)
                 {
                     var fc = flex.ConnectorManager.Connectors.Cast<Connector>()
                         .Where(c => c.ConnectorType == ConnectorType.End).ToList();
-                    Connector flexAtStub = fc.OrderBy(c => c.Origin.DistanceTo(R4)).FirstOrDefault();
                     Connector flexAtHead = fc.OrderBy(c => c.Origin.DistanceTo(H)).FirstOrDefault();
-                    if (flexAtStub != null && !flexAtStub.IsConnected) { try { flexAtStub.ConnectTo(stubEnd); } catch { } }
+                    Connector flexAtStub = fc.OrderBy(c => c.Origin.DistanceTo(R4)).FirstOrDefault();
                     if (flexAtHead != null && !flexAtHead.IsConnected) { try { flexAtHead.ConnectTo(inlet); } catch { } }
+                    if (flexAtStub != null && !flexAtStub.IsConnected) { try { flexAtStub.ConnectTo(stubEnd); } catch { } }
+                    // Set flex size LAST so a ConnectTo auto-resize doesn't override it.
+                    SetDiameter(flex, flexSizeFt);
                 }
                 else return "drop placed but flex create returned null";
             }
@@ -374,11 +383,31 @@ namespace SgRevitAddin.Commands.PipeRouting
             return null;
         }
 
+        /// <summary>
+        /// Inserts a real elbow fitting between two free, coincident-origin end
+        /// connectors. Falls back to a bare ConnectTo if an elbow can't resolve
+        /// (e.g. the two runs are collinear, or the type has no elbow rule).
+        /// </summary>
+        private static void JoinWithElbow(Document doc, Connector c1, Connector c2)
+        {
+            if (c1 == null || c2 == null) return;
+            if (c1.IsConnected || c2.IsConnected) return;
+            try { doc.Create.NewElbowFitting(c1, c2); }
+            catch { try { c1.ConnectTo(c2); } catch { } }
+        }
+
+        /// <summary>Removes consecutive points closer than <paramref name="minFt"/> (in place).</summary>
+        private static void DedupeConsecutive(List<XYZ> pts, double minFt)
+        {
+            for (int i = pts.Count - 1; i > 0; i--)
+                if (pts[i].DistanceTo(pts[i - 1]) < minFt) pts.RemoveAt(i);
+        }
+
         /// <summary>Bundle of dialog-chosen settings passed to placement.</summary>
         private class Cfg
         {
             public ElementId DropType, ArmType, FlexType;
-            public double SizeFt, RiseFt, TermFt, StubFt, MaxFlexFt;
+            public double SizeFt, FlexSizeFt, RiseFt, TermFt, StubFt, MaxFlexFt;
             public bool Swallow;
         }
 
@@ -416,12 +445,12 @@ namespace SgRevitAddin.Commands.PipeRouting
             return t >= -0.5 && t <= len + 0.5;
         }
 
-        private static void SetDiameter(Pipe pipe, double sizeFt)
+        private static void SetDiameter(MEPCurve curve, double sizeFt)
         {
-            if (pipe == null || sizeFt <= 0) return;
+            if (curve == null || sizeFt <= 0) return;
             try
             {
-                var d = pipe.get_Parameter(BuiltInParameter.RBS_PIPE_DIAMETER_PARAM);
+                var d = curve.get_Parameter(BuiltInParameter.RBS_PIPE_DIAMETER_PARAM);
                 if (d != null && !d.IsReadOnly) d.Set(sizeFt);
             }
             catch { }

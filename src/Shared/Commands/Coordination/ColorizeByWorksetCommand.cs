@@ -133,6 +133,8 @@ namespace SgRevitAddin.Commands.Coordination
             int pipesTyped = 0, fittingsMat = 0, viewOverrides = 0;
             int skippedNoStatus = 0, fittingNoMat = 0, pipeTypeFail = 0;
             var typeFailNotes = new HashSet<string>();
+            var fittingColoredNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var fittingNoMatNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             // Per-run cache so each (origType, status) is built once.
             var typeCache = new Dictionary<string, ElementId>();
@@ -196,14 +198,18 @@ namespace SgRevitAddin.Commands.Coordination
                         // exposes a material param wired to its solids.
                         else if (elem is FamilyInstance fi)
                         {
+                            string famLabel = FamilyLabel(fi);
                             try
                             {
-                                if (ColorLoadableInstance(doc, fi, status, matIds[status], symCache)) fittingsMat++;
-                                else fittingNoMat++;
+                                if (ColorLoadableInstance(doc, fi, status, matIds[status], symCache))
+                                { fittingsMat++; fittingColoredNames.Add(famLabel); }
+                                else
+                                { fittingNoMat++; fittingNoMatNames.Add(famLabel); }
                             }
                             catch (Exception ex)
                             {
                                 fittingNoMat++;
+                                fittingNoMatNames.Add(famLabel);
                                 typeFailNotes.Add(Trunc(ex.Message));
                             }
                         }
@@ -246,11 +252,19 @@ namespace SgRevitAddin.Commands.Coordination
             {
                 lines.Add($"Pipes + flex re-typed to colored duplicates: {pipesTyped}  (exports to NWC)");
                 lines.Add($"Fittings/sprinklers/accessories colored:     {fittingsMat}  (exports to NWC)");
+                if (fittingColoredNames.Count > 0)
+                {
+                    lines.Add("   Families recolored (symbol/material swap):");
+                    foreach (var n in fittingColoredNames.OrderBy(s => s).Take(12)) lines.Add("     ✓ " + n);
+                    if (fittingColoredNames.Count > 12) lines.Add($"     …and {fittingColoredNames.Count - 12} more.");
+                }
                 if (fittingNoMat > 0)
                 {
                     lines.Add($"Couldn't color (no material parameter):      {fittingNoMat}");
-                    lines.Add("   → those families have \"By Category\"/hardcoded solids; they");
-                    lines.Add("     need a Material parameter wired to their solids in the .rfa.");
+                    lines.Add("   These families have \"By Category\"/hardcoded solids — they need a");
+                    lines.Add("   Material parameter wired to their solids in the .rfa to color for NWC:");
+                    foreach (var n in fittingNoMatNames.OrderBy(s => s).Take(12)) lines.Add("     ✗ " + n);
+                    if (fittingNoMatNames.Count > 12) lines.Add($"     …and {fittingNoMatNames.Count - 12} more.");
                 }
                 if (pipeTypeFail > 0) lines.Add($"Pipes/flex whose colored type failed: {pipeTypeFail}");
                 foreach (var n in typeFailNotes.Take(4)) lines.Add("   • " + n);
@@ -391,32 +405,44 @@ namespace SgRevitAddin.Commands.Coordination
             catch (Exception ex) { failNotes.Add($"{origType.Name}: duplicate failed ({Trunc(ex.Message)})"); return ElementId.InvalidElementId; }
             if (newType == null) return ElementId.InvalidElementId;
 
-            // Recolor the duplicate's routing-preference segments.
-            try
+            if (newType is PipeType)
             {
-                var rpm = newType.RoutingPreferenceManager;
-                int n = rpm.GetNumberOfRules(RoutingPreferenceRuleGroupType.Segments);
-                for (int i = 0; i < n; i++)
+                // Rigid pipe: material is segment-driven. Recolor the duplicate's
+                // routing-preference segments.
+                try
                 {
-                    RoutingPreferenceRule rule = rpm.GetRule(RoutingPreferenceRuleGroupType.Segments, i);
-                    var origSeg = doc.GetElement(rule.MEPPartId) as PipeSegment;
-                    if (origSeg == null) continue;
+                    var rpm = newType.RoutingPreferenceManager;
+                    int n = rpm.GetNumberOfRules(RoutingPreferenceRuleGroupType.Segments);
+                    for (int i = 0; i < n; i++)
+                    {
+                        RoutingPreferenceRule rule = rpm.GetRule(RoutingPreferenceRuleGroupType.Segments, i);
+                        var origSeg = doc.GetElement(rule.MEPPartId) as PipeSegment;
+                        if (origSeg == null) continue;
 
-                    ElementId coloredSegId = GetOrCreateColoredSegment(doc, origSeg, statusMatId, segCache);
-                    if (coloredSegId == ElementId.InvalidElementId) continue;
+                        ElementId coloredSegId = GetOrCreateColoredSegment(doc, origSeg, statusMatId, segCache);
+                        if (coloredSegId == ElementId.InvalidElementId) continue;
 
-                    var newRule = new RoutingPreferenceRule(coloredSegId, rule.Description);
-                    for (int c = 0; c < rule.NumberOfCriteria; c++)
-                        newRule.AddCriterion(rule.GetCriterion(c));
+                        var newRule = new RoutingPreferenceRule(coloredSegId, rule.Description);
+                        for (int c = 0; c < rule.NumberOfCriteria; c++)
+                            newRule.AddCriterion(rule.GetCriterion(c));
 
-                    rpm.RemoveRule(RoutingPreferenceRuleGroupType.Segments, i);
-                    rpm.AddRule(RoutingPreferenceRuleGroupType.Segments, newRule, i);
+                        rpm.RemoveRule(RoutingPreferenceRuleGroupType.Segments, i);
+                        rpm.AddRule(RoutingPreferenceRuleGroupType.Segments, newRule, i);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Type exists but uncolored — still usable; flag it.
+                    failNotes.Add($"{origType.Name}: recolor failed ({Trunc(ex.Message)})");
                 }
             }
-            catch (Exception ex)
+            else
             {
-                // Type exists but uncolored — still usable; flag it.
-                failNotes.Add($"{origType.Name}: recolor failed ({Trunc(ex.Message)})");
+                // Flex pipe (FlexPipeType): no routing-preference segments — the
+                // body material is a TYPE-level Material parameter. Set it directly.
+                int set = SetAllTypeMaterials(doc, newType, statusMatId);
+                if (set == 0)
+                    failNotes.Add($"{origType.Name}: flex type has no settable material parameter");
             }
 
             typeCache[cacheKey] = newType.Id;
@@ -517,11 +543,11 @@ namespace SgRevitAddin.Commands.Coordination
         }
 
         /// <summary>
-        /// Sets every writable Material-type parameter on the symbol to
+        /// Sets every writable Material-type parameter on the type/symbol to
         /// <paramref name="matId"/> (covers multi-material bodies — valve
-        /// body/handle/trim, etc.). Returns how many were set.
+        /// body/handle/trim, etc., and flex pipe types). Returns how many were set.
         /// </summary>
-        private int SetAllTypeMaterials(Document doc, FamilySymbol sym, ElementId matId)
+        private int SetAllTypeMaterials(Document doc, ElementType sym, ElementId matId)
         {
             int n = 0;
             foreach (Parameter p in sym.Parameters)
@@ -622,5 +648,13 @@ namespace SgRevitAddin.Commands.Coordination
 
         private static Color ToRevit(WinColor c) => new Color(c.R, c.G, c.B);
         private static string Trunc(string s) => string.IsNullOrEmpty(s) ? "" : (s.Length > 80 ? s.Substring(0, 80) : s);
+
+        /// <summary>"Family : Type" label for a fitting/accessory, for the report.</summary>
+        private static string FamilyLabel(FamilyInstance fi)
+        {
+            string fam = fi.Symbol?.Family?.Name ?? fi.Category?.Name ?? "?";
+            string baseName = ColorizeStatusInfo.OriginalTypeName(fi.Symbol?.Name) ?? fi.Symbol?.Name;
+            return string.IsNullOrEmpty(baseName) ? fam : $"{fam} : {baseName}";
+        }
     }
 }

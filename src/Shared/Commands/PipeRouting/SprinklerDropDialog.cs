@@ -23,6 +23,7 @@ namespace SgRevitAddin.Commands.PipeRouting
         public int ArmPipeTypeId { get; private set; }
         public int FlexTypeId { get; private set; }
         public double SizeInches { get; private set; }
+        public double FlexSizeInches { get; private set; }
         public double RiseInches { get; private set; }
         public double TermHeightInches { get; private set; }
         public double StubInches { get; private set; }
@@ -35,7 +36,7 @@ namespace SgRevitAddin.Commands.PipeRouting
 
         private RadioButton _rbContinuous, _rbBatch;
         private ComboBox _cboDrop, _cboArm, _cboFlex;
-        private NumericUpDown _numSize, _numRise, _numTerm, _numStub, _numMaxFlex;
+        private NumericUpDown _numSize, _numFlexSize, _numRise, _numTerm, _numStub, _numMaxFlex;
         private CheckBox _chkSwallow;
 
         public SprinklerDropDialog(List<(int id, string name)> pipeTypes, List<(int id, string name)> flexTypes,
@@ -54,7 +55,7 @@ namespace SgRevitAddin.Commands.PipeRouting
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(580, 610);
+            ClientSize = new Size(580, 645);
 
             const int M = 18, W = 544;
             int y = M;
@@ -101,15 +102,16 @@ namespace SgRevitAddin.Commands.PipeRouting
             SelectById(_cboFlex, DialogMemory.GetInt(MemKey, "FlexType", -1));
 
             // ── Geometry ──
-            var grpGeo = new GroupBox { Text = "Geometry (inches)", Location = new Point(M, y), Size = new Size(W, 196) };
+            var grpGeo = new GroupBox { Text = "Geometry (inches)", Location = new Point(M, y), Size = new Size(W, 228) };
             gy = 28;
             _numSize = AddNum(grpGeo, "Drop / armover pipe size:", ref gy, 0.25m, 12, DialogMemory.GetDouble(MemKey, "Size", 1.0), 0.25m);
+            _numFlexSize = AddNum(grpGeo, "Flex pipe size:", ref gy, 0.25m, 12, DialogMemory.GetDouble(MemKey, "FlexSize", 1.0), 0.25m);
             _numRise = AddNum(grpGeo, "Return-bend rise above branch (0 = none):", ref gy, 0, 240, DialogMemory.GetDouble(MemKey, "Rise", 0), 0.5m);
             _numTerm = AddNum(grpGeo, "Hard-pipe termination above head:", ref gy, 0, 120, DialogMemory.GetDouble(MemKey, "Term", 12), 0.5m);
             _numStub = AddNum(grpGeo, "Elbow stub length (forces the turn):", ref gy, 1, 24, DialogMemory.GetDouble(MemKey, "Stub", 3), 0.5m);
             _numMaxFlex = AddNum(grpGeo, "Max flex length (0 = no check):", ref gy, 0, 120, DialogMemory.GetDouble(MemKey, "MaxFlex", 0), 1m);
             Controls.Add(grpGeo);
-            y += 204;
+            y += 236;
 
             _chkSwallow = new CheckBox
             {
@@ -170,6 +172,7 @@ namespace SgRevitAddin.Commands.PipeRouting
             ArmPipeTypeId = arm.Id;
             FlexTypeId = flex.Id;
             SizeInches = (double)_numSize.Value;
+            FlexSizeInches = (double)_numFlexSize.Value;
             RiseInches = (double)_numRise.Value;
             TermHeightInches = (double)_numTerm.Value;
             StubInches = (double)_numStub.Value;
@@ -181,6 +184,7 @@ namespace SgRevitAddin.Commands.PipeRouting
             DialogMemory.SetInt(MemKey, "ArmType", ArmPipeTypeId);
             DialogMemory.SetInt(MemKey, "FlexType", FlexTypeId);
             DialogMemory.SetDouble(MemKey, "Size", SizeInches);
+            DialogMemory.SetDouble(MemKey, "FlexSize", FlexSizeInches);
             DialogMemory.SetDouble(MemKey, "Rise", RiseInches);
             DialogMemory.SetDouble(MemKey, "Term", TermHeightInches);
             DialogMemory.SetDouble(MemKey, "Stub", StubInches);
