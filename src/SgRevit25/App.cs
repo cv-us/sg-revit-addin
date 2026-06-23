@@ -182,6 +182,10 @@ namespace SgRevitAddin
                 "SgRevitAddin.Commands.Coordination.ColorizeByWorksetCommand",
                 "color-pipes-32.png", "color-pipes-16.png",
                 "Colorize pipes & fittings by construction status carried on their workset (Existing/Demo/Modify/New). Material path paints faces and EXPORTS to Navisworks; view-override path is Revit-only. Includes a Clear All Coloring reset.");
+            AddLargeButton(coordPanel, "InspectMaterials", "Inspect\nMaterials", asmPath,
+                "SgRevitAddin.Commands.Coordination.InspectMaterialsCommand",
+                "modelcheck-32.png", "modelcheck-16.png",
+                "Read-only diagnostic: pick elements to see their type/instance material parameters and the actual material(s) on their geometry faces (what Navisworks reads). Use it to find why a flex pipe / fitting won't colorize for NWC.");
 
             // ── Annotation panel ──
             RibbonPanel annotPanel = application.CreateRibbonPanel(tabName, "Annotation");

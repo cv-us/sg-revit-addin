@@ -57,7 +57,9 @@ Real elbows are inserted at **R1**, **R2**, and **R3** (the drop base) because e
 | Return-bend rise above branch | in | **0 = simple perpendicular armover** (drop from branch height); >0 = up-over-down |
 | Hard-pipe termination above head | in | where the hard pipe ends / flex takes over |
 | Elbow stub length | in | the short turn that forces a real elbow (e.g. 3") |
-| Max flex length | in | 0 = no check; otherwise validates reachability |
+| **Drop offset toward branch** | in | **0 = drop directly over the head.** >0 pulls the hard drop back toward the branch by this much, so it lands *short* of the head; the flex whip reaches the rest. The base elbow aims the whip at the head. Clamped so the drop never crosses the branch. |
+| **Flex whip length** | in | **0 = taut/minimal** (straight flex on the shortest path). >0 builds the flex at that full length, drooping through interior vertices, so the whole whip is modeled with grab points to shape — instead of a short segment you have to lengthen by hand. |
+| Max flex reach check | in | 0 = no check; otherwise rejects a head whose straight drop-to-head distance exceeds this |
 | Swallow recoverable warnings | bool | default on |
 
 All settings persist between runs via `DialogMemory` and are restored on reopen.

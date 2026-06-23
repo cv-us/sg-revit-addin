@@ -89,6 +89,8 @@ namespace SgRevitAddin.Commands.PipeRouting
                         TermFt = dlg.TermHeightInches / 12.0,
                         StubFt = dlg.StubInches / 12.0,
                         MaxFlexFt = dlg.MaxFlexInches / 12.0,
+                        OffsetFt = dlg.OffsetInches / 12.0,
+                        WhipFt = dlg.WhipInches / 12.0,
                         Swallow = dlg.SwallowWarnings
                     };
                 }
@@ -239,14 +241,15 @@ namespace SgRevitAddin.Commands.PipeRouting
                 return "no system/level on the pipe";
             return PlaceOne(doc, head, pipe, line, sysId, lvlId,
                 cfg.DropType, cfg.ArmType, cfg.FlexType,
-                cfg.SizeFt, cfg.FlexSizeFt, cfg.RiseFt, cfg.TermFt, cfg.StubFt, cfg.MaxFlexFt, out newPiece);
+                cfg.SizeFt, cfg.FlexSizeFt, cfg.RiseFt, cfg.TermFt, cfg.StubFt, cfg.MaxFlexFt,
+                cfg.OffsetFt, cfg.WhipFt, out newPiece);
         }
 
         /// <summary>Places one drop. Returns null on success, or a short reason string on failure.</summary>
         private string PlaceOne(Document doc, FamilyInstance head, Pipe branch, Line branchLine,
             ElementId sysTypeId, ElementId levelId, ElementId dropTypeId, ElementId armTypeId, ElementId flexTypeId,
             double sizeFt, double flexSizeFt, double riseFt, double termFt, double stubFt, double maxFlexFt,
-            out ElementId newBranchPiece)
+            double offsetFt, double whipFt, out ElementId newBranchPiece)
         {
             newBranchPiece = ElementId.InvalidElementId;
             const double MinSeg = 0.04;   // ~1/2" — below this a segment is dropped (collinear/degenerate)
@@ -262,18 +265,31 @@ namespace SgRevitAddin.Commands.PipeRouting
             double termZ = H.Z + termFt;
             if (termZ <= H.Z + 1e-6) termZ = H.Z + (1.0 / 12.0); // guard: keep hard pipe above head
 
-            // Route points.
+            // Drop-point offset: pull the drop back from over the head TOWARD the
+            // branch by offsetFt, so the hard drop doesn't land directly on the
+            // sprinkler — the flex whip then reaches the rest of the way over. The
+            // offset is clamped so the drop never crosses past the branch.
+            XYZ hToT = new XYZ(T.X - H.X, T.Y - H.Y, 0);
+            double armLenPlan = hToT.GetLength();
+            double off = Math.Min(Math.Max(0, offsetFt), Math.Max(0, armLenPlan - MinArm));
+            XYZ Dxy = armLenPlan > 1e-9
+                ? new XYZ(H.X + hToT.Normalize().X * off, H.Y + hToT.Normalize().Y * off, 0)
+                : new XYZ(H.X, H.Y, 0);
+
+            // Route points (drop now sits over Dxy, offset back toward the branch).
             XYZ R1 = new XYZ(T.X, T.Y, T.Z + riseFt);              // top of riser
-            XYZ R2 = new XYZ(H.X, H.Y, R1.Z);                      // over the head
-            XYZ R3 = new XYZ(H.X, H.Y, termZ);                     // drop base
+            XYZ R2 = new XYZ(Dxy.X, Dxy.Y, R1.Z);                  // over the drop point
+            XYZ R3 = new XYZ(Dxy.X, Dxy.Y, termZ);                 // drop base (offset from head)
             if (R2.Z - R3.Z < MinSeg) return "drop too short — termination height too high vs rise";
 
-            // Horizontal aim for the stub (and thus the elbow rotation): along
-            // the arm if there is one, else perpendicular to the branch.
+            // Stub aim (elbow rotation): toward the HEAD when offset, so the whip
+            // points at the sprinkler; else along the arm, else perpendicular.
             XYZ armXY = new XYZ(R2.X - R1.X, R2.Y - R1.Y, 0);
+            XYZ headDirXY = new XYZ(H.X - Dxy.X, H.Y - Dxy.Y, 0);
             bool haveRise = (R1.Z - T.Z) > MinArm;
             bool haveArm = armXY.GetLength() > MinArm;
-            XYZ aim = haveArm ? armXY.Normalize() : Perp(branchLine);
+            XYZ aim = headDirXY.GetLength() > MinArm ? headDirXY.Normalize()
+                    : (haveArm ? armXY.Normalize() : Perp(branchLine));
             XYZ R4 = R3 + aim * stubFt;                            // stub end — flex starts here
 
             // Optional flex-length sanity check.
@@ -357,10 +373,13 @@ namespace SgRevitAddin.Commands.PipeRouting
             // ── Flex: head inlet (H) → stub open end (R4). Points are ordered
             //    HEAD-FIRST on purpose: the flex family's first connector carries
             //    the reducing nipple + bracket, which belongs at the SPRINKLER
-            //    HEAD; the plain threaded end then lands on the hard pipe. ──
+            //    HEAD; the plain threaded end then lands on the hard pipe.
+            //    If a whip length is given, the path droops through interior
+            //    vertices to that full length so the whole whip is shown with
+            //    grab points to shape, rather than a taut minimal segment. ──
             try
             {
-                var fpts = new List<XYZ> { H, R4 };
+                var fpts = BuildFlexPath(H, R4, whipFt, 3);
                 FlexPipe flex = FlexPipe.Create(doc, sysTypeId, flexTypeId, levelId, fpts);
                 if (flex != null)
                 {
@@ -403,11 +422,55 @@ namespace SgRevitAddin.Commands.PipeRouting
                 if (pts[i].DistanceTo(pts[i - 1]) < minFt) pts.RemoveAt(i);
         }
 
+        /// <summary>
+        /// Builds a head-first flex path from <paramref name="a"/> to
+        /// <paramref name="b"/>. If <paramref name="targetLen"/> exceeds the
+        /// straight distance, the path droops straight down through
+        /// <paramref name="interior"/> interior vertices (sine profile) so the
+        /// whole whip length is modeled with grab points to shape; otherwise it's
+        /// the straight two-point segment.
+        /// </summary>
+        private static List<XYZ> BuildFlexPath(XYZ a, XYZ b, double targetLen, int interior)
+        {
+            double d = a.DistanceTo(b);
+            if (targetLen <= d + 0.05 || interior < 1)
+                return new List<XYZ> { a, b };
+
+            XYZ down = new XYZ(0, 0, -1);
+            Func<double, List<XYZ>> build = amp =>
+            {
+                var pts = new List<XYZ> { a };
+                for (int i = 1; i <= interior; i++)
+                {
+                    double s = (double)i / (interior + 1);
+                    XYZ baseP = a + (b - a) * s;
+                    pts.Add(baseP + down * (amp * Math.Sin(Math.PI * s))); // 0 at ends, max mid
+                }
+                pts.Add(b);
+                return pts;
+            };
+            Func<List<XYZ>, double> len = pts =>
+            {
+                double L = 0;
+                for (int i = 0; i < pts.Count - 1; i++) L += pts[i].DistanceTo(pts[i + 1]);
+                return L;
+            };
+
+            // Belly amplitude is monotonic in length → binary-search to targetLen.
+            double lo = 0, hi = targetLen;
+            for (int it = 0; it < 40; it++)
+            {
+                double mid = (lo + hi) / 2.0;
+                if (len(build(mid)) < targetLen) lo = mid; else hi = mid;
+            }
+            return build(hi);
+        }
+
         /// <summary>Bundle of dialog-chosen settings passed to placement.</summary>
         private class Cfg
         {
             public ElementId DropType, ArmType, FlexType;
-            public double SizeFt, FlexSizeFt, RiseFt, TermFt, StubFt, MaxFlexFt;
+            public double SizeFt, FlexSizeFt, RiseFt, TermFt, StubFt, MaxFlexFt, OffsetFt, WhipFt;
             public bool Swallow;
         }
 

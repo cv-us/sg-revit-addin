@@ -28,6 +28,8 @@ namespace SgRevitAddin.Commands.PipeRouting
         public double TermHeightInches { get; private set; }
         public double StubInches { get; private set; }
         public double MaxFlexInches { get; private set; }
+        public double OffsetInches { get; private set; }
+        public double WhipInches { get; private set; }
         public bool SwallowWarnings { get; private set; }
 
         private readonly List<(int id, string name)> _pipeTypes;
@@ -36,7 +38,7 @@ namespace SgRevitAddin.Commands.PipeRouting
 
         private RadioButton _rbContinuous, _rbBatch;
         private ComboBox _cboDrop, _cboArm, _cboFlex;
-        private NumericUpDown _numSize, _numFlexSize, _numRise, _numTerm, _numStub, _numMaxFlex;
+        private NumericUpDown _numSize, _numFlexSize, _numRise, _numTerm, _numStub, _numMaxFlex, _numOffset, _numWhip;
         private CheckBox _chkSwallow;
 
         public SprinklerDropDialog(List<(int id, string name)> pipeTypes, List<(int id, string name)> flexTypes,
@@ -55,7 +57,7 @@ namespace SgRevitAddin.Commands.PipeRouting
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(580, 645);
+            ClientSize = new Size(580, 712);
 
             const int M = 18, W = 544;
             int y = M;
@@ -102,16 +104,18 @@ namespace SgRevitAddin.Commands.PipeRouting
             SelectById(_cboFlex, DialogMemory.GetInt(MemKey, "FlexType", -1));
 
             // ── Geometry ──
-            var grpGeo = new GroupBox { Text = "Geometry (inches)", Location = new Point(M, y), Size = new Size(W, 228) };
+            var grpGeo = new GroupBox { Text = "Geometry (inches)", Location = new Point(M, y), Size = new Size(W, 292) };
             gy = 28;
             _numSize = AddNum(grpGeo, "Drop / armover pipe size:", ref gy, 0.25m, 12, DialogMemory.GetDouble(MemKey, "Size", 1.0), 0.25m);
             _numFlexSize = AddNum(grpGeo, "Flex pipe size:", ref gy, 0.25m, 12, DialogMemory.GetDouble(MemKey, "FlexSize", 1.0), 0.25m);
             _numRise = AddNum(grpGeo, "Return-bend rise above branch (0 = none):", ref gy, 0, 240, DialogMemory.GetDouble(MemKey, "Rise", 0), 0.5m);
             _numTerm = AddNum(grpGeo, "Hard-pipe termination above head:", ref gy, 0, 120, DialogMemory.GetDouble(MemKey, "Term", 12), 0.5m);
             _numStub = AddNum(grpGeo, "Elbow stub length (forces the turn):", ref gy, 1, 24, DialogMemory.GetDouble(MemKey, "Stub", 3), 0.5m);
-            _numMaxFlex = AddNum(grpGeo, "Max flex length (0 = no check):", ref gy, 0, 120, DialogMemory.GetDouble(MemKey, "MaxFlex", 0), 1m);
+            _numOffset = AddNum(grpGeo, "Drop offset toward branch (0 = over head):", ref gy, 0, 120, DialogMemory.GetDouble(MemKey, "Offset", 0), 1m);
+            _numWhip = AddNum(grpGeo, "Flex whip length (0 = taut/minimal):", ref gy, 0, 240, DialogMemory.GetDouble(MemKey, "Whip", 0), 1m);
+            _numMaxFlex = AddNum(grpGeo, "Max flex reach check (0 = no check):", ref gy, 0, 240, DialogMemory.GetDouble(MemKey, "MaxFlex", 0), 1m);
             Controls.Add(grpGeo);
-            y += 236;
+            y += 300;
 
             _chkSwallow = new CheckBox
             {
@@ -177,6 +181,8 @@ namespace SgRevitAddin.Commands.PipeRouting
             TermHeightInches = (double)_numTerm.Value;
             StubInches = (double)_numStub.Value;
             MaxFlexInches = (double)_numMaxFlex.Value;
+            OffsetInches = (double)_numOffset.Value;
+            WhipInches = (double)_numWhip.Value;
             SwallowWarnings = _chkSwallow.Checked;
 
             DialogMemory.SetInt(MemKey, "Mode", Mode == ConnectionMode.Batch ? 1 : 0);
@@ -189,6 +195,8 @@ namespace SgRevitAddin.Commands.PipeRouting
             DialogMemory.SetDouble(MemKey, "Term", TermHeightInches);
             DialogMemory.SetDouble(MemKey, "Stub", StubInches);
             DialogMemory.SetDouble(MemKey, "MaxFlex", MaxFlexInches);
+            DialogMemory.SetDouble(MemKey, "Offset", OffsetInches);
+            DialogMemory.SetDouble(MemKey, "Whip", WhipInches);
             DialogMemory.SetBool(MemKey, "Swallow", SwallowWarnings);
             DialogMemory.Flush();
 

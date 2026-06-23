@@ -67,7 +67,7 @@ namespace SgRevitAddin.Commands.Coordination
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(620, 672);
+            ClientSize = new Size(620, 700);
 
             const int M = 15, W = 590;
             int y = M;
@@ -81,11 +81,11 @@ namespace SgRevitAddin.Commands.Coordination
                        "• View graphic override → in-Revit visualization only, does NOT export.\n" +
                        "TIP: export the NWC, then close WITHOUT saving/syncing to keep colored types out of the fab model.",
                 Location = new Point(M, y),
-                Size = new Size(W, 76),
+                Size = new Size(W, 96),
                 ForeColor = SystemColors.GrayText
             };
             Controls.Add(lblInfo);
-            y += 82;
+            y += 102;
 
             // ── Workset → Status grid ──
             var grpMap = new GroupBox { Text = "Workset → Status", Location = new Point(M, y), Size = new Size(W, 220) };
@@ -124,7 +124,12 @@ namespace SgRevitAddin.Commands.Coordination
                 var row = _grid.Rows[rowIdx];
                 row.Cells[0].Value = ws.name;
                 row.Cells[1].Value = _counts.TryGetValue(ws.id, out int c) ? c : 0;
-                row.Cells[2].Value = StatusLabelFor(ColorizeStatusInfo.Suggest(ws.name));
+                // Restore the last status chosen for this workset (keyed by name,
+                // which is stable across runs); else auto-suggest from the name.
+                string savedLabel = DialogMemory.Get(MemKey, WsField(ws.name), null);
+                row.Cells[2].Value = (!string.IsNullOrEmpty(savedLabel) && StatusItems.Contains(savedLabel))
+                    ? savedLabel
+                    : StatusLabelFor(ColorizeStatusInfo.Suggest(ws.name));
                 row.Tag = ws.id;
             }
             _grid.CellValueChanged += (s, e) => UpdatePreview();
@@ -243,6 +248,9 @@ namespace SgRevitAddin.Commands.Coordination
             Controls.Add(btnPreview);
         }
 
+        /// <summary>Per-workset memory field key (status remembered by workset name).</summary>
+        private static string WsField(string worksetName) => "WS::" + worksetName;
+
         private static string StatusLabelFor(StatusBucket s)
             => s == StatusBucket.Ignore ? "Ignore / skip" : ColorizeStatusInfo.Label(s);
 
@@ -312,7 +320,12 @@ namespace SgRevitAddin.Commands.Coordination
             foreach (DataGridViewRow row in _grid.Rows)
             {
                 if (!(row.Tag is int wsId)) continue;
-                WorksetStatus[wsId] = BucketFromLabel(row.Cells[2].Value?.ToString());
+                string label = row.Cells[2].Value?.ToString();
+                WorksetStatus[wsId] = BucketFromLabel(label);
+                // Remember this workset's status by name for next time.
+                string wsName = row.Cells[0].Value?.ToString();
+                if (!string.IsNullOrEmpty(wsName))
+                    DialogMemory.Set(MemKey, WsField(wsName), label ?? "");
             }
 
             // Persist colors + modes + scope.
