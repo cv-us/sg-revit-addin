@@ -4,6 +4,7 @@ Master list of all SG Revit Addin commands.
 
 ## PipeRouting
 - `ShortenFlexPipesCommand` - Replace selected flex pipes with shortest-length connections between the same endpoints
+- `SprinklerDropCommand` - Place hard-pipe up-over-down drops to pendent heads ending in a REAL elbow at the drop base (a short stub forces a 90° turn so the BOM lists an elbow, not a union), then a flex hose from the elbow to the head. Connector-overload Pipe.Create for routing-preference elbow auto-insert; branch tee via BreakCurve+NewTeeFitting; IFailuresPreprocessor. **Under development — needs field testing**
 
 ## Hangers
 - `PlaceHangersCommand` - Unified auto-placement: one dialog with a method dropdown (auto-spaced to decks, auto-spaced to parallel framing, downstream ends, or at structural steel). Settings remembered per method. **Replaces the four commands below on the ribbon** (their classes remain for the RunPlacement logic)
