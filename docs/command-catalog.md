@@ -54,6 +54,7 @@ Master list of all SG Revit Addin commands.
 
 ## Coordination
 - `ColorCodePipesCommand` - Color-code pipes in the active view by diameter (8 size buckets), type name (substring match), or reset all overrides
+- `ColorizeByWorksetCommand` - Colorize pipes & fittings by construction status carried on their workset (Existing/Demo/Modify/New). Material path PAINTS faces with Status-* materials → exports to Navisworks; view-override path is Revit-only. Workset→status grid with keyword auto-suggest, status color pickers, scope, preview count, and a Clear All Coloring reset (idempotent across runs). Optional sprinklers + pipe accessories
 
 ## Annotation
 - `PipeElevationsCommand` - Calculate and write TOS/AFF elevation parameters on pipes and fittings with 4 reference methods including raybounce, slope classification

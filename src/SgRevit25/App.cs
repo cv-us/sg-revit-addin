@@ -174,6 +174,10 @@ namespace SgRevitAddin
                 "SgRevitAddin.Commands.Coordination.MarkFamilyInstancesCommand",
                 "modelcheck-32.png", "modelcheck-16.png",
                 "Place orange spheres at every instance of a chosen family. Searchable family list; scope is active view or whole project. Separate Delete All Markers button.");
+            AddLargeButton(coordPanel, "ColorizeByWorkset", "Colorize by\nWorkset", asmPath,
+                "SgRevitAddin.Commands.Coordination.ColorizeByWorksetCommand",
+                "color-pipes-32.png", "color-pipes-16.png",
+                "Colorize pipes & fittings by construction status carried on their workset (Existing/Demo/Modify/New). Material path paints faces and EXPORTS to Navisworks; view-override path is Revit-only. Includes a Clear All Coloring reset.");
 
             // ── Annotation panel ──
             RibbonPanel annotPanel = application.CreateRibbonPanel(tabName, "Annotation");
