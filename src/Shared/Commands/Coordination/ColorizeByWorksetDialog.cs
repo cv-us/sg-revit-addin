@@ -26,6 +26,7 @@ namespace SgRevitAddin.Commands.Coordination
         public Dictionary<StatusBucket, Color> StatusColors { get; } = new Dictionary<StatusBucket, Color>();
         public bool AssignMaterial { get; private set; } = true;
         public bool ApplyViewOverride { get; private set; } = false;
+        public bool DeepColor { get; private set; } = true;
         public ColorizeScope Scope { get; private set; } = ColorizeScope.EntireModel;
         public bool IncludeExtraCategories { get; private set; } = false;
 
@@ -37,6 +38,7 @@ namespace SgRevitAddin.Commands.Coordination
         private DataGridView _grid;
         private readonly Dictionary<StatusBucket, Button> _colorBtns = new Dictionary<StatusBucket, Button>();
         private CheckBox _chkMaterial;
+        private CheckBox _chkDeep;
         private CheckBox _chkViewOverride;
         private RadioButton _rbModel, _rbView, _rbSel;
         private CheckBox _chkExtra;
@@ -67,7 +69,7 @@ namespace SgRevitAddin.Commands.Coordination
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(620, 700);
+            ClientSize = new Size(620, 726);
 
             const int M = 15, W = 590;
             int y = M;
@@ -183,7 +185,7 @@ namespace SgRevitAddin.Commands.Coordination
             y += 64;
 
             // ── Apply mode ──
-            var grpMode = new GroupBox { Text = "Apply", Location = new Point(M, y), Size = new Size(W, 78) };
+            var grpMode = new GroupBox { Text = "Apply", Location = new Point(M, y), Size = new Size(W, 104) };
             _chkMaterial = new CheckBox
             {
                 Text = "Assign material — colored pipe-type swap + fitting materials, EXPORTS to NWC (recommended)",
@@ -191,15 +193,22 @@ namespace SgRevitAddin.Commands.Coordination
                 Checked = DialogMemory.GetBool(MemKey, "Material", true)
             };
             grpMode.Controls.Add(_chkMaterial);
+            _chkDeep = new CheckBox
+            {
+                Text = "Deep-color By-Category fittings & flex (edits fab families in-memory; flex = one global color)",
+                Location = new Point(12, 48), Size = new Size(W - 24, 20),
+                Checked = DialogMemory.GetBool(MemKey, "DeepColor", true)
+            };
+            grpMode.Controls.Add(_chkDeep);
             _chkViewOverride = new CheckBox
             {
                 Text = "Apply view graphic override (active view only — does NOT export to NWC)",
-                Location = new Point(12, 48), Size = new Size(W - 24, 20),
+                Location = new Point(12, 74), Size = new Size(W - 24, 20),
                 Checked = DialogMemory.GetBool(MemKey, "ViewOverride", false)
             };
             grpMode.Controls.Add(_chkViewOverride);
             Controls.Add(grpMode);
-            y += 86;
+            y += 112;
 
             // ── Scope + extra categories ──
             var grpScope = new GroupBox { Text = "Scope", Location = new Point(M, y), Size = new Size(W, 78) };
@@ -301,6 +310,7 @@ namespace SgRevitAddin.Commands.Coordination
         private void CaptureAndClose()
         {
             AssignMaterial = _chkMaterial.Checked;
+            DeepColor = _chkDeep.Checked;
             ApplyViewOverride = _chkViewOverride.Checked;
 
             if (!AssignMaterial && !ApplyViewOverride)
@@ -332,6 +342,7 @@ namespace SgRevitAddin.Commands.Coordination
             foreach (var st in ColorizeStatusInfo.Buckets)
                 DialogMemory.SetInt(MemKey, "Color_" + st, StatusColors[st].ToArgb());
             DialogMemory.SetBool(MemKey, "Material", AssignMaterial);
+            DialogMemory.SetBool(MemKey, "DeepColor", DeepColor);
             DialogMemory.SetBool(MemKey, "ViewOverride", ApplyViewOverride);
             DialogMemory.SetInt(MemKey, "Scope", (int)Scope);
             DialogMemory.SetBool(MemKey, "Extra", IncludeExtraCategories);

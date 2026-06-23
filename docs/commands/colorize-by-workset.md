@@ -20,10 +20,21 @@ So color must live on the **material the element actually resolves to**:
 | Category | Mechanism | Why |
 |----------|-----------|-----|
 | **Pipes** (`OST_PipeCurves`) | colored per-status **duplicate pipe type** + `ChangeTypeId` | Material is segment/type-driven; instance material param is **read-only**. |
-| **Flex pipes** (`OST_FlexPipeCurves`) | colored per-status **duplicate FlexPipeType** whose **type-level Material parameter** is set + `ChangeTypeId` | Flex has **no** routing-preference segments — its body material is a Material *type parameter*, so it's set directly (not via segments like rigid pipe). |
-| **Fittings / accessories / sprinklers** | writable **instance** material param if present, else **duplicate the symbol** with all its material params set + reassign `Symbol` | There is **no** per-instance material override API for family geometry; a type with the material set is the only route. |
+| **Fittings / accessories / sprinklers** (loadable families) | writable **instance** material param if present, else **duplicate the symbol** with its material params set + reassign `Symbol`. If the family has **no** material param (By-Category solids), the **Deep-color** pre-pass first *binds one* (see below). | There is no per-instance material override API for family geometry; a type with the material set is the only route. |
+| **Flex pipes** (`OST_FlexPipeCurves`) | **one global color** — the command sets the **flex *category* material** (`Category.Material`) to the dominant flex status's color | `FlexPipeType` has **no** material parameter and the flex body is **By Category**, so there is *no per-element hook*. A single category color is the only thing Navisworks can read. |
 
-> **Hard limit (honest):** a loadable family can only be recolored if it was **authored with a Material parameter wired to its solids**. Families whose solids are **"By Category"** or hardcoded (common for fab fittings and many sprinklers) **cannot** be recolored for NWC by any API call — they're counted and reported as "couldn't color," and the one-time fix is editing the `.rfa` to bind a Material parameter to the solids. Pipes and flex always work (type/segment route).
+### Deep-color: binding a material param to By-Category fab families
+
+Fab fittings (HydraCAD threaded/grooved elbows, mech tees, couplings, etc.) are commonly modeled with **"By Category" solids and no material parameter** — confirmed with the **Inspect Materials** command (their geometry faces resolve to `<By Category>`). Nothing can color those per-status *as authored*.
+
+With **Deep-color** on (default), the command runs a **pre-pass before the coloring transaction**: for each unique such family that has an in-scope, status-mapped instance, it
+
+1. `Document fdoc = doc.EditFamily(family)`,
+2. adds a **Material type parameter** (`SG Status Material`),
+3. **associates every solid's `MATERIAL_ID_PARAM`** to it (extrusions/blends/sweeps/free-forms and nested instances),
+4. `fdoc.LoadFamily(doc, …)` (overwrite).
+
+After that the family carries a real material param, so the normal symbol-duplicate path colors it per status. This is **non-destructive** within the recommended workflow — the family edits live only in the open session and are **discarded on close-without-saving**. Families whose solids can't be bound (imported/SAT geometry, deeply nested) are reported with a reason.
 
 ### Pipe type duplication
 
@@ -39,9 +50,12 @@ Everything the command created is discarded on close. Nothing reaches the centra
 
 ## Dialog
 
-- **Workset → Status grid** — every user workset, its whole-model pipe/fitting count, and a status dropdown. **Auto-suggest from names** (new / demo / modif / exist); fully editable; multiple worksets can map to one status.
+- **Workset → Status grid** — every user workset, its whole-model pipe/fitting count, and a status dropdown. **Auto-suggest from names** (new / demo / modif / exist); fully editable; multiple worksets can map to one status. **Each workset's chosen status is remembered** (by name) between runs.
 - **Status Colors** — a swatch per status (defaults: Existing gray, Demo red, Modify amber, New green; remembered between runs).
-- **Apply** — *Assign material* (the NWC path: pipe-type swap + fitting materials) and/or *Apply view graphic override* (active view, Revit-only).
+- **Apply**
+  - *Assign material* (the NWC path: pipe-type swap + fitting materials).
+  - *Deep-color By-Category fittings & flex* (default on) — the in-memory family-rebind pre-pass for fittings, plus the single global flex color. Turn off to skip the (slower) family edits.
+  - *Apply view graphic override* (active view, Revit-only).
 - **Scope** — entire model / active view / selection. **Include sprinklers & accessories** toggle.
 - **Preview Count**, **Apply**, **Clear All Coloring**, **Cancel**.
 

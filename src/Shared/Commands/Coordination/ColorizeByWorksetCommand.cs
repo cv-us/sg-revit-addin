@@ -129,12 +129,44 @@ namespace SgRevitAddin.Commands.Coordination
                 return Result.Cancelled;
             }
 
+            // ── PRE-PASS: bind a Material parameter to By-Category fab families
+            //    (fittings/accessories whose solids are "By Category" with NO
+            //    material param). EditFamily → add a type Material param → wire
+            //    every solid's material to it → reload. After this the normal
+            //    symbol-duplicate path can color them per status. Must run
+            //    OUTSIDE the coloring transaction (EditFamily/LoadFamily own theirs).
+            //    Discarded on close-without-saving, like everything else here. ──
+            int famBound = 0, famEditFail = 0;
+            var famBoundNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var famEditFailNotes = new HashSet<string>();
+            if (dlg.AssignMaterial && dlg.DeepColor)
+            {
+                var famsToEdit = new Dictionary<int, Family>();
+                foreach (var fi in targets.OfType<FamilyInstance>())
+                {
+                    if (!dlg.WorksetStatus.TryGetValue(fi.WorksetId.IntegerValue, out var st) || st == StatusBucket.Ignore) continue;
+                    var fam = fi.Symbol?.Family;
+                    if (fam == null || famsToEdit.ContainsKey(fam.Id.IntegerValue)) continue;
+                    if (FamilyHasMaterialParam(doc, fam)) continue; // already colorable
+                    famsToEdit[fam.Id.IntegerValue] = fam;
+                }
+                foreach (var fam in famsToEdit.Values)
+                {
+                    if (BindMaterialParamToFamily(doc, fam, out string note)) { famBound++; famBoundNames.Add(fam.Name); }
+                    else { famEditFail++; if (note != null) famEditFailNotes.Add(note); }
+                }
+                // Family reloads can invalidate cached element refs → re-collect.
+                if (famBound > 0) targets = CollectTargets(uidoc, dlg.Scope, targetCats);
+            }
+
             var perStatus = new Dictionary<StatusBucket, int>();
             int pipesTyped = 0, fittingsMat = 0, viewOverrides = 0;
-            int skippedNoStatus = 0, fittingNoMat = 0, pipeTypeFail = 0;
+            int skippedNoStatus = 0, fittingNoMat = 0, pipeTypeFail = 0, flexCount = 0;
             var typeFailNotes = new HashSet<string>();
-            var fittingColoredNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var fittingNoMatNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var flexTally = new Dictionary<StatusBucket, int>();
+            StatusBucket flexStatus = StatusBucket.New;
+            bool flexColored = false;
 
             // Per-run cache so each (origType, status) is built once.
             var typeCache = new Dictionary<string, ElementId>();
@@ -164,10 +196,9 @@ namespace SgRevitAddin.Commands.Coordination
                     // ── Material (NWC-exporting body color) ──
                     if (dlg.AssignMaterial)
                     {
-                        // Pipes AND flex pipes: colored per-status duplicate type
-                        // (material is segment/type-driven, instance param is
-                        // read-only) → ChangeTypeId.
-                        if (elem is Pipe || elem is FlexPipe)
+                        // Rigid pipe: colored per-status duplicate type (material
+                        // is segment-driven) → ChangeTypeId.
+                        if (elem is Pipe)
                         {
                             try
                             {
@@ -192,17 +223,25 @@ namespace SgRevitAddin.Commands.Coordination
                                 typeFailNotes.Add(Trunc(ex.Message));
                             }
                         }
+                        // Flex pipe: FlexPipeType has NO material parameter and the
+                        // body is "By Category", so there's no per-element hook.
+                        // Tally its status; we color all flex ONE global color below.
+                        else if (elem is FlexPipe)
+                        {
+                            flexCount++;
+                            flexTally[status] = (flexTally.TryGetValue(status, out int fc) ? fc : 0) + 1;
+                        }
                         // Loadable families (fittings / accessories / sprinklers):
-                        // duplicate the symbol with its material params set to the
-                        // status color, reassign Symbol. Works only if the family
-                        // exposes a material param wired to its solids.
+                        // writable instance material param, else symbol-duplicate
+                        // with material params set. The pre-pass above bound a
+                        // material param to families that lacked one.
                         else if (elem is FamilyInstance fi)
                         {
                             string famLabel = FamilyLabel(fi);
                             try
                             {
                                 if (ColorLoadableInstance(doc, fi, status, matIds[status], symCache))
-                                { fittingsMat++; fittingColoredNames.Add(famLabel); }
+                                    fittingsMat++;
                                 else
                                 { fittingNoMat++; fittingNoMatNames.Add(famLabel); }
                             }
@@ -237,6 +276,16 @@ namespace SgRevitAddin.Commands.Coordination
                     }
                 }
 
+                // ── Global flex color: set the OST_FlexPipeCurves category
+                //    material (By-Category source) to the dominant flex status's
+                //    color. One color for all flex — the only option, since flex
+                //    has no per-element material hook. ──
+                if (dlg.AssignMaterial && dlg.DeepColor && flexCount > 0 && flexTally.Count > 0)
+                {
+                    flexStatus = flexTally.OrderByDescending(k => k.Value).First().Key;
+                    flexColored = SetCategoryMaterial(doc, BuiltInCategory.OST_FlexPipeCurves, matIds[flexStatus]);
+                }
+
                 tx.Commit();
             }
 
@@ -250,30 +299,40 @@ namespace SgRevitAddin.Commands.Coordination
             lines.Add("");
             if (dlg.AssignMaterial)
             {
-                lines.Add($"Pipes + flex re-typed to colored duplicates: {pipesTyped}  (exports to NWC)");
-                lines.Add($"Fittings/sprinklers/accessories colored:     {fittingsMat}  (exports to NWC)");
-                if (fittingColoredNames.Count > 0)
+                lines.Add($"Pipes re-typed to colored duplicates:    {pipesTyped}  (exports to NWC)");
+                lines.Add($"Fittings/sprinklers/accessories colored: {fittingsMat}  (exports to NWC)");
+                if (dlg.DeepColor)
                 {
-                    lines.Add("   Families recolored (symbol/material swap):");
-                    foreach (var n in fittingColoredNames.OrderBy(s => s).Take(12)) lines.Add("     ✓ " + n);
-                    if (fittingColoredNames.Count > 12) lines.Add($"     …and {fittingColoredNames.Count - 12} more.");
+                    if (famBound > 0)
+                    {
+                        lines.Add($"By-Category fab families bound to a material param: {famBound}");
+                        foreach (var n in famBoundNames.OrderBy(s => s).Take(12)) lines.Add("     + " + n);
+                        if (famBoundNames.Count > 12) lines.Add($"     …and {famBoundNames.Count - 12} more.");
+                    }
+                    if (flexColored)
+                        lines.Add($"Flex pipes ({flexCount}) → ONE global color: {ColorizeStatusInfo.Label(flexStatus)}  (By-Category, can't be per-status)");
+                    else if (flexCount > 0)
+                        lines.Add($"Flex pipes ({flexCount}): left uncolored (couldn't set the flex category material)");
+                    if (famEditFail > 0)
+                    {
+                        lines.Add($"Families that couldn't be bound: {famEditFail}");
+                        foreach (var n in famEditFailNotes.Take(8)) lines.Add("     ✗ " + n);
+                    }
                 }
                 if (fittingNoMat > 0)
                 {
-                    lines.Add($"Couldn't color (no material parameter):      {fittingNoMat}");
-                    lines.Add("   These families have \"By Category\"/hardcoded solids — they need a");
-                    lines.Add("   Material parameter wired to their solids in the .rfa to color for NWC:");
-                    foreach (var n in fittingNoMatNames.OrderBy(s => s).Take(12)) lines.Add("     ✗ " + n);
-                    if (fittingNoMatNames.Count > 12) lines.Add($"     …and {fittingNoMatNames.Count - 12} more.");
+                    lines.Add($"Fittings still not colored (no material param): {fittingNoMat}");
+                    foreach (var n in fittingNoMatNames.OrderBy(s => s).Take(10)) lines.Add("     ✗ " + n);
+                    if (fittingNoMatNames.Count > 10) lines.Add($"     …and {fittingNoMatNames.Count - 10} more.");
                 }
-                if (pipeTypeFail > 0) lines.Add($"Pipes/flex whose colored type failed: {pipeTypeFail}");
+                if (pipeTypeFail > 0) lines.Add($"Pipes whose colored type failed: {pipeTypeFail}");
                 foreach (var n in typeFailNotes.Take(4)) lines.Add("   • " + n);
             }
             if (dlg.ApplyViewOverride) lines.Add($"View overrides (Revit only): {viewOverrides}");
             if (skippedNoStatus > 0) lines.Add($"Skipped (Ignored / unmapped workset): {skippedNoStatus}");
             lines.Add("");
             lines.Add("TIP: export the NWC, then CLOSE WITHOUT SAVING / SYNCING to keep the");
-            lines.Add("colored types out of the fab model. Or use Clear All Coloring to revert.");
+            lines.Add("colored types AND the in-memory family edits out of the fab model.");
             lines.Add("(Navisworks must be in Shaded render style to show the colors.)");
 
             TaskDialog.Show("Colorize by Workset", string.Join("\n", lines));
@@ -347,6 +406,9 @@ namespace SgRevitAddin.Commands.Coordination
                     }
                     catch { }
                 }
+
+                // Revert the global flex category color (set during deep-color).
+                SetCategoryMaterial(doc, BuiltInCategory.OST_FlexPipeCurves, ElementId.InvalidElementId);
 
                 // Clear element graphic overrides across graphical model views.
                 var emptyOgs = new OverrideGraphicSettings();
@@ -569,6 +631,103 @@ namespace SgRevitAddin.Commands.Coordination
             if (cur != ElementId.InvalidElementId && doc.GetElement(cur) is Material) return true;
             string nm = p.Definition?.Name ?? "";
             return nm.IndexOf("material", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        //  BY-CATEGORY FAB FAMILIES: bind a material param (in-memory edit)
+        // ══════════════════════════════════════════════════════════════
+
+        private const string StatusMatParamName = "SG Status Material";
+
+        /// <summary>True if any of the family's symbols exposes a writable material param.</summary>
+        private bool FamilyHasMaterialParam(Document doc, Family fam)
+        {
+            foreach (var sid in fam.GetFamilySymbolIds())
+            {
+                if (!(doc.GetElement(sid) is FamilySymbol sym)) continue;
+                foreach (Parameter p in sym.Parameters)
+                    if (p != null && !p.IsReadOnly && p.StorageType == StorageType.ElementId && IsMaterialParam(doc, p))
+                        return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Opens the family, adds a Material type parameter, associates every
+        /// solid's material parameter to it, and reloads the family (overwrite).
+        /// After this, the family's symbols carry a writable material param so
+        /// the normal symbol-duplicate path can color it per status. Returns true
+        /// if at least one solid was bound. Non-destructive: discarded on
+        /// close-without-saving like the rest of the command.
+        /// </summary>
+        private bool BindMaterialParamToFamily(Document doc, Family fam, out string note)
+        {
+            note = null;
+            if (fam == null) { note = "null family"; return false; }
+            if (!fam.IsEditable) { note = fam.Name + ": not editable (system/in-place)"; return false; }
+
+            Document fdoc = null;
+            try
+            {
+                fdoc = doc.EditFamily(fam);
+                bool boundAny = false;
+                using (var t = new Transaction(fdoc, "Bind status material"))
+                {
+                    t.Start();
+                    FamilyManager fm = fdoc.FamilyManager;
+                    FamilyParameter fp = fm.get_Parameter(StatusMatParamName)
+                        ?? fm.AddParameter(StatusMatParamName, GroupTypeId.Materials, SpecTypeId.Reference.Material, false);
+
+                    // Wire every solid-bearing element's material param to it
+                    // (extrusions/blends/sweeps/free-forms, and nested instances).
+                    foreach (Element el in new FilteredElementCollector(fdoc).WhereElementIsNotElementType())
+                    {
+                        Parameter mp;
+                        try { mp = el.get_Parameter(BuiltInParameter.MATERIAL_ID_PARAM); } catch { continue; }
+                        if (mp == null || mp.IsReadOnly || mp.StorageType != StorageType.ElementId) continue;
+                        try { fm.AssociateElementParameterToFamilyParameter(mp, fp); boundAny = true; } catch { }
+                    }
+                    t.Commit();
+                }
+
+                if (!boundAny)
+                {
+                    note = fam.Name + ": no bindable solids (imported/nested geometry?)";
+                    try { fdoc.Close(false); } catch { }
+                    return false;
+                }
+                fdoc.LoadFamily(doc, new FamLoadOpts());
+                try { fdoc.Close(false); } catch { }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                note = (fam.Name ?? "?") + ": " + Trunc(ex.Message);
+                if (fdoc != null) { try { fdoc.Close(false); } catch { } }
+                return false;
+            }
+        }
+
+        /// <summary>Sets a category's By-Category material (null clears). Used for flex.</summary>
+        private bool SetCategoryMaterial(Document doc, BuiltInCategory bic, ElementId matId)
+        {
+            try
+            {
+                Category cat = doc.Settings.Categories.get_Item(bic);
+                if (cat == null) return false;
+                cat.Material = (matId == ElementId.InvalidElementId) ? null : doc.GetElement(matId) as Material;
+                return true;
+            }
+            catch { return false; }
+        }
+
+        /// <summary>Overwrite-on-reload options for the in-memory family rebind.</summary>
+        private class FamLoadOpts : IFamilyLoadOptions
+        {
+            public bool OnFamilyFound(bool familyInUse, out bool overwriteParameterValues)
+            { overwriteParameterValues = true; return true; }
+            public bool OnSharedFamilyFound(Family sharedFamily, bool familyInUse, out FamilySource source, out bool overwriteParameterValues)
+            { source = FamilySource.Family; overwriteParameterValues = true; return true; }
         }
 
         // ══════════════════════════════════════════════════════════════
