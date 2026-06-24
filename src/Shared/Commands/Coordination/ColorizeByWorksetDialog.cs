@@ -69,7 +69,7 @@ namespace SgRevitAddin.Commands.Coordination
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(620, 726);
+            ClientSize = new Size(620, 770);
 
             const int M = 15, W = 590;
             int y = M;
@@ -80,14 +80,30 @@ namespace SgRevitAddin.Commands.Coordination
                 Text = "Colors pipes & fittings by the construction status on their workset, so it EXPORTS to NWC.\n" +
                        "• Assign material → pipes get a colored per-status duplicate type (e.g. \"Welded - New\"),\n" +
                        "   fittings get a material. Bakes into the body → survives NWC. (Face paint does NOT export.)\n" +
-                       "• View graphic override → in-Revit visualization only, does NOT export.\n" +
-                       "TIP: export the NWC, then close WITHOUT saving/syncing to keep colored types out of the fab model.",
+                       "• View graphic override → in-Revit visualization only, does NOT export.",
                 Location = new Point(M, y),
-                Size = new Size(W, 96),
+                Size = new Size(W, 76),
                 ForeColor = SystemColors.GrayText
             };
             Controls.Add(lblInfo);
-            y += 102;
+            y += 80;
+
+            // ── Loud DO-NOT-SAVE warning ──
+            var lblWarn = new Label
+            {
+                Text = "⚠️  DO NOT SAVE OR SYNCHRONIZE AFTER RUNNING  ⚠️\n" +
+                       "This bakes colored types into the model and edits fab families in-memory.\n" +
+                       "Export the NWC, then CLOSE the model WITHOUT saving / syncing.",
+                Location = new Point(M, y),
+                Size = new Size(W, 58),
+                TextAlign = ContentAlignment.MiddleCenter,
+                Font = new Font(Font.FontFamily, 9f, FontStyle.Bold),
+                ForeColor = Color.FromArgb(120, 0, 0),
+                BackColor = Color.FromArgb(255, 244, 150),
+                BorderStyle = BorderStyle.FixedSingle
+            };
+            Controls.Add(lblWarn);
+            y += 66;
 
             // ── Workset → Status grid ──
             var grpMap = new GroupBox { Text = "Workset → Status", Location = new Point(M, y), Size = new Size(W, 220) };
