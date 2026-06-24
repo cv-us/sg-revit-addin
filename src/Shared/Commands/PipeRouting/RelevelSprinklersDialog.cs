@@ -34,9 +34,9 @@ namespace SgRevitAddin.Commands.PipeRouting
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(460, 196);
+            ClientSize = new Size(600, 196);
 
-            const int M = 16, W = 428;
+            const int M = 16, W = 568;
             int y = M;
 
             var lblInfo = new Label
@@ -64,16 +64,16 @@ namespace SgRevitAddin.Commands.PipeRouting
 
             var lblNote = new Label
             {
-                Text = "Face/work-plane-hosted heads can't be re-leveled in place and are skipped + reported.",
+                Text = "Face/work-plane-hosted heads can't be re-leveled in place — skipped + reported.",
                 Location = new Point(M, y), Size = new Size(W, 20), ForeColor = SystemColors.GrayText
             };
             Controls.Add(lblNote);
             y += 30;
 
-            var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(460 - M - 90, y), Size = new Size(90, 30) };
+            var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(600 - M - 90, y), Size = new Size(90, 30) };
             CancelButton = btnCancel;
             Controls.Add(btnCancel);
-            var btnOK = new Button { Text = "Re-Level", Location = new Point(460 - M - 90 - 10 - 100, y), Size = new Size(100, 30) };
+            var btnOK = new Button { Text = "Re-Level", Location = new Point(600 - M - 90 - 10 - 100, y), Size = new Size(100, 30) };
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
             Controls.Add(btnOK);

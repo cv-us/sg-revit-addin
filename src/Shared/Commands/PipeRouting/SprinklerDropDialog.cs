@@ -64,9 +64,8 @@ namespace SgRevitAddin.Commands.PipeRouting
 
             var lblInfo = new Label
             {
-                Text = "Hard-pipe drop ending in a REAL elbow at the base (a stub forces the 90° turn so\n" +
-                       "the BOM lists an elbow, not a union), then a flex hose to the head. Each head gets\n" +
-                       "its own perpendicular armover + connection.",
+                Text = "Hard-pipe drop ending in a REAL elbow at the base, then a flex\n" +
+                       "hose to the head. Each head gets its own armover + connection.",
                 Location = new Point(M, y), Size = new Size(W, 50), ForeColor = SystemColors.GrayText
             };
             Controls.Add(lblInfo);
@@ -81,7 +80,7 @@ namespace SgRevitAddin.Commands.PipeRouting
             };
             _rbBatch = new RadioButton
             {
-                Text = "Batch — select heads first, then click one pipe (each head gets its own perpendicular tie-in)",
+                Text = "Batch — select heads, then click one pipe (each gets its own armover)",
                 Location = new Point(12, 44), Size = new Size(W - 24, 20)
             };
             grpMode.Controls.AddRange(new Control[] { _rbContinuous, _rbBatch });
@@ -110,7 +109,7 @@ namespace SgRevitAddin.Commands.PipeRouting
             _numFlexSize = AddNum(grpGeo, "Flex pipe size:", ref gy, 0.25m, 12, DialogMemory.GetDouble(MemKey, "FlexSize", 1.0), 0.25m);
             _numRise = AddNum(grpGeo, "Return-bend rise above branch (0 = none):", ref gy, 0, 240, DialogMemory.GetDouble(MemKey, "Rise", 0), 0.5m);
             _numTerm = AddNum(grpGeo, "Hard-pipe termination above head:", ref gy, 0, 120, DialogMemory.GetDouble(MemKey, "Term", 12), 0.5m);
-            _numStub = AddNum(grpGeo, "Elbow stub length (0 = none, flex straight off elbow):", ref gy, 0, 24, DialogMemory.GetDouble(MemKey, "Stub", 3), 0.5m);
+            _numStub = AddNum(grpGeo, "Elbow stub length (0 = none):", ref gy, 0, 24, DialogMemory.GetDouble(MemKey, "Stub", 3), 0.5m);
             _numOffset = AddNum(grpGeo, "Drop offset toward branch (0 = over head):", ref gy, 0, 120, DialogMemory.GetDouble(MemKey, "Offset", 0), 1m);
             _numWhip = AddNum(grpGeo, "Flex whip length (0 = taut/minimal):", ref gy, 0, 240, DialogMemory.GetDouble(MemKey, "Whip", 0), 1m);
             _numMaxFlex = AddNum(grpGeo, "Max flex reach check (0 = no check):", ref gy, 0, 240, DialogMemory.GetDouble(MemKey, "MaxFlex", 0), 1m);

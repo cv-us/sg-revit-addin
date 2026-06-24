@@ -69,9 +69,9 @@ namespace SgRevitAddin.Commands.Coordination
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(620, 770);
+            ClientSize = new Size(740, 770);
 
-            const int M = 15, W = 590;
+            const int M = 15, W = 710;
             int y = M;
 
             // ── Info ──
@@ -230,7 +230,7 @@ namespace SgRevitAddin.Commands.Coordination
             var grpScope = new GroupBox { Text = "Scope", Location = new Point(M, y), Size = new Size(W, 78) };
             _rbModel = new RadioButton { Text = "Entire model", Location = new Point(12, 22), AutoSize = true, Checked = true };
             _rbView = new RadioButton { Text = "Active view's visible elements", Location = new Point(140, 22), AutoSize = true };
-            _rbSel = new RadioButton { Text = "Current selection", Location = new Point(340, 22), AutoSize = true };
+            _rbSel = new RadioButton { Text = "Current selection", Location = new Point(380, 22), AutoSize = true };
             int savedScope = DialogMemory.GetInt(MemKey, "Scope", 0);
             _rbView.Checked = savedScope == 1; _rbSel.Checked = savedScope == 2; _rbModel.Checked = savedScope == 0;
             grpScope.Controls.AddRange(new Control[] { _rbModel, _rbView, _rbSel });
@@ -255,11 +255,11 @@ namespace SgRevitAddin.Commands.Coordination
             UpdatePreview();
 
             // ── Buttons ──
-            var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(620 - M - 80, y), Size = new Size(80, 30) };
+            var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(740 - M - 80, y), Size = new Size(80, 30) };
             CancelButton = btnCancel;
             Controls.Add(btnCancel);
 
-            var btnApply = new Button { Text = "Apply", Location = new Point(620 - M - 80 - 10 - 90, y), Size = new Size(90, 30) };
+            var btnApply = new Button { Text = "Apply", Location = new Point(740 - M - 80 - 10 - 90, y), Size = new Size(90, 30) };
             btnApply.Click += (s, e) => { Action = ColorizeAction.Apply; CaptureAndClose(); };
             AcceptButton = btnApply;
             Controls.Add(btnApply);

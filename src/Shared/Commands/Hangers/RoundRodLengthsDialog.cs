@@ -36,7 +36,7 @@ namespace SgRevitAddin.Commands.Hangers
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(460, 250);
+            ClientSize = new Size(480, 250);
 
             const int Margin = 15;
             int y = Margin;
@@ -46,7 +46,7 @@ namespace SgRevitAddin.Commands.Hangers
             {
                 Text = "About",
                 Location = new Point(Margin, y),
-                Size = new Size(430, 75)
+                Size = new Size(450, 75)
             };
             grpInfo.Controls.Add(new Label
             {
@@ -54,7 +54,7 @@ namespace SgRevitAddin.Commands.Hangers
                        "Rods already on a full or half inch are left alone. Rods are\n" +
                        "never rounded down — e.g. 8 41/256\" → 8 1/2\", 11 17/32\" → 12\".",
                 Location = new Point(10, 18),
-                Size = new Size(410, 50)
+                Size = new Size(430, 50)
             });
             Controls.Add(grpInfo);
             y += 85;
@@ -64,14 +64,14 @@ namespace SgRevitAddin.Commands.Hangers
             {
                 Text = "Selection",
                 Location = new Point(Margin, y),
-                Size = new Size(430, 50)
+                Size = new Size(450, 50)
             };
             grpSummary.Controls.Add(new Label
             {
                 Text = $"{_hangerCount} hanger{(_hangerCount != 1 ? "s" : "")} selected — " +
                        $"{_willChange} not on a half inch (will round up).",
                 Location = new Point(10, 20),
-                Size = new Size(410, 18),
+                Size = new Size(430, 18),
                 Font = new Font(Font, FontStyle.Bold)
             });
             Controls.Add(grpSummary);
@@ -82,7 +82,7 @@ namespace SgRevitAddin.Commands.Hangers
             {
                 Text = "Also set Y Grip to match the new Rod Length",
                 Location = new Point(Margin + 5, y),
-                Size = new Size(425, 22),
+                Size = new Size(445, 22),
                 Checked = DialogMemory.GetBool(MemKey, "UpdateYGrip", true)
             };
             Controls.Add(chkYGrip);
@@ -93,7 +93,7 @@ namespace SgRevitAddin.Commands.Hangers
             {
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
-                Location = new Point(460 - Margin - 75, y),
+                Location = new Point(480 - Margin - 75, y),
                 Size = new Size(75, 30)
             };
             CancelButton = btnCancel;
@@ -103,7 +103,7 @@ namespace SgRevitAddin.Commands.Hangers
             {
                 Text = "Round Up",
                 DialogResult = DialogResult.OK,
-                Location = new Point(460 - Margin - 75 - 10 - 95, y),
+                Location = new Point(480 - Margin - 75 - 10 - 95, y),
                 Size = new Size(95, 30)
             };
             btnOK.Click += BtnOK_Click;
