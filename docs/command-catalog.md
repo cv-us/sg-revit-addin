@@ -4,7 +4,8 @@ Master list of all SG Revit Addin commands.
 
 ## PipeRouting
 - `ShortenFlexPipesCommand` - Replace selected flex pipes with shortest-length connections between the same endpoints
-- `SprinklerDropCommand` - Place hard-pipe up-over-down drops to pendent heads ending in a REAL elbow at the drop base (a short stub forces a 90° turn so the BOM lists an elbow, not a union), then a flex hose from the elbow to the head. Connector-overload Pipe.Create for routing-preference elbow auto-insert; branch tee via BreakCurve+NewTeeFitting; IFailuresPreprocessor. **Under development — needs field testing**
+- `SprinklerDropCommand` - Place hard-pipe up-over-down drops to pendent heads ending in a REAL elbow at the drop base (a short stub — settable to 0 — forces a 90° turn so the BOM lists an elbow, not a union), then a flex hose from the elbow to the head. Free-pipe segments + explicit NewElbowFitting at every joint; plan-perpendicular tap so a sloped branch keeps the armover straight; flex built head-first with mandatory above-head + in-front-of-elbow guide vertices and an optional whip length. Options: pipe/flex sizes (default 1"), drop offset toward branch, no-stub checkbox. **Under development — needs field testing**
+- `RelevelSprinklersCommand` - Move selected sprinkler heads to a chosen Level while keeping each head in its EXACT world location; sets FAMILY_LEVEL_PARAM then re-pins the captured world point so Revit recomputes Offset-from-Level = worldZ − newLevelElevation automatically. Verifies position held; skips + reports face/work-plane-hosted or read-only-level heads (never deletes). Level picker remembers last choice
 
 ## Hangers
 - `PlaceHangersCommand` - Unified auto-placement: one dialog with a method dropdown (auto-spaced to decks, auto-spaced to parallel framing, downstream ends, or at structural steel). Settings remembered per method. **Replaces the four commands below on the ribbon** (their classes remain for the RunPlacement logic)

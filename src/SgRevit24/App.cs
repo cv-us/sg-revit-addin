@@ -27,6 +27,10 @@ namespace SgRevitAddin
                 "SgRevitAddin.Commands.PipeRouting.SprinklerDropCommand",
                 "shorten-flex-32.png", "shorten-flex-16.png",
                 "Place hard-pipe up-over-down drops to pendent heads, ending in a REAL elbow at the drop base (a stub forces the turn so the BOM lists an elbow, not a union), with a flex hose from the elbow to the head. Select heads + a branch line. (Under development — needs field testing.)");
+            AddLargeButton(pipingPanel, "RelevelSprinklers", "Re-Level\nSprinklers", asmPath,
+                "SgRevitAddin.Commands.PipeRouting.RelevelSprinklersCommand",
+                "shorten-flex-32.png", "shorten-flex-16.png",
+                "Move selected sprinkler heads to a chosen Level while keeping each head in its EXACT world location — the Offset from Level is recomputed automatically from the level-elevation difference. Face/work-plane-hosted heads are skipped + reported.");
 
             // ── Hangers panel ──
             RibbonPanel hangersPanel = application.CreateRibbonPanel(tabName, "Hangers");

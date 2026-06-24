@@ -39,7 +39,7 @@ namespace SgRevitAddin.Commands.PipeRouting
         private RadioButton _rbContinuous, _rbBatch;
         private ComboBox _cboDrop, _cboArm, _cboFlex;
         private NumericUpDown _numSize, _numFlexSize, _numRise, _numTerm, _numStub, _numMaxFlex, _numOffset, _numWhip;
-        private CheckBox _chkSwallow;
+        private CheckBox _chkSwallow, _chkNoStub;
 
         public SprinklerDropDialog(List<(int id, string name)> pipeTypes, List<(int id, string name)> flexTypes,
             int defaultPipeTypeId)
@@ -57,7 +57,7 @@ namespace SgRevitAddin.Commands.PipeRouting
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(580, 712);
+            ClientSize = new Size(580, 744);
 
             const int M = 18, W = 544;
             int y = M;
@@ -104,18 +104,33 @@ namespace SgRevitAddin.Commands.PipeRouting
             SelectById(_cboFlex, DialogMemory.GetInt(MemKey, "FlexType", -1));
 
             // ── Geometry ──
-            var grpGeo = new GroupBox { Text = "Geometry (inches)", Location = new Point(M, y), Size = new Size(W, 292) };
+            var grpGeo = new GroupBox { Text = "Geometry (inches)", Location = new Point(M, y), Size = new Size(W, 322) };
             gy = 28;
             _numSize = AddNum(grpGeo, "Drop / armover pipe size:", ref gy, 0.25m, 12, DialogMemory.GetDouble(MemKey, "Size", 1.0), 0.25m);
             _numFlexSize = AddNum(grpGeo, "Flex pipe size:", ref gy, 0.25m, 12, DialogMemory.GetDouble(MemKey, "FlexSize", 1.0), 0.25m);
             _numRise = AddNum(grpGeo, "Return-bend rise above branch (0 = none):", ref gy, 0, 240, DialogMemory.GetDouble(MemKey, "Rise", 0), 0.5m);
             _numTerm = AddNum(grpGeo, "Hard-pipe termination above head:", ref gy, 0, 120, DialogMemory.GetDouble(MemKey, "Term", 12), 0.5m);
-            _numStub = AddNum(grpGeo, "Elbow stub length (forces the turn):", ref gy, 1, 24, DialogMemory.GetDouble(MemKey, "Stub", 3), 0.5m);
+            _numStub = AddNum(grpGeo, "Elbow stub length (0 = none, flex straight off elbow):", ref gy, 0, 24, DialogMemory.GetDouble(MemKey, "Stub", 3), 0.5m);
             _numOffset = AddNum(grpGeo, "Drop offset toward branch (0 = over head):", ref gy, 0, 120, DialogMemory.GetDouble(MemKey, "Offset", 0), 1m);
             _numWhip = AddNum(grpGeo, "Flex whip length (0 = taut/minimal):", ref gy, 0, 240, DialogMemory.GetDouble(MemKey, "Whip", 0), 1m);
             _numMaxFlex = AddNum(grpGeo, "Max flex reach check (0 = no check):", ref gy, 0, 240, DialogMemory.GetDouble(MemKey, "MaxFlex", 0), 1m);
+
+            _chkNoStub = new CheckBox
+            {
+                Text = "No elbow stub (set stub length to 0)",
+                Location = new Point(14, gy + 2), Size = new Size(W - 28, 20)
+            };
+            grpGeo.Controls.Add(_chkNoStub);
+            _chkNoStub.CheckedChanged += (s, e) =>
+            {
+                if (_chkNoStub.Checked) { _numStub.Value = 0; _numStub.Enabled = false; }
+                else { _numStub.Enabled = true; if (_numStub.Value == 0) _numStub.Value = 3; }
+            };
+            _chkNoStub.Checked = _numStub.Value == 0;
+            if (_chkNoStub.Checked) _numStub.Enabled = false;
+
             Controls.Add(grpGeo);
-            y += 300;
+            y += 330;
 
             _chkSwallow = new CheckBox
             {

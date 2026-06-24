@@ -259,7 +259,12 @@ namespace SgRevitAddin.Commands.PipeRouting
             if (inlet == null) return "no open piping inlet on head (already dropped?)";
 
             XYZ H = inlet.Origin;
-            XYZ T = branchLine.Project(H)?.XYZPoint;
+            // Tap point: foot of the head's PLAN (XY) perpendicular onto the branch,
+            // NOT the 3D-closest point. On a SLOPED branch the 3D projection skews
+            // the tap along the run, which angles the armover in plan; the plan foot
+            // keeps the armover straight/perpendicular to the branch and lets the
+            // rise/drop absorb the slope (it carries the branch's sloped Z at T).
+            XYZ T = PlanFootOnLine(branchLine, H);
             if (T == null) return "could not project head onto branch";
 
             double termZ = H.Z + termFt;
@@ -374,12 +379,28 @@ namespace SgRevitAddin.Commands.PipeRouting
             //    HEAD-FIRST on purpose: the flex family's first connector carries
             //    the reducing nipple + bracket, which belongs at the SPRINKLER
             //    HEAD; the plain threaded end then lands on the hard pipe.
-            //    If a whip length is given, the path droops through interior
-            //    vertices to that full length so the whole whip is shown with
-            //    grab points to shape, rather than a taut minimal segment. ──
+            //
+            //    Two guide vertices are MANDATORY for the flex to render cleanly
+            //    without hand-editing: one just ABOVE the head (the inlet faces up,
+            //    so the whip must leave the head going up, not below it), and one
+            //    horizontally IN FRONT of the base elbow toward the head (the whip
+            //    leaves the elbow going across, not straight down).
+            //
+            //    If a whip length is given, the path droops through extra interior
+            //    vertices to that full length so the whole whip is shown with grab
+            //    points to shape, rather than a taut minimal segment. ──
             try
             {
-                var fpts = BuildFlexPath(H, R4, whipFt, 3);
+                const double GuideFt = 4.0 / 12.0;   // 4"
+                XYZ headDir = inlet.CoordinateSystem?.BasisZ ?? XYZ.BasisZ;
+                if (headDir.GetLength() < 1e-9) headDir = XYZ.BasisZ;
+                headDir = headDir.Normalize();
+                XYZ vHead = H + headDir * GuideFt;                              // above the head
+                XYZ towardHeadXY = new XYZ(H.X - R4.X, H.Y - R4.Y, 0);
+                towardHeadXY = towardHeadXY.GetLength() > 1e-6 ? towardHeadXY.Normalize() : aim;
+                XYZ vElbow = new XYZ(R4.X + towardHeadXY.X * GuideFt, R4.Y + towardHeadXY.Y * GuideFt, R4.Z); // in front of the elbow
+
+                var fpts = BuildFlexPath(H, vHead, vElbow, R4, whipFt, 3);
                 FlexPipe flex = FlexPipe.Create(doc, sysTypeId, flexTypeId, levelId, fpts);
                 if (flex != null)
                 {
@@ -423,37 +444,33 @@ namespace SgRevitAddin.Commands.PipeRouting
         }
 
         /// <summary>
-        /// Builds a head-first flex path from <paramref name="a"/> to
-        /// <paramref name="b"/>. If <paramref name="targetLen"/> exceeds the
-        /// straight distance, the path droops straight down through
-        /// <paramref name="interior"/> interior vertices (sine profile) so the
-        /// whole whip length is modeled with grab points to shape; otherwise it's
-        /// the straight two-point segment.
+        /// Builds a head-first flex path: head → <paramref name="vHead"/> (above the
+        /// head) → … → <paramref name="vElbow"/> (in front of the base elbow) → hard.
+        /// Those two interior vertices are mandatory for the flex to render cleanly.
+        /// If <paramref name="targetLen"/> exceeds the base path length, extra
+        /// vertices droop down (sine profile) between vHead and vElbow so the whole
+        /// whip length is modeled with grab points to shape.
         /// </summary>
-        private static List<XYZ> BuildFlexPath(XYZ a, XYZ b, double targetLen, int interior)
+        private static List<XYZ> BuildFlexPath(XYZ head, XYZ vHead, XYZ vElbow, XYZ hard, double targetLen, int interior)
         {
-            double d = a.DistanceTo(b);
-            if (targetLen <= d + 0.05 || interior < 1)
-                return new List<XYZ> { a, b };
+            var basePts = new List<XYZ> { head, vHead, vElbow, hard };
+            double baseLen = PolylineLength(basePts);
+            if (targetLen <= baseLen + 0.05 || interior < 1)
+                return basePts;
 
             XYZ down = new XYZ(0, 0, -1);
             Func<double, List<XYZ>> build = amp =>
             {
-                var pts = new List<XYZ> { a };
+                var pts = new List<XYZ> { head, vHead };
                 for (int i = 1; i <= interior; i++)
                 {
                     double s = (double)i / (interior + 1);
-                    XYZ baseP = a + (b - a) * s;
+                    XYZ baseP = vHead + (vElbow - vHead) * s;
                     pts.Add(baseP + down * (amp * Math.Sin(Math.PI * s))); // 0 at ends, max mid
                 }
-                pts.Add(b);
+                pts.Add(vElbow);
+                pts.Add(hard);
                 return pts;
-            };
-            Func<List<XYZ>, double> len = pts =>
-            {
-                double L = 0;
-                for (int i = 0; i < pts.Count - 1; i++) L += pts[i].DistanceTo(pts[i + 1]);
-                return L;
             };
 
             // Belly amplitude is monotonic in length → binary-search to targetLen.
@@ -461,9 +478,32 @@ namespace SgRevitAddin.Commands.PipeRouting
             for (int it = 0; it < 40; it++)
             {
                 double mid = (lo + hi) / 2.0;
-                if (len(build(mid)) < targetLen) lo = mid; else hi = mid;
+                if (PolylineLength(build(mid)) < targetLen) lo = mid; else hi = mid;
             }
             return build(hi);
+        }
+
+        private static double PolylineLength(List<XYZ> pts)
+        {
+            double L = 0;
+            for (int i = 0; i < pts.Count - 1; i++) L += pts[i].DistanceTo(pts[i + 1]);
+            return L;
+        }
+
+        /// <summary>
+        /// Foot of <paramref name="p"/>'s plan (XY) perpendicular onto the 3D line,
+        /// returned as the point ON the line at that plan parameter (so it carries
+        /// the line's slope Z). Clamped to the segment.
+        /// </summary>
+        private static XYZ PlanFootOnLine(Line line, XYZ p)
+        {
+            XYZ a = line.GetEndPoint(0), b = line.GetEndPoint(1);
+            double dx = b.X - a.X, dy = b.Y - a.Y;
+            double len2 = dx * dx + dy * dy;
+            if (len2 < 1e-12) return a;
+            double t = ((p.X - a.X) * dx + (p.Y - a.Y) * dy) / len2;
+            if (t < 0) t = 0; else if (t > 1) t = 1;
+            return new XYZ(a.X + dx * t, a.Y + dy * t, a.Z + (b.Z - a.Z) * t);
         }
 
         /// <summary>Bundle of dialog-chosen settings passed to placement.</summary>
