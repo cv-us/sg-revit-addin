@@ -141,22 +141,29 @@ namespace SgRevitAddin.Commands.Coordination
             var famEditFailNotes = new HashSet<string>();
             if (dlg.AssignMaterial && dlg.DeepColor)
             {
-                var famsToEdit = new Dictionary<int, Family>();
+                // Capture family IDs first — never hold live Family objects across
+                // a reload (reloading family A regenerates the doc and invalidates
+                // a Family handle captured for family B → "referenced object is not
+                // valid" on the next EditFamily).
+                var famIdsToEdit = new HashSet<int>();
                 foreach (var fi in targets.OfType<FamilyInstance>())
                 {
                     if (!dlg.WorksetStatus.TryGetValue(fi.WorksetId.IntegerValue, out var st) || st == StatusBucket.Ignore) continue;
                     var fam = fi.Symbol?.Family;
-                    if (fam == null || famsToEdit.ContainsKey(fam.Id.IntegerValue)) continue;
+                    if (fam == null || famIdsToEdit.Contains(fam.Id.IntegerValue)) continue;
                     if (FamilyHasMaterialParam(doc, fam)) continue; // already colorable
-                    famsToEdit[fam.Id.IntegerValue] = fam;
+                    famIdsToEdit.Add(fam.Id.IntegerValue);
                 }
-                foreach (var fam in famsToEdit.Values)
+                foreach (int famIdInt in famIdsToEdit)
                 {
-                    if (BindMaterialParamToFamily(doc, fam, out string note)) { famBound++; famBoundNames.Add(fam.Name); }
+                    var fam = doc.GetElement(new ElementId(famIdInt)) as Family; // RE-FETCH each pass
+                    if (fam == null || !fam.IsEditable) { famEditFail++; continue; }
+                    string famName = fam.Name;
+                    if (BindMaterialParamToFamily(doc, fam, out string note)) { famBound++; famBoundNames.Add(famName); }
                     else { famEditFail++; if (note != null) famEditFailNotes.Add(note); }
                 }
-                // Family reloads can invalidate cached element refs → re-collect.
-                if (famBound > 0) targets = CollectTargets(uidoc, dlg.Scope, targetCats);
+                // Any reload regenerates the doc → re-collect to drop stale refs.
+                if (famBound > 0 || famEditFail > 0) targets = CollectTargets(uidoc, dlg.Scope, targetCats);
             }
 
             var perStatus = new Dictionary<StatusBucket, int>();
@@ -678,15 +685,36 @@ namespace SgRevitAddin.Commands.Coordination
                     FamilyParameter fp = fm.get_Parameter(StatusMatParamName)
                         ?? fm.AddParameter(StatusMatParamName, GroupTypeId.Materials, SpecTypeId.Reference.Material, false);
 
-                    // Wire every solid-bearing element's material param to it
-                    // (extrusions/blends/sweeps/free-forms, and nested instances).
+                    // Seed a default value on every type BEFORE associating — works
+                    // around REVIT-79279 where Associate otherwise throws.
+                    foreach (FamilyType ft in fm.Types)
+                    {
+                        try { fm.CurrentType = ft; if (!ft.HasValue(fp)) fm.Set(fp, ElementId.InvalidElementId); } catch { }
+                    }
+
+                    // Wire ONLY genuine in-family solids (extrusions/blends/sweeps/
+                    // revolves/free-forms) to the param. Binding nested instances,
+                    // imports, voids, or connectors corrupts the family so its
+                    // reload regeneration throws "referenced object is not valid".
                     foreach (Element el in new FilteredElementCollector(fdoc).WhereElementIsNotElementType())
                     {
+                        if (!(el is GenericForm || el is FreeFormElement)) continue;
                         Parameter mp;
                         try { mp = el.get_Parameter(BuiltInParameter.MATERIAL_ID_PARAM); } catch { continue; }
                         if (mp == null || mp.IsReadOnly || mp.StorageType != StorageType.ElementId) continue;
-                        try { fm.AssociateElementParameterToFamilyParameter(mp, fp); boundAny = true; } catch { }
+                        if (!(mp.Definition is InternalDefinition)) continue;
+                        try
+                        {
+                            if (!fm.CanElementParameterBeAssociated(mp)) continue;
+                            fm.AssociateElementParameterToFamilyParameter(mp, fp);
+                            boundAny = true;
+                        }
+                        catch { /* skip this solid; never abort the whole family */ }
                     }
+
+                    // Force regen now so a structurally bad family fails HERE
+                    // (caught below, family skipped) rather than during LoadFamily.
+                    fdoc.Regenerate();
                     t.Commit();
                 }
 
@@ -721,13 +749,17 @@ namespace SgRevitAddin.Commands.Coordination
             catch { return false; }
         }
 
-        /// <summary>Overwrite-on-reload options for the in-memory family rebind.</summary>
+        /// <summary>
+        /// Reload options for the in-memory family rebind: take the new family
+        /// definition (geometry + the new material param) but DON'T reset existing
+        /// instance parameter values — minimizes disruption to placed instances.
+        /// </summary>
         private class FamLoadOpts : IFamilyLoadOptions
         {
             public bool OnFamilyFound(bool familyInUse, out bool overwriteParameterValues)
-            { overwriteParameterValues = true; return true; }
+            { overwriteParameterValues = false; return true; }
             public bool OnSharedFamilyFound(Family sharedFamily, bool familyInUse, out FamilySource source, out bool overwriteParameterValues)
-            { source = FamilySource.Family; overwriteParameterValues = true; return true; }
+            { source = FamilySource.Family; overwriteParameterValues = false; return true; }
         }
 
         // ══════════════════════════════════════════════════════════════

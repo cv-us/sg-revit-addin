@@ -31,7 +31,7 @@ With **Deep-color** on (default), the command runs a **pre-pass before the color
 
 1. `Document fdoc = doc.EditFamily(family)`,
 2. adds a **Material type parameter** (`SG Status Material`),
-3. **associates every solid's `MATERIAL_ID_PARAM`** to it (extrusions/blends/sweeps/free-forms and nested instances),
+3. **associates every solid's `MATERIAL_ID_PARAM`** to it — *only* genuine in-family solids (`GenericForm` extrusions/blends/sweeps/revolves + `FreeFormElement`); nested instances, imports, voids and connectors are skipped on purpose (associating those corrupts the family and makes the reload throw),
 4. `fdoc.LoadFamily(doc, …)` (overwrite).
 
 After that the family carries a real material param, so the normal symbol-duplicate path colors it per status. This is **non-destructive** within the recommended workflow — the family edits live only in the open session and are **discarded on close-without-saving**. Families whose solids can't be bound (imported/SAT geometry, deeply nested) are reported with a reason.
