@@ -19,6 +19,7 @@ namespace SgRevitAddin.Commands.PipeRouting
 
         // ── Results ──
         public ConnectionMode Mode { get; private set; } = ConnectionMode.Continuous;
+        public bool UseExistingOutlet { get; private set; } = false;
         public int DropPipeTypeId { get; private set; }
         public int ArmPipeTypeId { get; private set; }
         public int FlexTypeId { get; private set; }
@@ -37,6 +38,7 @@ namespace SgRevitAddin.Commands.PipeRouting
         private readonly int _defaultPipeTypeId;
 
         private RadioButton _rbContinuous, _rbBatch;
+        private RadioButton _rbBranch, _rbOutlet;
         private ComboBox _cboDrop, _cboArm, _cboFlex;
         private NumericUpDown _numSize, _numFlexSize, _numRise, _numTerm, _numStub, _numMaxFlex, _numOffset, _numWhip;
         private CheckBox _chkSwallow, _chkNoStub;
@@ -57,7 +59,7 @@ namespace SgRevitAddin.Commands.PipeRouting
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(580, 744);
+            ClientSize = new Size(580, 778);
 
             const int M = 18, W = 544;
             int y = M;
@@ -72,22 +74,30 @@ namespace SgRevitAddin.Commands.PipeRouting
             y += 56;
 
             // ── Mode ──
-            var grpMode = new GroupBox { Text = "Connection Mode", Location = new Point(M, y), Size = new Size(W, 72) };
+            var grpMode = new GroupBox { Text = "Connection", Location = new Point(M, y), Size = new Size(W, 106) };
             _rbContinuous = new RadioButton
             {
-                Text = "Continuous — click a head, then its pipe; repeat until Esc",
+                Text = "Continuous — click a head, then its pipe/fitting; repeat until Esc",
                 Location = new Point(12, 22), Size = new Size(W - 24, 20)
             };
             _rbBatch = new RadioButton
             {
-                Text = "Batch — select heads, then click one pipe (each gets its own armover)",
+                Text = "Batch — select heads, then click one pipe (branch-line mode only)",
                 Location = new Point(12, 44), Size = new Size(W - 24, 20)
             };
             grpMode.Controls.AddRange(new Control[] { _rbContinuous, _rbBatch });
+
+            grpMode.Controls.Add(new Label { Text = "Tap into:", Location = new Point(12, 76), Size = new Size(60, 18) });
+            _rbBranch = new RadioButton { Text = "Branch line", Location = new Point(76, 74), Size = new Size(110, 20) };
+            _rbOutlet = new RadioButton { Text = "Existing outlet (pick a fitting per head)", Location = new Point(196, 74), Size = new Size(W - 210, 20) };
+            grpMode.Controls.AddRange(new Control[] { _rbBranch, _rbOutlet });
+
             Controls.Add(grpMode);
-            y += 80;
+            y += 114;
             bool batch = DialogMemory.GetInt(MemKey, "Mode", 0) == 1;
             _rbBatch.Checked = batch; _rbContinuous.Checked = !batch;
+            bool outlet = DialogMemory.GetInt(MemKey, "Outlet", 0) == 1;
+            _rbOutlet.Checked = outlet; _rbBranch.Checked = !outlet;
 
             // ── Types ──
             var grpTypes = new GroupBox { Text = "Pipe & Flex Types", Location = new Point(M, y), Size = new Size(W, 120) };
@@ -186,6 +196,7 @@ namespace SgRevitAddin.Commands.PipeRouting
             var arm = _cboArm.SelectedItem as Item ?? drop;
 
             Mode = _rbBatch.Checked ? ConnectionMode.Batch : ConnectionMode.Continuous;
+            UseExistingOutlet = _rbOutlet.Checked;
             DropPipeTypeId = drop.Id;
             ArmPipeTypeId = arm.Id;
             FlexTypeId = flex.Id;
@@ -200,6 +211,7 @@ namespace SgRevitAddin.Commands.PipeRouting
             SwallowWarnings = _chkSwallow.Checked;
 
             DialogMemory.SetInt(MemKey, "Mode", Mode == ConnectionMode.Batch ? 1 : 0);
+            DialogMemory.SetInt(MemKey, "Outlet", UseExistingOutlet ? 1 : 0);
             DialogMemory.SetInt(MemKey, "DropType", DropPipeTypeId);
             DialogMemory.SetInt(MemKey, "ArmType", ArmPipeTypeId);
             DialogMemory.SetInt(MemKey, "FlexType", FlexTypeId);

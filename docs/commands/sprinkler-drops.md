@@ -41,15 +41,17 @@ Real elbows are inserted at **R1**, **R2**, and **R3** (the drop base) because e
 - **Every hard segment is a free `Pipe.Create(doc, systemTypeId, pipeTypeId, levelId, a, b)`** sharing endpoints with its neighbours (degenerate <½" segments are dropped).
 - At **each interior joint** the command then calls **`doc.Create.NewElbowFitting(c1, c2)`** between the two coincident free end connectors — this *guarantees* a real BOM elbow (the earlier connector-overload approach connected the pipes but left some joints with no fitting). If an elbow can't resolve (collinear runs, or the type has no elbow rule) it falls back to a bare `ConnectTo`.
 - **Branch tee:** `PlumbingUtils.BreakCurve(doc, branchId, T)` splits the branch at the tap point, then `doc.Create.NewTeeFitting(b1, b2, riserConnector)`.
-- **Flex:** `FlexPipe.Create(doc, systemTypeId, flexTypeId, levelId, path)` — **head-first on purpose.** The flex family's first connector carries the **reducing nipple + bracket**, which belongs at the **sprinkler head**; the plain threaded end then lands on the hard pipe. The path always includes **two mandatory guide vertices** so the whip renders cleanly without hand-editing: one **just above the head** (the inlet faces up, so the whip leaves going up — 4" guide), and one **horizontally in front of the base elbow** toward the head (so the whip leaves the elbow going across, not straight down). If a **whip length** is set, extra vertices droop between them to model the full length with grab points. Both ends `ConnectTo`, then the flex diameter is set **last** (so a connect-time auto-resize doesn't override the chosen flex size).
+- **Flex:** `FlexPipe.Create(doc, systemTypeId, flexTypeId, levelId, path)` — **head-first on purpose.** The flex family's first connector carries the **reducing nipple + bracket**, which belongs at the **sprinkler head**; the plain threaded end then lands on the hard pipe. The path keeps **all interior vertices ABOVE the head**: one rises **straight up from the head** to the hard-pipe level, and one sits just **beyond the stub end on the far side** (away from the head). If a **whip length** is set, extra vertices **bulge up** between them (spread in X/Y) to model the full length with grab points. Both ends `ConnectTo`, then the flex diameter is set **last** (so a connect-time auto-resize doesn't override the chosen flex size).
 - **Sloped branches:** the tap point is the **plan-perpendicular foot** of the head onto the branch (carrying the branch's sloped Z), not the 3D-closest point — so the armover stays straight/perpendicular to the branch in plan even when the main is sloped, and the rise/drop absorb the slope.
+- **Existing-outlet mode:** instead of teeing a branch, the riser's start connector `ConnectTo`s the chosen fitting's open piping connector — the up-over-down rises from there.
 - All in one transaction with an `IFailuresPreprocessor` that deletes recoverable **warnings** (errors still roll back). Each head is wrapped in try/catch and reported individually.
 
 ## Dialog
 
 | Field | Unit | Notes |
 |-------|------|-------|
-| **Connection mode** | — | **Continuous** (click a head, then its pipe; repeat until Esc) or **Batch** (select heads, then one pipe) |
+| **Connection mode** | — | **Continuous** (click a head, then its pipe/fitting; repeat until Esc) or **Batch** (select heads, then one pipe — branch-line mode only) |
+| **Tap into** | — | **Branch line** (tee onto the pipe at the perpendicular foot) or **Existing outlet** (after the head, click a pipe fitting / POL — the riser rises from that fitting's open connector; one fitting per head, continuous). |
 | Drop pipe type | — | required; defaults to **hcad3 lines threaded** if present, else any threaded, else first |
 | Armover pipe type | — | defaults to the same |
 | Flex pipe type | — | from loaded `FlexPipeType` (family : type) |

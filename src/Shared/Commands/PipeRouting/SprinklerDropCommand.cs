@@ -73,11 +73,13 @@ namespace SgRevitAddin.Commands.PipeRouting
                 // ── Dialog (settings only; picking happens after, per mode) ──
                 Cfg cfg;
                 SprinklerDropDialog.ConnectionMode mode;
+                bool useOutlet = false;
                 using (var dlg = new SprinklerDropDialog(pipeTypes, flexTypes, defaultPipeTypeId))
                 {
                     if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK)
                         return Result.Cancelled;
                     mode = dlg.Mode;
+                    useOutlet = dlg.UseExistingOutlet;
                     cfg = new Cfg
                     {
                         DropType = new ElementId(dlg.DropPipeTypeId),
@@ -98,7 +100,39 @@ namespace SgRevitAddin.Commands.PipeRouting
                 int done = 0, failed = 0;
                 var failReasons = new List<string>();
 
-                if (mode == SprinklerDropDialog.ConnectionMode.Continuous)
+                if (useOutlet)
+                {
+                    // Existing-outlet mode: pick a head, then a pipe fitting (the
+                    // POL / outlet) the drop should rise from; repeat until Esc.
+                    while (true)
+                    {
+                        FamilyInstance head; FamilyInstance fitting;
+                        try
+                        {
+                            var hRef = uidoc.Selection.PickObject(ObjectType.Element,
+                                new CategoryFilter(BuiltInCategory.OST_Sprinklers),
+                                "Pick a sprinkler head (Esc to finish).");
+                            head = doc.GetElement(hRef) as FamilyInstance;
+                            var fRef = uidoc.Selection.PickObject(ObjectType.Element,
+                                new CategoryFilter(BuiltInCategory.OST_PipeFitting),
+                                "Pick the outlet fitting to rise from (Esc to finish).");
+                            fitting = doc.GetElement(fRef) as FamilyInstance;
+                        }
+                        catch (Autodesk.Revit.Exceptions.OperationCanceledException) { break; }
+                        if (head == null || fitting == null) continue;
+
+                        using (var tx = new Transaction(doc, "Sprinkler Drop (outlet)"))
+                        {
+                            tx.Start();
+                            ApplySwallow(tx, cfg.Swallow);
+                            string err = ConnectForHeadOutlet(doc, head, fitting, cfg);
+                            tx.Commit();
+                            if (err == null) done++;
+                            else { failed++; failReasons.Add($"  {head.Id}: {err}"); }
+                        }
+                    }
+                }
+                else if (mode == SprinklerDropDialog.ConnectionMode.Continuous)
                 {
                     // Click a head, then its pipe; repeat until Esc.
                     while (true)
@@ -239,14 +273,52 @@ namespace SgRevitAddin.Commands.PipeRouting
             ElementId lvlId = pipe.ReferenceLevel?.Id ?? FirstLevelId(doc);
             if (sysId == ElementId.InvalidElementId || lvlId == ElementId.InvalidElementId)
                 return "no system/level on the pipe";
-            return PlaceOne(doc, head, pipe, line, sysId, lvlId,
+            return PlaceOne(doc, head, pipe, line, null, sysId, lvlId,
                 cfg.DropType, cfg.ArmType, cfg.FlexType,
                 cfg.SizeFt, cfg.FlexSizeFt, cfg.RiseFt, cfg.TermFt, cfg.StubFt, cfg.MaxFlexFt,
                 cfg.OffsetFt, cfg.WhipFt, out newPiece);
         }
 
-        /// <summary>Places one drop. Returns null on success, or a short reason string on failure.</summary>
-        private string PlaceOne(Document doc, FamilyInstance head, Pipe branch, Line branchLine,
+        /// <summary>
+        /// Existing-outlet variant: the drop rises from an open connector on a
+        /// chosen pipe fitting (a POL / pipe outlet) instead of tapping a branch.
+        /// </summary>
+        private string ConnectForHeadOutlet(Document doc, FamilyInstance head, FamilyInstance fitting, Cfg cfg)
+        {
+            Connector outlet = OpenPipingConnector(fitting);
+            if (outlet == null) return "the chosen fitting has no open piping connector";
+            ElementId sysId = outlet.MEPSystem?.GetTypeId() ?? FirstPipingSystemTypeId(doc);
+            ElementId lvlId = fitting.LevelId != ElementId.InvalidElementId ? fitting.LevelId : FirstLevelId(doc);
+            if (sysId == ElementId.InvalidElementId || lvlId == ElementId.InvalidElementId)
+                return "no system/level on the fitting";
+            return PlaceOne(doc, head, null, null, outlet, sysId, lvlId,
+                cfg.DropType, cfg.ArmType, cfg.FlexType,
+                cfg.SizeFt, cfg.FlexSizeFt, cfg.RiseFt, cfg.TermFt, cfg.StubFt, cfg.MaxFlexFt,
+                cfg.OffsetFt, cfg.WhipFt, out _);
+        }
+
+        /// <summary>First open (unconnected) piping connector on a fitting, End preferred.</summary>
+        private static Connector OpenPipingConnector(FamilyInstance fi)
+        {
+            var cm = fi.MEPModel?.ConnectorManager;
+            if (cm == null) return null;
+            Connector best = null;
+            foreach (Connector c in cm.Connectors)
+            {
+                if (c.Domain != Domain.DomainPiping) continue;
+                if (c.IsConnected) continue;
+                if (c.ConnectorType == ConnectorType.End) return c;
+                best = best ?? c;
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// Places one drop. Returns null on success, or a short reason string on
+        /// failure. Tap source is EITHER a branch line (tee tap) OR an existing
+        /// outlet connector (rise from the fitting) — exactly one is non-null.
+        /// </summary>
+        private string PlaceOne(Document doc, FamilyInstance head, Pipe branch, Line branchLine, Connector outletConn,
             ElementId sysTypeId, ElementId levelId, ElementId dropTypeId, ElementId armTypeId, ElementId flexTypeId,
             double sizeFt, double flexSizeFt, double riseFt, double termFt, double stubFt, double maxFlexFt,
             double offsetFt, double whipFt, out ElementId newBranchPiece)
@@ -259,12 +331,12 @@ namespace SgRevitAddin.Commands.PipeRouting
             if (inlet == null) return "no open piping inlet on head (already dropped?)";
 
             XYZ H = inlet.Origin;
-            // Tap point: foot of the head's PLAN (XY) perpendicular onto the branch,
-            // NOT the 3D-closest point. On a SLOPED branch the 3D projection skews
-            // the tap along the run, which angles the armover in plan; the plan foot
-            // keeps the armover straight/perpendicular to the branch and lets the
-            // rise/drop absorb the slope (it carries the branch's sloped Z at T).
-            XYZ T = PlanFootOnLine(branchLine, H);
+            // Tap point: the existing outlet connector (rise from there), else the
+            // foot of the head's PLAN (XY) perpendicular onto the branch — NOT the
+            // 3D-closest point. On a SLOPED branch the 3D projection skews the tap
+            // along the run, which angles the armover in plan; the plan foot keeps
+            // the armover straight/perpendicular and lets the rise/drop absorb slope.
+            XYZ T = outletConn != null ? outletConn.Origin : PlanFootOnLine(branchLine, H);
             if (T == null) return "could not project head onto branch";
 
             double termZ = H.Z + termFt;
@@ -293,8 +365,11 @@ namespace SgRevitAddin.Commands.PipeRouting
             XYZ headDirXY = new XYZ(H.X - Dxy.X, H.Y - Dxy.Y, 0);
             bool haveRise = (R1.Z - T.Z) > MinArm;
             bool haveArm = armXY.GetLength() > MinArm;
+            XYZ perpFallback;
+            if (branchLine != null) perpFallback = Perp(branchLine);
+            else { perpFallback = hToT.GetLength() > 1e-9 ? hToT.Normalize() : XYZ.BasisX; }
             XYZ aim = headDirXY.GetLength() > MinArm ? headDirXY.Normalize()
-                    : (haveArm ? armXY.Normalize() : Perp(branchLine));
+                    : (haveArm ? armXY.Normalize() : perpFallback);
             XYZ R4 = R3 + aim * stubFt;                            // stub end — flex starts here
 
             // Optional flex-length sanity check.
@@ -351,11 +426,17 @@ namespace SgRevitAddin.Commands.PipeRouting
                 JoinWithElbow(doc, c1, c2);
             }
 
-            // ── Tee onto the branch at T. ──
+            // ── Tap source: connect the riser start (at T) to the EXISTING outlet
+            //    connector, or tee onto the branch line at T. ──
             try
             {
                 Connector tapConn = EndConnectorNear(first, T);
-                if (tapConn != null && !tapConn.IsConnected)
+                if (outletConn != null)
+                {
+                    if (tapConn != null && !tapConn.IsConnected && !outletConn.IsConnected)
+                        tapConn.ConnectTo(outletConn);
+                }
+                else if (tapConn != null && !tapConn.IsConnected)
                 {
                     ElementId newBranchId = PlumbingUtils.BreakCurve(doc, branch.Id, T);
                     newBranchPiece = newBranchId;
@@ -370,9 +451,8 @@ namespace SgRevitAddin.Commands.PipeRouting
             }
             catch (Exception ex)
             {
-                // Hard pipe is placed; just the branch tap failed. Report but
-                // don't abort — user can connect the riser manually.
-                return "drop placed but branch tee failed: " + ex.Message;
+                // Hard pipe is placed; just the tap failed. Report but don't abort.
+                return (outletConn != null ? "drop placed but outlet connect failed: " : "drop placed but branch tee failed: ") + ex.Message;
             }
 
             // ── Flex: head inlet (H) → stub open end (R4). Points are ordered
@@ -380,25 +460,20 @@ namespace SgRevitAddin.Commands.PipeRouting
             //    the reducing nipple + bracket, which belongs at the SPRINKLER
             //    HEAD; the plain threaded end then lands on the hard pipe.
             //
-            //    Two guide vertices are MANDATORY for the flex to render cleanly
-            //    without hand-editing: one just ABOVE the head (the inlet faces up,
-            //    so the whip must leave the head going up, not below it), and one
-            //    horizontally IN FRONT of the base elbow toward the head (the whip
-            //    leaves the elbow going across, not straight down).
-            //
-            //    If a whip length is given, the path droops through extra interior
-            //    vertices to that full length so the whole whip is shown with grab
-            //    points to shape, rather than a taut minimal segment. ──
+            //    The whip's interior vertices ALL sit ABOVE the head: vHead rises
+            //    straight up from the head to the hard-pipe level, and vElbow sits
+            //    just BEYOND the stub end on the FAR side (away from the head), at
+            //    the hard-pipe level. Whip slack bulges UP between them, spread in
+            //    X/Y — so the whole whip is above the head with grab points to
+            //    shape, rather than drooping below it. ──
             try
             {
-                const double GuideFt = 4.0 / 12.0;   // 4"
-                XYZ headDir = inlet.CoordinateSystem?.BasisZ ?? XYZ.BasisZ;
-                if (headDir.GetLength() < 1e-9) headDir = XYZ.BasisZ;
-                headDir = headDir.Normalize();
-                XYZ vHead = H + headDir * GuideFt;                              // above the head
-                XYZ towardHeadXY = new XYZ(H.X - R4.X, H.Y - R4.Y, 0);
-                towardHeadXY = towardHeadXY.GetLength() > 1e-6 ? towardHeadXY.Normalize() : aim;
-                XYZ vElbow = new XYZ(R4.X + towardHeadXY.X * GuideFt, R4.Y + towardHeadXY.Y * GuideFt, R4.Z); // in front of the elbow
+                const double GuideFt = 4.0 / 12.0;        // 4"
+                double upFt = Math.Max(termFt, 0.5);      // at least 6" above the head
+                XYZ vHead = new XYZ(H.X, H.Y, H.Z + upFt);                       // straight above the head
+                XYZ awayHeadXY = new XYZ(R4.X - H.X, R4.Y - H.Y, 0);
+                awayHeadXY = awayHeadXY.GetLength() > 1e-6 ? awayHeadXY.Normalize() : aim;
+                XYZ vElbow = new XYZ(R4.X + awayHeadXY.X * GuideFt, R4.Y + awayHeadXY.Y * GuideFt, R4.Z); // beyond the stub, away from head
 
                 var fpts = BuildFlexPath(H, vHead, vElbow, R4, whipFt, 3);
                 FlexPipe flex = FlexPipe.Create(doc, sysTypeId, flexTypeId, levelId, fpts);
@@ -445,11 +520,11 @@ namespace SgRevitAddin.Commands.PipeRouting
 
         /// <summary>
         /// Builds a head-first flex path: head → <paramref name="vHead"/> (above the
-        /// head) → … → <paramref name="vElbow"/> (in front of the base elbow) → hard.
-        /// Those two interior vertices are mandatory for the flex to render cleanly.
-        /// If <paramref name="targetLen"/> exceeds the base path length, extra
-        /// vertices droop down (sine profile) between vHead and vElbow so the whole
-        /// whip length is modeled with grab points to shape.
+        /// head) → … → <paramref name="vElbow"/> (beyond the base elbow) → hard.
+        /// Those two interior vertices keep the whip above the head and render it
+        /// cleanly. If <paramref name="targetLen"/> exceeds the base path length,
+        /// extra vertices bulge UP (sine profile) between vHead and vElbow so the
+        /// whole whip length is modeled, above the head, with grab points to shape.
         /// </summary>
         private static List<XYZ> BuildFlexPath(XYZ head, XYZ vHead, XYZ vElbow, XYZ hard, double targetLen, int interior)
         {
@@ -458,7 +533,7 @@ namespace SgRevitAddin.Commands.PipeRouting
             if (targetLen <= baseLen + 0.05 || interior < 1)
                 return basePts;
 
-            XYZ down = new XYZ(0, 0, -1);
+            XYZ up = new XYZ(0, 0, 1);
             Func<double, List<XYZ>> build = amp =>
             {
                 var pts = new List<XYZ> { head, vHead };
@@ -466,7 +541,7 @@ namespace SgRevitAddin.Commands.PipeRouting
                 {
                     double s = (double)i / (interior + 1);
                     XYZ baseP = vHead + (vElbow - vHead) * s;
-                    pts.Add(baseP + down * (amp * Math.Sin(Math.PI * s))); // 0 at ends, max mid
+                    pts.Add(baseP + up * (amp * Math.Sin(Math.PI * s))); // 0 at ends, max mid — bulges above the head
                 }
                 pts.Add(vElbow);
                 pts.Add(hard);

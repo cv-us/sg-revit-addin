@@ -1,8 +1,13 @@
 # Re-Level Sprinklers
 
+> 🚫 **DISABLED (temporarily).** The ribbon button is commented out in both
+> `App.cs` files while this command is under rework — the command class still
+> ships but is not reachable from the UI. Re-enable by un-commenting the
+> `AddLargeButton("RelevelSprinklers", …)` calls.
+
 **Command:** `SgRevitAddin.Commands.PipeRouting.RelevelSprinklersCommand`
 **Domain:** Pipe Routing
-**Ribbon:** SG ♈ > Pipe Routing > Re-Level Sprinklers
+**Ribbon:** SG ♈ > Pipe Routing > Re-Level Sprinklers *(hidden)*
 
 ## Purpose
 
