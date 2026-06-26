@@ -25,7 +25,7 @@ namespace SgRevitAddin.Commands.Coordination
     /// and is disabled; the workset filter falls through (every instance
     /// included).
     /// </summary>
-    public class MarkFamilyInstancesDialog : Form
+    public class MarkFamilyInstancesDialog : DpiAwareForm
     {
         public enum MarkAction { None, Place, DeleteAll }
 

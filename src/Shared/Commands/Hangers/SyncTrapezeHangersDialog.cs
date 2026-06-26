@@ -11,7 +11,7 @@ namespace SgRevitAddin.Commands.Hangers
     ///   - Minimum clearance distance from structural to pipe (inches)
     ///   - Rod position: closest side or middle of structural elements
     /// </summary>
-    public class SyncTrapezeHangersDialog : Form
+    public class SyncTrapezeHangersDialog : DpiAwareForm
     {
         // ── Results ──
         public double MinClearanceInches { get; private set; } = 7.0;

@@ -19,7 +19,7 @@ namespace SgRevitAddin.Commands.Hangers
     ///   wide form, fixed label column, hint stacked under input where
     ///   needed.
     /// </summary>
-    public class StripSectionIDTypeCodeDialog : Form
+    public class StripSectionIDTypeCodeDialog : DpiAwareForm
     {
         // ── Result ──
         public string TypeCode { get; private set; }

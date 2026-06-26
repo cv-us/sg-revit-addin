@@ -10,7 +10,7 @@ namespace SgRevitAddin.Commands.Modify
     /// thrown away when the dialog closes. It's a visible reminder that
     /// the slot is reserved for a future tool.
     /// </summary>
-    public class PlaceholderDialog : Form
+    public class PlaceholderDialog : DpiAwareForm
     {
         public PlaceholderDialog(string title)
         {

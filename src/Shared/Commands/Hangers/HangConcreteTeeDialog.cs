@@ -17,7 +17,7 @@ namespace SgRevitAddin.Commands.Hangers
     ///   - Anchor distance above bottom of stem (inches, default 4)
     ///   - Linked model keyword for finding double tee model
     /// </summary>
-    public class HangConcreteTeeDialog : Form
+    public class HangConcreteTeeDialog : DpiAwareForm
     {
         // ── Results ──
         public string PipeTypeFilter { get; private set; } = "ALL Pipes";

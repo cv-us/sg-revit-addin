@@ -14,7 +14,7 @@ namespace SgRevitAddin.Commands.Hangers
     /// Collects hanger type codes per structural category and a keep-types
     /// option.
     /// </summary>
-    public class RaybounceEarlyDialog : Form
+    public class RaybounceEarlyDialog : DpiAwareForm
     {
         // ── Results ──
         public string TypeCodeFloors { get; private set; } = "05";

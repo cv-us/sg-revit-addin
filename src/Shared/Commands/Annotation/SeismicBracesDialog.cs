@@ -11,7 +11,7 @@ namespace SgRevitAddin.Commands.Annotation
     ///
     /// Collects brace type, families, spacing, orientation, and linked model settings.
     /// </summary>
-    public class SeismicBracesDialog : Form
+    public class SeismicBracesDialog : DpiAwareForm
     {
         // ── Results ──
         public int BraceMode { get; private set; }              // 0=Lateral, 1=Longitudinal, 2=Both

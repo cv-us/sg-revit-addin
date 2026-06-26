@@ -13,7 +13,7 @@ namespace SgRevitAddin.Commands.Hangers.PlaceHangers
     /// groups show/hide and re-stack. Every input is remembered between runs
     /// via <see cref="DialogMemory"/>, namespaced per method.
     /// </summary>
-    public class PlaceHangersDialog : Form
+    public class PlaceHangersDialog : DpiAwareForm
     {
         private const string MemRoot = "PlaceHangers";
 

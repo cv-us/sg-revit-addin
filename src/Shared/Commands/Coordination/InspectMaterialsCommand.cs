@@ -171,7 +171,7 @@ namespace SgRevitAddin.Commands.Coordination
 
         private static void ShowReport(string text)
         {
-            using (var f = new WinForms.Form())
+            using (var f = new DpiAwareForm())   // DPI-aware: scales on 125%/150% machines
             {
                 f.Text = "Inspect Materials — copy this and paste it back";
                 f.StartPosition = WinForms.FormStartPosition.CenterScreen;

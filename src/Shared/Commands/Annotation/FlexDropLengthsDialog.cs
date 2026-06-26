@@ -11,7 +11,7 @@ namespace SgRevitAddin.Commands.Annotation
     ///   - Standard drop length (31", 36", 48", 60", 72")
     ///   - Tag orientation (N, NE, E, SE, S, SW, W, NW)
     /// </summary>
-    public class FlexDropLengthsDialog : Form
+    public class FlexDropLengthsDialog : DpiAwareForm
     {
         // ── Results ──
         public string SelectedLength { get; private set; }

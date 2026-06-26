@@ -10,7 +10,7 @@ namespace SgRevitAddin.Commands.Hangers
     /// WinForms dialog for the Auto Hang at CAD Lines command.
     /// Collects: hanger family, type code, rod length, min CAD line length, and layer selection.
     /// </summary>
-    public class HangAtCADLinesDialog : Form
+    public class HangAtCADLinesDialog : DpiAwareForm
     {
         // ── Results (read these after ShowDialog() == OK) ──
         public string SelectedFamily { get; private set; }

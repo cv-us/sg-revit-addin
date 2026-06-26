@@ -22,7 +22,7 @@ namespace SgRevitAddin.Commands.Annotation
     /// Dry thresholds (4'-4" max):
     ///   ≤ 2'-8" → "38"   ≤ 3'-8" → "50"   ≤ 4'-4" → "58"   > flagged
     /// </summary>
-    public class FlexDropLengthsAutoDialog : Form
+    public class FlexDropLengthsAutoDialog : DpiAwareForm
     {
         // ── Results ──
         public bool IsWetSystem { get; private set; } = true;

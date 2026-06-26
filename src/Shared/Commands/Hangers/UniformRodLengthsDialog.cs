@@ -20,7 +20,7 @@ namespace SgRevitAddin.Commands.Hangers
     ///   so the form stays narrow enough to fit on small monitors without
     ///   clipping the hint text.
     /// </summary>
-    public class UniformRodLengthsDialog : Form
+    public class UniformRodLengthsDialog : DpiAwareForm
     {
         // ── Results ──
         public string TypeCode { get; private set; }

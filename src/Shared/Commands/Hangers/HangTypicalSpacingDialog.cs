@@ -18,7 +18,7 @@ namespace SgRevitAddin.Commands.Hangers
     ///   - Linked model selection (architectural + structural)
     ///   - Max clash height for raybounce
     /// </summary>
-    public class HangTypicalSpacingDialog : Form
+    public class HangTypicalSpacingDialog : DpiAwareForm
     {
         // ── Results ──
         public string SelectedFamily { get; private set; }

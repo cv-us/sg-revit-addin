@@ -15,7 +15,7 @@ namespace SgRevitAddin.Commands.Hangers
     ///   - C-Clamp visibility
     ///   - Structural source (local or linked)
     /// </summary>
-    public class HangParallelStructuralDialog : Form
+    public class HangParallelStructuralDialog : DpiAwareForm
     {
         // ── Results ──
         public string SelectedFamily { get; private set; }

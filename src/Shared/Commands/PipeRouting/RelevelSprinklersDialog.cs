@@ -10,7 +10,7 @@ namespace SgRevitAddin.Commands.PipeRouting
     /// Target-level picker for Re-Level Sprinklers. Lists every level (sorted by
     /// elevation) and remembers the last chosen level by name.
     /// </summary>
-    public class RelevelSprinklersDialog : Form
+    public class RelevelSprinklersDialog : DpiAwareForm
     {
         private const string MemKey = "RelevelSprinklers";
 

@@ -19,7 +19,7 @@ namespace SgRevitAddin.Commands.Hangers
     ///   nothing clips on small monitors. Buttons right-aligned at the
     ///   bottom.
     /// </summary>
-    public class ChangeTypeCodeDialog : Form
+    public class ChangeTypeCodeDialog : DpiAwareForm
     {
         // ── Results ──
         public string FromCode { get; private set; }

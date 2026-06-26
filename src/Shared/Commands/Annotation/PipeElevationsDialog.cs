@@ -14,7 +14,7 @@ namespace SgRevitAddin.Commands.Annotation
     ///   - AFF (Above Finished Floor) reference method and parameters
     ///   - Element type to process (pipes, fittings, or both)
     /// </summary>
-    public class PipeElevationsDialog : Form
+    public class PipeElevationsDialog : DpiAwareForm
     {
         // ── Results ──
         public string TOSMethod { get; private set; }       // "Deck", "Plane", "Z", "Level"

@@ -14,7 +14,7 @@ namespace SgRevitAddin.Commands.Hangers
     ///   - Framing sync direction (top or bottom)
     ///   - Whether to keep existing hanger types
     /// </summary>
-    public class SyncHangersSurfaceDialog : Form
+    public class SyncHangersSurfaceDialog : DpiAwareForm
     {
         // ── Results ──
         public string TypeCodeFloors { get; private set; }

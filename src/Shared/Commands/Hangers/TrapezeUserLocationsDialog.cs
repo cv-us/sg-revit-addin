@@ -21,7 +21,7 @@ namespace SgRevitAddin.Commands.Hangers
     ///
     /// No spacing controls — hanger locations are determined by detail lines.
     /// </summary>
-    public class TrapezeUserLocationsDialog : Form
+    public class TrapezeUserLocationsDialog : DpiAwareForm
     {
         // ── Results ──
         public string SelectedFamily { get; private set; }

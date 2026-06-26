@@ -7,7 +7,7 @@ namespace SgRevitAddin.Commands.Coordination
     /// Dialog for the Color Code Pipes command.
     /// Lets the user choose: By Size, By Type, or Reset.
     /// </summary>
-    public class ColorCodePipesDialog : Form
+    public class ColorCodePipesDialog : DpiAwareForm
     {
         public enum ColorMode { BySize, ByType, Reset }
         public ColorMode SelectedMode { get; private set; } = ColorMode.BySize;

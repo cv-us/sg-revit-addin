@@ -21,7 +21,7 @@ namespace SgRevitAddin.Commands.Hangers
     ///   - Max clash height (feet)
     ///   - Structural source (local or linked model)
     /// </summary>
-    public class TrapezeHangDialog : Form
+    public class TrapezeHangDialog : DpiAwareForm
     {
         // ── Results ──
         public string SelectedFamily { get; private set; }

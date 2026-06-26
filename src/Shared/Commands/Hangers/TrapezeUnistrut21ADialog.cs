@@ -16,7 +16,7 @@ namespace SgRevitAddin.Commands.Hangers
     ///   - Distance to unistrut default: "6"
     ///   - Extension distance default: "1"
     /// </summary>
-    public class TrapezeUnistrut21ADialog : Form
+    public class TrapezeUnistrut21ADialog : DpiAwareForm
     {
         // ── Results ──
         public string SelectedFamily { get; private set; }

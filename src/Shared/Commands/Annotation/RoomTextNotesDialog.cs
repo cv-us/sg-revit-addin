@@ -15,7 +15,7 @@ namespace SgRevitAddin.Commands.Annotation
     ///   - TextNoteType selection
     ///   - Whether to delete existing text notes of the selected type
     /// </summary>
-    public class RoomTextNotesDialog : Form
+    public class RoomTextNotesDialog : DpiAwareForm
     {
         // ── Results ──
         public int SelectedLinkIndex { get; private set; } = -1;

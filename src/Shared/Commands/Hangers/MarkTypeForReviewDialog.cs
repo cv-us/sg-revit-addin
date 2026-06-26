@@ -15,7 +15,7 @@ namespace SgRevitAddin.Commands.Hangers
     /// The "Add Markers" group is disabled when no hangers are selected;
     /// the "Delete Markers" group is disabled when no markers exist.
     /// </summary>
-    public class MarkTypeForReviewDialog : Form
+    public class MarkTypeForReviewDialog : DpiAwareForm
     {
         public enum MarkAction { None, Place, DeleteAll, DeleteByType }
 

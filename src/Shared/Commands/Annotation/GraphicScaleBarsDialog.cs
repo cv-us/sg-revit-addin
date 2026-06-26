@@ -13,7 +13,7 @@ namespace SgRevitAddin.Commands.Annotation
     ///   - Sheet selection mode (all sheets or specific sheets)
     ///   - Selected sheets (if specific)
     /// </summary>
-    public class GraphicScaleBarsDialog : Form
+    public class GraphicScaleBarsDialog : DpiAwareForm
     {
         // ── Results ──
         public bool ProcessAllSheets { get; private set; }

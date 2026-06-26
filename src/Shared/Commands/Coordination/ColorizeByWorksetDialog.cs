@@ -14,7 +14,7 @@ namespace SgRevitAddin.Commands.Coordination
     /// optional extra-categories toggle. Also exposes a "Clear All Coloring"
     /// action that reverts everything the command applied.
     /// </summary>
-    public class ColorizeByWorksetDialog : Form
+    public class ColorizeByWorksetDialog : DpiAwareForm
     {
         private const string MemKey = "ColorizeByWorkset";
 

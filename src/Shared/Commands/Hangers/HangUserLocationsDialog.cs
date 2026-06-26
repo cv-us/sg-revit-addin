@@ -14,7 +14,7 @@ namespace SgRevitAddin.Commands.Hangers
     ///   - Pipe type filter
     ///   - Hanger type code (Hydratec)
     /// </summary>
-    public class HangUserLocationsDialog : Form
+    public class HangUserLocationsDialog : DpiAwareForm
     {
         // ── Results ──
         public string SelectedFamily { get; private set; }

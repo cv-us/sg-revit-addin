@@ -9,7 +9,7 @@ namespace SgRevitAddin.Commands.Export
     /// Dialog for ImportASPipesCommand.
     /// Collects: level, pipe type, and piping system type to use when creating pipes.
     /// </summary>
-    public class ImportASPipesDialog : Form
+    public class ImportASPipesDialog : DpiAwareForm
     {
         public string SelectedLevelName    { get; private set; } = "";
         public string SelectedPipeTypeName { get; private set; } = "";

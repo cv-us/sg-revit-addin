@@ -16,7 +16,7 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
     ///   - Scope boxes to apply (checklist, enabled only in scope box mode)
     ///   - Number of copies (enabled only in blank copies mode)
     /// </summary>
-    public class CreateDependentViewsDialog : Form
+    public class CreateDependentViewsDialog : DpiAwareForm
     {
         // ── Results ──
         public List<string> SelectedFloorViewNames { get; private set; } = new List<string>();

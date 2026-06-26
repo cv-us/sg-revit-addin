@@ -10,7 +10,7 @@ namespace SgRevitAddin.Commands.Hangers
     /// Collects:
     ///   - Symbol direction preference (Forward slash, Backslash, or Default)
     /// </summary>
-    public class FormatHangerTicksDialog : Form
+    public class FormatHangerTicksDialog : DpiAwareForm
     {
         // ── Result ──
         /// <summary>

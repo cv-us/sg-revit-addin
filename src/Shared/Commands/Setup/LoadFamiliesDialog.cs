@@ -7,7 +7,7 @@ namespace SgRevitAddin.Commands.Setup
     /// <summary>
     /// Dialog for selecting a folder of .rfa family files to load.
     /// </summary>
-    public class LoadFamiliesDialog : Form
+    public class LoadFamiliesDialog : DpiAwareForm
     {
         public string FolderPath { get; private set; }
         public bool IncludeSubfolders { get; private set; }

@@ -16,7 +16,7 @@ namespace SgRevitAddin.Commands.Hangers
     ///   - Minimum pipe length to qualify
     ///   - C-Clamp visibility
     /// </summary>
-    public class HangDownstreamDialog : Form
+    public class HangDownstreamDialog : DpiAwareForm
     {
         // ── Results ──
         public string SelectedFamily { get; private set; }

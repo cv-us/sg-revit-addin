@@ -11,7 +11,7 @@ namespace SgRevitAddin.Commands.Hangers
     /// Collects:
     ///   - Reference plane selection (dropdown of named reference planes)
     /// </summary>
-    public class SyncHangersToRefPlaneDialog : Form
+    public class SyncHangersToRefPlaneDialog : DpiAwareForm
     {
         // ── Results ──
         public int SelectedRefPlaneIndex { get; private set; } = -1;

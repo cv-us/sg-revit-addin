@@ -9,7 +9,7 @@ namespace SgRevitAddin.Commands.Export
     /// Dialog for ImportASSprinklersCommand.
     /// Collects: level, sprinkler family type, and host floor offset.
     /// </summary>
-    public class ImportASSprinklersDialog : Form
+    public class ImportASSprinklersDialog : DpiAwareForm
     {
         public string SelectedLevelName        { get; private set; } = "";
         public string SelectedFamilyTypeName   { get; private set; } = "";

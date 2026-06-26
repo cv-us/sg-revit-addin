@@ -10,7 +10,7 @@ namespace SgRevitAddin.Commands.Hangers
     /// offers a single option (keep Y Grip in sync). Last-used option is
     /// remembered via <see cref="DialogMemory"/>.
     /// </summary>
-    public class RoundRodLengthsDialog : Form
+    public class RoundRodLengthsDialog : DpiAwareForm
     {
         private const string MemKey = "RoundRods";
 

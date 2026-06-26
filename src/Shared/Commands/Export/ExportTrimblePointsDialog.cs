@@ -17,7 +17,7 @@ namespace SgRevitAddin.Commands.Export
     ///   - Code/description value for the Code column
     ///   - Optional elevation datum offset
     /// </summary>
-    public class ExportTrimblePointsDialog : Form
+    public class ExportTrimblePointsDialog : DpiAwareForm
     {
         // ── Results ──
         public ScopeMode Scope { get; private set; } = ScopeMode.ActiveView;

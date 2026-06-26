@@ -12,7 +12,7 @@ namespace SgRevitAddin.Commands.Annotation
     ///   - Structural linked model selection
     ///   - Sleeve length in inches
     /// </summary>
-    public class PipeSleevesAtBeamsDialog : Form
+    public class PipeSleevesAtBeamsDialog : DpiAwareForm
     {
         // ── Results ──
         public int SelectedLinkIndex { get; private set; } = -1;

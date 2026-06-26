@@ -10,7 +10,7 @@ namespace SgRevitAddin.Commands.Hangers
     /// Shows info about the swap operation and lets the user choose whether
     /// to delete the original HydraCAD hangers after replacement.
     /// </summary>
-    public class SwapHydraCADHangersDialog : Form
+    public class SwapHydraCADHangersDialog : DpiAwareForm
     {
         // ── Results ──
         public bool DeleteOriginals { get; private set; } = true;

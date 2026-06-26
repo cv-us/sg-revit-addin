@@ -13,7 +13,7 @@ namespace SgRevitAddin.Commands.ModelCheck
     /// a "Clear Markers Only" action for wiping existing markers without
     /// running a check.
     /// </summary>
-    public class HangerGapCheckDialog : Form
+    public class HangerGapCheckDialog : DpiAwareForm
     {
         public enum ActionMode { Check, ClearOnly }
 

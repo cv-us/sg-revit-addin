@@ -16,7 +16,7 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
     ///   - Ceiling plan view template
     ///   - View name suffix: OVERALL, FOR REFERENCE ONLY, or custom text
     /// </summary>
-    public class CreatePlanViewsDialog : Form
+    public class CreatePlanViewsDialog : DpiAwareForm
     {
         // ── Results ──
         public enum ViewTypeOption { FloorAndCeiling, FloorOnly, CeilingOnly }

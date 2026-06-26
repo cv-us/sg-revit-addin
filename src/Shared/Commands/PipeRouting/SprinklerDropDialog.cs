@@ -11,7 +11,7 @@ namespace SgRevitAddin.Commands.PipeRouting
     /// spacing; numerics are inches with a units suffix; settings persist
     /// via <see cref="DialogMemory"/> and are restored on reopen.
     /// </summary>
-    public class SprinklerDropDialog : Form
+    public class SprinklerDropDialog : DpiAwareForm
     {
         private const string MemKey = "SprinklerDrops";
 

@@ -15,7 +15,7 @@ namespace SgRevitAddin.Commands.Annotation
     ///   - Wall type filtering (All, or filter by Interior/Exterior/Fire Rated/Structural)
     ///   - Selected wall types from filtered results
     /// </summary>
-    public class PipeSleevesAtWallsDialog : Form
+    public class PipeSleevesAtWallsDialog : DpiAwareForm
     {
         // ── Results ──
         public int SelectedLinkIndex { get; private set; } = -1;

@@ -16,7 +16,7 @@ namespace SgRevitAddin.Commands.Setup
     ///   - Whether to copy ALL or let user select specific levels/grids
     ///   - Whether to pin the imported elements
     /// </summary>
-    public class CopyLinkLevelsGridsDialog : Form
+    public class CopyLinkLevelsGridsDialog : DpiAwareForm
     {
         // ── Results ──
         public enum ImportMode { LevelsAndGrids, LevelsOnly, GridsOnly }
@@ -241,7 +241,7 @@ namespace SgRevitAddin.Commands.Setup
     /// Secondary dialog for selecting specific levels or grids to import.
     /// Shows a checklist and returns the selected names.
     /// </summary>
-    public class SelectItemsDialog : Form
+    public class SelectItemsDialog : DpiAwareForm
     {
         public List<string> SelectedItems { get; private set; } = new List<string>();
 

@@ -11,7 +11,7 @@ namespace SgRevitAddin.Commands.ModelCheck
     ///   - Sprinkler head height (inches)
     ///   - Annotation mode: All sprinklers or Exceeding only
     /// </summary>
-    public class DeflectorDistanceCheckDialog : Form
+    public class DeflectorDistanceCheckDialog : DpiAwareForm
     {
         /// <summary>Maximum allowable deflector distance in feet.</summary>
         public double MaxDistance { get; private set; } = 12.0 / 12.0; // 12 inches

@@ -14,7 +14,7 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
     ///   - Grid selection (for grid-based rotation)
     ///   - Manual angle (for manual entry)
     /// </summary>
-    public class RotateScopeBoxDialog : Form
+    public class RotateScopeBoxDialog : DpiAwareForm
     {
         // ── Results ──
         public enum AngleSourceOption { LocalGrid, LinkedGrid, ManualAngle }

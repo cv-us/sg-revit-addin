@@ -4,7 +4,7 @@ using System.Windows.Forms;
 
 namespace SgRevitAddin.Commands.Export
 {
-    public class PlaceTrimbleMarkersDialog : Form
+    public class PlaceTrimbleMarkersDialog : DpiAwareForm
     {
         public enum TrimbleMode { PlaceOnly, ClearAndPlace, ClearOnly }
 

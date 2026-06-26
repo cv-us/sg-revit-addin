@@ -13,7 +13,7 @@ namespace SgRevitAddin.Commands.Annotation
     ///   - Linked model for BBD reference (structural decks)
     ///   - Elevation display format (decimal feet vs feet-and-inches)
     /// </summary>
-    public class SleeveElevationsDialog : Form
+    public class SleeveElevationsDialog : DpiAwareForm
     {
         // ── Results ──
         public int AFFLinkIndex { get; private set; } = -1;

@@ -14,7 +14,7 @@ namespace SgRevitAddin.Commands.Hangers
     ///
     /// All inputs persist between runs via <see cref="DialogMemory"/>.
     /// </summary>
-    public class SyncHangersRaybounceDialog : Form
+    public class SyncHangersRaybounceDialog : DpiAwareForm
     {
         private const string MemKey = "SyncRaybounce";
 

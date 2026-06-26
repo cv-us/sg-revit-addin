@@ -14,7 +14,7 @@ namespace SgRevitAddin.Commands.Hangers
     ///   - Unistrut extension measured from: framing center or hanger rod
     ///   - Extension distance (inches)
     /// </summary>
-    public class TrapezeUnistrutDialog : Form
+    public class TrapezeUnistrutDialog : DpiAwareForm
     {
         // ── Results ──
         public string SelectedFamily { get; private set; }

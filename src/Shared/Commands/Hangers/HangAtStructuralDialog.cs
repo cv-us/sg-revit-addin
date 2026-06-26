@@ -9,7 +9,7 @@ namespace SgRevitAddin.Commands.Hangers
     /// <summary>
     /// Dialog for the Auto Hang at Structural Framing command.
     /// </summary>
-    public class HangAtStructuralDialog : Form
+    public class HangAtStructuralDialog : DpiAwareForm
     {
         // ── Results ──
         public string SelectedFamily { get; private set; }

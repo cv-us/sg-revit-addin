@@ -12,7 +12,7 @@ namespace SgRevitAddin.Commands.Annotation
     ///   - Linked model selection (containing floors/roofs)
     ///   - Sleeve length behavior (same as deck thickness, or extend 2" for wet areas)
     /// </summary>
-    public class PipeSleevesAtDecksDialog : Form
+    public class PipeSleevesAtDecksDialog : DpiAwareForm
     {
         // ── Results ──
         public int SelectedLinkIndex { get; private set; } = -1;
