@@ -6,6 +6,7 @@ using SgRevitAddin.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 
 namespace SgRevitAddin.Commands.Hangers
 {
@@ -47,6 +48,8 @@ namespace SgRevitAddin.Commands.Hangers
             public double Distance { get; set; }
             public BuiltInCategory HitCategory { get; set; }
             public string HitCategoryLabel { get; set; }
+            public string HitElementName { get; set; }
+            public string HitLinkName { get; set; }
         }
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
@@ -120,7 +123,9 @@ namespace SgRevitAddin.Commands.Hangers
                         HitPoint = hitResult.Value.hitPoint,
                         Distance = hitResult.Value.distance,
                         HitCategory = hitResult.Value.category,
-                        HitCategoryLabel = hitResult.Value.categoryLabel
+                        HitCategoryLabel = hitResult.Value.categoryLabel,
+                        HitElementName = hitResult.Value.elementName,
+                        HitLinkName = hitResult.Value.linkName
                     });
                 }
 
@@ -131,6 +136,50 @@ namespace SgRevitAddin.Commands.Hangers
                         "Make sure structural elements (floors, roofs, framing) exist above the hangers " +
                         "in the model or linked models.");
                     return Result.Failed;
+                }
+
+                // ── DIAGNOSTIC: report each hanger's hit, non-destructively ──
+                // Set the rods inside a transaction we DON'T commit (TransactionWrapper
+                // auto-rolls back), regenerate, read each hanger's actual rod-top, then
+                // discard. Lets us compare: hitZ (the raycast target) vs rodTopZ (where
+                // the family actually puts the rod top). If rodTopZ ≈ hitZ but the rod
+                // visually overshoots the deck, the HIT is above the underside (raycast /
+                // wrong face). If rodTopZ > hitZ, the FAMILY extends beyond Rod Length.
+                if (dlg.Diagnostic)
+                {
+                    var rep = new StringBuilder();
+                    rep.AppendLine($"RAYBOUNCE EARLY — DIAGNOSTIC   ({hits.Count} hits, {misses.Count} misses)   [units: decimal feet]");
+                    rep.AppendLine("hitZ = hangerZ + rodLen (the raycast target).  rodTopZ = actual top of the hanger after setting Rod Length.");
+                    rep.AppendLine("If rodTopZ ≈ hitZ but the rod still pokes past the deck → the HIT is above the underside (raycast/wrong face).");
+                    rep.AppendLine("If rodTopZ > hitZ → the hanger FAMILY extends beyond Rod Length.  Compare hitZ to the deck underside in a section.");
+                    rep.AppendLine(new string('-', 110));
+                    rep.AppendLine(string.Format("{0,-4}{1,9}{2,9}{3,10}{4,9}{5,10}{6,10}{7,8}  {8}",
+                        "#", "X", "Y", "hangerZ", "rodLen", "hitZ", "rodTopZ", "dTop", "hit (cat / element / link)"));
+
+                    using (var tw = new TransactionWrapper(doc, "Raybounce Diagnostic (rolled back)"))
+                    {
+                        foreach (var h in hits)
+                        {
+                            try { SetParameter(h.Hanger, "Rod Length", h.Distance); SetParameter(h.Hanger, "Y Grip", h.Distance); } catch { }
+                        }
+                        doc.Regenerate();
+
+                        int i = 1;
+                        foreach (var h in hits.OrderBy(x => x.HangerPoint.X).ThenBy(x => x.HangerPoint.Y))
+                        {
+                            double hz = h.HangerPoint.Z + h.Distance;
+                            double rodTop = double.NaN;
+                            try { var bb = h.Hanger.get_BoundingBox(null); if (bb != null) rodTop = bb.Max.Z; } catch { }
+                            double dTop = double.IsNaN(rodTop) ? double.NaN : rodTop - hz;
+                            rep.AppendLine(string.Format("{0,-4}{1,9:F3}{2,9:F3}{3,10:F3}{4,9:F3}{5,10:F3}{6,10:F3}{7,8:F3}  {8}",
+                                i++, h.HangerPoint.X, h.HangerPoint.Y, h.HangerPoint.Z, h.Distance, hz, rodTop, dTop,
+                                $"{h.HitCategoryLabel} / {h.HitElementName} / {h.HitLinkName}"));
+                        }
+                        // NOT committed → rolled back. Nothing changes.
+                    }
+
+                    ShowCopyableReport(rep.ToString());
+                    return Result.Succeeded;
                 }
 
                 int syncedCount = 0;
@@ -210,7 +259,7 @@ namespace SgRevitAddin.Commands.Hangers
             }
         }
 
-        private (XYZ hitPoint, double distance, BuiltInCategory category, string categoryLabel)?
+        private (XYZ hitPoint, double distance, BuiltInCategory category, string categoryLabel, string elementName, string linkName)?
             ShootRayUp(Document doc, View3D view3D, XYZ origin, ElementFilter categoryFilter)
         {
             try
@@ -231,10 +280,12 @@ namespace SgRevitAddin.Commands.Hangers
 
                 Element hitElement = null;
                 BuiltInCategory hitCat = BuiltInCategory.INVALID;
+                string linkName = "";
 
                 if (reference.LinkedElementId != ElementId.InvalidElementId)
                 {
                     RevitLinkInstance linkInst = doc.GetElement(reference.ElementId) as RevitLinkInstance;
+                    try { linkName = linkInst?.Name ?? ""; } catch { }
                     Document linkDoc = linkInst?.GetLinkDocument();
                     if (linkDoc != null)
                         hitElement = linkDoc.GetElement(reference.LinkedElementId);
@@ -248,11 +299,44 @@ namespace SgRevitAddin.Commands.Hangers
                     hitCat = (BuiltInCategory)hitElement.Category.Id.IntegerValue;
 
                 string label = GetCategoryLabel(hitCat);
-                return (hitPoint, distance, hitCat, label);
+                string elemName = "";
+                try { elemName = $"{hitElement?.Name} #{hitElement?.Id.IntegerValue}"; } catch { }
+                return (hitPoint, distance, hitCat, label, elemName, linkName);
             }
             catch
             {
                 return null;
+            }
+        }
+
+        /// <summary>Shows a copyable, monospaced text report (for the diagnostic).</summary>
+        private static void ShowCopyableReport(string text)
+        {
+            using (var f = new DpiAwareForm())
+            {
+                f.Text = "Raybounce Diagnostic — copy this and paste it back";
+                f.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
+                f.ClientSize = new System.Drawing.Size(900, 600);
+                var tb = new System.Windows.Forms.TextBox
+                {
+                    Multiline = true,
+                    ReadOnly = true,
+                    ScrollBars = System.Windows.Forms.ScrollBars.Both,
+                    WordWrap = false,
+                    Dock = System.Windows.Forms.DockStyle.Fill,
+                    Font = new System.Drawing.Font("Consolas", 9f),
+                    Text = text
+                };
+                var panel = new System.Windows.Forms.Panel { Dock = System.Windows.Forms.DockStyle.Bottom, Height = 44 };
+                var btnCopy = new System.Windows.Forms.Button { Text = "Copy to clipboard", Location = new System.Drawing.Point(10, 8), Size = new System.Drawing.Size(150, 28) };
+                btnCopy.Click += (s, ev) => { try { System.Windows.Forms.Clipboard.SetText(text); } catch { } };
+                var btnClose = new System.Windows.Forms.Button { Text = "Close", DialogResult = System.Windows.Forms.DialogResult.OK, Location = new System.Drawing.Point(170, 8), Size = new System.Drawing.Size(90, 28) };
+                panel.Controls.Add(btnCopy);
+                panel.Controls.Add(btnClose);
+                f.Controls.Add(tb);
+                f.Controls.Add(panel);
+                f.AcceptButton = btnClose;
+                f.ShowDialog();
             }
         }
 

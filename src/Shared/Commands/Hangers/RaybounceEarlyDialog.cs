@@ -22,6 +22,7 @@ namespace SgRevitAddin.Commands.Hangers
         public string TypeCodeRoofs { get; private set; } = "03";
         public string TypeCodeFraming { get; private set; } = "02";
         public bool KeepHangerTypes { get; private set; } = false;
+        public bool Diagnostic { get; private set; } = false;
 
         // ── Controls ──
         private TextBox txtFloors;
@@ -29,6 +30,7 @@ namespace SgRevitAddin.Commands.Hangers
         private TextBox txtRoofs;
         private TextBox txtFraming;
         private CheckBox chkKeepTypes;
+        private CheckBox chkDiagnostic;
 
         private readonly int _hangerCount;
 
@@ -53,7 +55,7 @@ namespace SgRevitAddin.Commands.Hangers
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(480, 380);
+            ClientSize = new Size(480, 412);
 
             int margin = 15;
             int y = margin;
@@ -142,6 +144,17 @@ namespace SgRevitAddin.Commands.Hangers
                 txtFraming.Enabled = !disabled;
             };
             Controls.Add(chkKeepTypes);
+            y += 26;
+
+            // ── Diagnostic ──
+            chkDiagnostic = new CheckBox
+            {
+                Text = "Diagnostic: report each hanger's hit (don't change rods)",
+                Location = new Point(margin + 5, y),
+                Size = new Size(440, 20),
+                Checked = Diagnostic
+            };
+            Controls.Add(chkDiagnostic);
             y += 30;
 
             // ── Buttons ──
@@ -174,6 +187,7 @@ namespace SgRevitAddin.Commands.Hangers
             TypeCodeRoofs = txtRoofs.Text.Trim();
             TypeCodeFraming = txtFraming.Text.Trim();
             KeepHangerTypes = chkKeepTypes.Checked;
+            Diagnostic = chkDiagnostic.Checked;
         }
     }
 }
