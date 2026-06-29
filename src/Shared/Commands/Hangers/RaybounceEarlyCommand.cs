@@ -315,6 +315,9 @@ namespace SgRevitAddin.Commands.Hangers
             using (var f = new DpiAwareForm())
             {
                 f.Text = "Raybounce Diagnostic — copy this and paste it back";
+                // DPI self-check: after the handle exists, DeviceDpi is final.
+                // 144 on a 150% machine = the DPI fix engaged; 96 = still broken.
+                f.Shown += (s, ev) => { try { f.Text = $"Raybounce Diagnostic — DeviceDpi={f.DeviceDpi} (expect 144 @150%) — copy & paste back"; } catch { } };
                 f.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
                 f.ClientSize = new System.Drawing.Size(900, 600);
                 var tb = new System.Windows.Forms.TextBox
