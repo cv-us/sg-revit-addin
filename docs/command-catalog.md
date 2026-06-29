@@ -63,6 +63,7 @@ Master list of all SG Revit Addin commands.
 - `PipeElevationsCommand` - Calculate and write TOS/AFF elevation parameters on pipes and fittings with 4 reference methods including raybounce, slope classification
 - `FlexDropLengthsCommand` - Insert flexible drop length tags on sprinkler heads with standard pipe lengths
 - `FlexDropLengthsAutoCommand` - Auto-size flex drop tags by reading each sprinkler's connected flex pipe length against Wet/Dry threshold tables; flags pipes exceeding the system max. Companion to FlexDropLengthsCommand ("Flex Drops Set")
+- `SprigTagsCommand` - Re-types the Hydratec vertical-pipe direction tag (UP/DN/RN) to a SPRIG tag on small sprigs. A candidate's host pipe must be vertical, ≤ a chosen size (default 1"), with a sprinkler reachable at its UPPER end (geometric sprig-vs-drop test that walks through a reducing coupling/nipple). Drops (sprinkler at the bottom) and riser nipples (no sprinkler) are left alone. Optional "only this tag family" guard. Works on selected tags/pipes, else scans the active view
 - `GraphicScaleBarsCommand` - Insert graphic scale bar annotations on sheets based on view scales
 - `SleeveElevationsCommand` - Calculate AFF/BBD elevations on pipe sleeves from linked floor and deck geometry
 - `PipeSleevesAtBeamsCommand` - Auto-place NFPA-sized pipe sleeves at pipe-beam intersections with linked structural model
@@ -76,7 +77,7 @@ Master list of all SG Revit Addin commands.
 
 ## ViewsAndSheets
 - `CreateDependentViewsCommand` - Create dependent views from parent floor/ceiling plans with scope box assignment or blank copies
-- `CreatePlanViewsCommand` - Create floor and/or ceiling plan views for selected levels with view templates and naming
+- `CreatePlanViewsCommand` - Create floor and/or ceiling plan views with view templates, a Sub-Discipline, and naming. Two source modes: from this model's selected levels, OR replicate selected plan views from another open/linked model (recreated on the matching level with your template + scope-box-by-name + sub-discipline)
 - `RotateScopeBoxCommand` - Rotate a scope box to match the angle of a local or linked grid line
 - `RemoveScopeBoxesCommand` - Delete selected scope boxes, or all scope boxes in the project if none are selected
 
@@ -84,7 +85,7 @@ Master list of all SG Revit Addin commands.
 - `LoadFamiliesCommand` - Load .rfa families from a folder into the project, skipping already-loaded families
 - `SetupGlobalParamsCommand` - Create all 86 configuration global parameters with defaults, fix legacy seismic Int64 types
 - `ClearPipeElevationParamsCommand` - Remove pipe elevation shared parameters (TOS/AFF) from the project with confirmation
-- `CopyLinkLevelsGridsCommand` - Copy levels and/or grids from a linked model with duplicate detection, grid type assignment, and pinning
+- `CopyLinkLevelsGridsCommand` - Copy levels and/or grids from a linked model with duplicate detection, grid type assignment, and pinning. Optional "Set up Copy/Monitor instead" checkbox skips the recreate-import and launches Revit's native Copy/Monitor tool (the API can't create monitor relationships)
 
 ## ModelCheck
 - `SprinklerClearanceCheckCommand` - Check upright sprinklers for NFPA 3" clearance violations from pipes and hangers with annotation placement

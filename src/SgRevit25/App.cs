@@ -211,6 +211,11 @@ namespace SgRevitAddin
                 MakeButton("InsertScaleBars", "Scale Bars", asmPath,
                     "SgRevitAddin.Commands.Annotation.GraphicScaleBarsCommand",
                     "scale-bars-16.png", "Insert graphic scale bar annotations on sheets based on view scales."));
+            // Large: re-type sprig tags
+            AddLargeButton(annotPanel, "SprigTags", "Sprig\nTags", asmPath,
+                "SgRevitAddin.Commands.Annotation.SprigTagsCommand",
+                "sprig-tags-32.png", "sprig-tags-16.png",
+                "Re-type the vertical-pipe direction tag (UP/DN/RN) to your SPRIG tag on small sprigs — vertical pipes at or below a chosen size (default 1\") with a sprinkler on top. Drops and riser nipples are left alone. Works on your selected tags, or scans the active view.");
             // Small stack: sleeve elevations + placement
             annotPanel.AddStackedItems(
                 MakeButton("InsertSleeveElevations", "Sleeve Elevations", asmPath,

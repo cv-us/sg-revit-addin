@@ -28,6 +28,12 @@ namespace SgRevitAddin.Commands.Setup
         public SelectionMode LevelSelectionMode { get; private set; } = SelectionMode.CopyAll;
         public SelectionMode GridSelectionMode { get; private set; } = SelectionMode.CopyAll;
         public bool PinElements { get; private set; } = true;
+        /// <summary>
+        /// When true, the command skips its own recreate-import and instead
+        /// launches Revit's native Copy/Monitor tool for the chosen link — the
+        /// only way to establish a real monitor relationship (the API can't).
+        /// </summary>
+        public bool LaunchCopyMonitor { get; private set; } = false;
 
         // ── Controls ──
         private ComboBox cboLink;
@@ -36,6 +42,7 @@ namespace SgRevitAddin.Commands.Setup
         private RadioButton rbAllLevels, rbSelectLevels;
         private RadioButton rbAllGrids, rbSelectGrids;
         private CheckBox chkPin;
+        private CheckBox chkMonitor;
 
         private readonly IList<string> _linkNames;
         private readonly IList<string> _gridTypeNames;
@@ -56,7 +63,7 @@ namespace SgRevitAddin.Commands.Setup
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(460, 430);
+            ClientSize = new Size(460, 415);
 
             int margin = 15;
             int y = margin;
@@ -199,7 +206,38 @@ namespace SgRevitAddin.Commands.Setup
                 Checked = true
             };
             Controls.Add(chkPin);
-            y += 30;
+            y += 26;
+
+            // ── Copy/Monitor (native tool) ──
+            chkMonitor = new CheckBox
+            {
+                Text = "Set up Copy/Monitor instead (uses Revit's native tool)",
+                Location = new Point(margin + 5, y),
+                Size = new Size(420, 20),
+                Checked = false
+            };
+            chkMonitor.CheckedChanged += (s, e) =>
+            {
+                bool mon = chkMonitor.Checked;
+                grpImport.Enabled = !mon;
+                grpGridType.Enabled = !mon;
+                grpLevels.Enabled = !mon;
+                grpGrids.Enabled = !mon;
+                chkPin.Enabled = !mon;
+            };
+            Controls.Add(chkMonitor);
+            y += 22;
+
+            var lblMonitor = new Label
+            {
+                Text = "Skips the import above and opens Revit's Copy/Monitor for the chosen link so the\n" +
+                       "copied levels/grids are monitored. You finish picking elements in Revit.",
+                Location = new Point(margin + 22, y),
+                Size = new Size(420, 32),
+                ForeColor = SystemColors.GrayText
+            };
+            Controls.Add(lblMonitor);
+            y += 40;
 
             // ── Buttons ──
             var btnOK = new Button
@@ -212,6 +250,10 @@ namespace SgRevitAddin.Commands.Setup
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
             Controls.Add(btnOK);
+
+            // Reflect the action: in monitor mode the button launches the native tool.
+            chkMonitor.CheckedChanged += (s, e) =>
+                btnOK.Text = chkMonitor.Checked ? "Copy/Monitor" : "Import";
 
             var btnCancel = new Button
             {
@@ -234,6 +276,7 @@ namespace SgRevitAddin.Commands.Setup
             LevelSelectionMode = rbAllLevels.Checked ? SelectionMode.CopyAll : SelectionMode.SelectSpecific;
             GridSelectionMode = rbAllGrids.Checked ? SelectionMode.CopyAll : SelectionMode.SelectSpecific;
             PinElements = chkPin.Checked;
+            LaunchCopyMonitor = chkMonitor.Checked;
         }
     }
 

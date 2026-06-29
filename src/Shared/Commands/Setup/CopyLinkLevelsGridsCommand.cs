@@ -65,6 +65,35 @@ namespace SgRevitAddin.Commands.Setup
                     if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK)
                         return Result.Cancelled;
 
+                    // ── Copy/Monitor: hand off to Revit's native tool ──
+                    // The public API can't create a monitor relationship, so when the
+                    // user wants monitoring we skip our own recreate-import and post
+                    // the native Copy/Monitor command. Revit then copies AND monitors.
+                    if (dialog.LaunchCopyMonitor)
+                    {
+                        RevitCommandId cmdId = null;
+                        try { cmdId = RevitCommandId.LookupPostableCommandId(PostableCommand.CopyMonitorSelectLink); }
+                        catch { cmdId = null; }
+
+                        if (cmdId == null || !commandData.Application.CanPostCommand(cmdId))
+                        {
+                            TaskDialog.Show("Copy / Monitor",
+                                "Revit's Copy/Monitor tool isn't available in the current context.\n\n" +
+                                "Open a plan or 3D view with the link visible and try again, or start " +
+                                "Copy/Monitor from the Collaborate tab manually.");
+                            return Result.Cancelled;
+                        }
+
+                        TaskDialog.Show("Copy / Monitor",
+                            "Launching Revit's Copy/Monitor tool.\n\n" +
+                            "Pick the linked model, then use Copy or Batch Copy to copy and monitor its " +
+                            "levels and grids. Revit establishes the monitoring relationship — the add-in " +
+                            "can't create that part directly.");
+
+                        commandData.Application.PostCommand(cmdId);
+                        return Result.Succeeded;
+                    }
+
                     // Find the selected link
                     int linkIndex = linkNames.IndexOf(dialog.SelectedLinkName);
                     if (linkIndex < 0) linkIndex = 0;

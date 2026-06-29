@@ -30,6 +30,7 @@ Copies levels and/or grids from a selected linked Revit model into the host docu
 | Level selection | Copy ALL | Copy all or select specific levels |
 | Grid selection | Copy ALL | Copy all or select specific grids |
 | Pin elements | Checked | Pin all imported levels and grids |
+| Set up Copy/Monitor instead | Unchecked | Skip the recreate-import and launch Revit's native Copy/Monitor tool for the chosen link (the only way to get a real monitor relationship) |
 
 ### Selection Dialogs (Secondary)
 
@@ -75,8 +76,21 @@ Reports:
 - Pin status
 - Grid type applied
 
+## Copy/Monitor (native tool hand-off)
+
+The Revit public API **cannot create a Copy/Monitor (coordination monitor) relationship** — it can only read (`GetMonitoredLinkElementIds`) or stop (`StopMonitoring`) one. So this command's normal path *recreates* levels/grids as plain, unmonitored elements.
+
+When you actually want the copied datums **monitored**, check **"Set up Copy/Monitor instead."** The command then skips its own import and posts Revit's native Copy/Monitor command (`PostableCommand.CopyMonitorSelectLink`). Revit's tool both copies AND monitors:
+
+1. The dialog's other import options are disabled (they don't apply in this mode).
+2. On OK, a short notice appears, then Revit drops you into Copy/Monitor's "select link" mode.
+3. Pick the link, then use **Copy** or **Batch Copy** to copy and monitor its levels/grids, and Finish.
+
+Because Revit does the copy here, don't also run the normal import on the same datums or you'll get duplicates.
+
 ## Notes
 
 - Grid curves are properly transformed from linked model coordinates to host model coordinates
 - Arc grids (curved grids) are supported in addition to linear grids
+- The Copy/Monitor checkbox is a hand-off to Revit's native tool — the add-in can't establish the monitor relationship itself
 
