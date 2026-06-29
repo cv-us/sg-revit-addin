@@ -78,12 +78,12 @@ namespace SgRevitAddin.Commands.Hangers
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(500, 510);
+            ClientSize = new Size(540, 510);
 
             int margin = 15;
             int y = margin;
 
-            const int GroupW = 470;
+            const int GroupW = 510;
 
             // ── Info ──
             var grpInfo = new GroupBox
@@ -194,12 +194,12 @@ namespace SgRevitAddin.Commands.Hangers
             y += 30;
 
             // ── Buttons (right-aligned with 10px gap) ──
-            // Form width 500, margin 15 → Cancel right edge at 485.
+            // Form width 540, margin 15 → Cancel right edge at 525.
             var btnCancel = new Button
             {
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
-                Location = new Point(410, y),
+                Location = new Point(450, y),
                 Size = new Size(75, 30)
             };
             CancelButton = btnCancel;
@@ -209,7 +209,7 @@ namespace SgRevitAddin.Commands.Hangers
             {
                 Text = "Sync Rod Lengths",
                 DialogResult = DialogResult.OK,
-                Location = new Point(290, y),
+                Location = new Point(330, y),
                 Size = new Size(110, 30)
             };
             btnOK.Click += BtnOK_Click;

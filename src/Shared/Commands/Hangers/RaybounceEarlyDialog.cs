@@ -100,7 +100,7 @@ namespace SgRevitAddin.Commands.Hangers
             {
                 Text = "Hanger Assembly Type Codes (Hydratec)",
                 Location = new Point(margin, y),
-                Size = new Size(450, 105)
+                Size = new Size(450, 124)
             };
 
             int lx = 10, tx = 150, tw = 60, rowH = 24;
@@ -125,7 +125,7 @@ namespace SgRevitAddin.Commands.Hangers
             grpTypes.Controls.Add(txtFraming);
 
             Controls.Add(grpTypes);
-            y += 115;
+            y += 134;
 
             // ── Keep Types ──
             chkKeepTypes = new CheckBox

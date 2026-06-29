@@ -87,7 +87,7 @@ namespace SgRevitAddin.Commands.Setup
             {
                 Text = "Import Options",
                 Location = new Point(margin, y),
-                Size = new Size(430, 80)
+                Size = new Size(430, 86)
             };
             rbBoth = new RadioButton
             {
@@ -148,7 +148,7 @@ namespace SgRevitAddin.Commands.Setup
             {
                 Text = "Levels",
                 Location = new Point(margin, y),
-                Size = new Size(210, 60)
+                Size = new Size(210, 64)
             };
             rbAllLevels = new RadioButton
             {
@@ -171,7 +171,7 @@ namespace SgRevitAddin.Commands.Setup
             {
                 Text = "Grids",
                 Location = new Point(margin + 220, y),
-                Size = new Size(210, 60)
+                Size = new Size(210, 64)
             };
             rbAllGrids = new RadioButton
             {

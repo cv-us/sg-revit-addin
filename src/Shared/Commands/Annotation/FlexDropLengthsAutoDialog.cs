@@ -116,7 +116,7 @@ namespace SgRevitAddin.Commands.Annotation
             {
                 Text = "Standard Length Thresholds",
                 Location = new Point(margin, y),
-                Size = new Size(490, 80)
+                Size = new Size(490, 92)
             };
             grpRef.Controls.Add(new Label
             {
@@ -124,11 +124,11 @@ namespace SgRevitAddin.Commands.Annotation
                        "Dry:   pipe <= 2'-8\" → 38\"   |   <= 3'-8\" → 50\"   |   <= 4'-4\" → 58\"\n\n" +
                        "Pipes exceeding the max length will be flagged for review.",
                 Location = new Point(10, 18),
-                Size = new Size(470, 55),
+                Size = new Size(470, 66),
                 ForeColor = SystemColors.GrayText
             });
             Controls.Add(grpRef);
-            y += 85;
+            y += 97;
 
             // ── Tag Orientation ──
             var grpOrient = new GroupBox

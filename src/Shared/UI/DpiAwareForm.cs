@@ -94,6 +94,14 @@ namespace SgRevitAddin
             }
             AutoScroll = true;
 
+            // (2b) Auto-flex on resize: widen wide controls (combos, grids, lists,
+            //      full-width groups/labels/text) and pin buttons to the bottom
+            //      corner. Widen-only + bottom-anchored buttons is overlap-safe in
+            //      these vertically-stacked layouts (no control grows DOWN into the
+            //      one below it). Anchors only affect resize — the default view is
+            //      unchanged.
+            if (AllowResize) ApplyAutoFlex(this);
+
             // (3) MinimumSize floor (scaled px) so content can't be squeezed away.
             if (MinimumSize.Width <= 0 || MinimumSize.Height <= 0)
                 MinimumSize = new Size((int)Math.Round(Width * 0.6f), (int)Math.Round(Height * 0.6f));
@@ -113,6 +121,39 @@ namespace SgRevitAddin
                 }
             }
             _layoutInit = true;
+        }
+
+        /// <summary>
+        /// Recursively set Anchors so resizing the dialog flexes the content:
+        /// wide controls (≥55% of their parent's width) widen with the window, and
+        /// buttons pin to the bottom (and the nearer horizontal edge). Widen-only
+        /// keeps vertically-stacked sections from overlapping on resize.
+        /// </summary>
+        private void ApplyAutoFlex(Control parent)
+        {
+            int pw = parent.ClientSize.Width;
+            if (pw <= 0) return;
+            foreach (Control c in parent.Controls)
+            {
+                if (c is Button btn)
+                {
+                    bool right = (btn.Left + btn.Width / 2) * 2 >= pw;
+                    btn.Anchor = AnchorStyles.Bottom | (right ? AnchorStyles.Right : AnchorStyles.Left);
+                    continue;
+                }
+
+                bool wide = c.Width >= pw * 0.55;
+                if (wide && (c is GroupBox || c is Panel || c is ComboBox || c is TextBox ||
+                             c is DataGridView || c is ListBox || c is ListView || c is TreeView ||
+                             c is Label || c is CheckBox || c is RadioButton ||
+                             c is FlowLayoutPanel || c is TableLayoutPanel))
+                {
+                    c.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+                }
+
+                if (c is GroupBox || c is Panel || c is TableLayoutPanel || c is FlowLayoutPanel)
+                    ApplyAutoFlex(c); // widen wide children inside containers too
+            }
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)

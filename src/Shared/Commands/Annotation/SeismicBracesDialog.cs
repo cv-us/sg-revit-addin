@@ -55,7 +55,7 @@ namespace SgRevitAddin.Commands.Annotation
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(500, 590);
+            ClientSize = new Size(500, 614);
             AutoScroll = true;
 
             int margin = 12;
@@ -140,7 +140,7 @@ namespace SgRevitAddin.Commands.Annotation
             {
                 Text = "Longitudinal Brace Settings",
                 Location = new Point(margin, y),
-                Size = new Size(474, 120)
+                Size = new Size(474, 144)
             };
 
             grpLongitudinal.Controls.Add(new Label { Text = "Family:", Location = new Point(10, 22), Size = new Size(50, 18) });
@@ -173,14 +173,14 @@ namespace SgRevitAddin.Commands.Annotation
                 grpLongitudinal.Controls.Add(new Label
                 {
                     Text = "No longitudinal seismic brace families found (name must contain \"-SeismicBrace\" and \"Longitudinal\")",
-                    Location = new Point(10, 100),
-                    Size = new Size(450, 18),
+                    Location = new Point(10, 104),
+                    Size = new Size(456, 34),
                     ForeColor = Color.Red
                 });
             }
 
             Controls.Add(grpLongitudinal);
-            y += 128;
+            y += 152;
 
             // ── Linked Model ──
             var grpLink = new GroupBox

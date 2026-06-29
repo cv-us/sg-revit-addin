@@ -33,7 +33,7 @@ namespace SgRevitAddin.Commands.Hangers
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(480, 290);
+            ClientSize = new Size(480, 326);
 
             int margin = 15;
             int y = margin;
@@ -43,7 +43,7 @@ namespace SgRevitAddin.Commands.Hangers
             {
                 Text = "About",
                 Location = new Point(margin, y),
-                Size = new Size(450, 85)
+                Size = new Size(450, 120)
             };
             grpInfo.Controls.Add(new Label
             {
@@ -52,10 +52,10 @@ namespace SgRevitAddin.Commands.Hangers
                        "Parameters transferred: Nominal Diameter, Rod Length, Type Code (Hydratec),\n" +
                        "HCAD-System, Elevation from Level, Additional Stocklist Information.",
                 Location = new Point(10, 18),
-                Size = new Size(430, 60)
+                Size = new Size(430, 96)
             });
             Controls.Add(grpInfo);
-            y += 95;
+            y += 130;
 
             // ── Summary ──
             var grpSummary = new GroupBox
