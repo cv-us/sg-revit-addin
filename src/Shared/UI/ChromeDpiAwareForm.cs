@@ -7,34 +7,31 @@ namespace SgRevitAddin
 {
     /// <summary>
     /// A <see cref="DpiAwareForm"/> with a custom SG-blue title bar instead of the
-    /// OS caption. Borderless (FormBorderStyle.None); the top strip is an
+    /// OS caption. Borderless (FormBorderStyle.None); the top strip is a docked
     /// <see cref="HeaderColor"/> band with the dialog title in white and a close
-    /// (✕) button, and the band is draggable to move the window.
+    /// (✕) button, draggable to move the window. Content goes in <see cref="Content"/>
+    /// (a docked-fill panel below the band).
     ///
-    /// Inherits all of DpiAwareForm's PMv2 + auto-scale behavior unchanged (it does
-    /// NOT override CreateHandle / ShowDialog). Fixed-size (AllowResize=false) to
-    /// keep the custom chrome simple and robust.
-    ///
-    /// DERIVED DIALOGS: add content directly to the form, but start the vertical
-    /// layout at <see cref="HeaderHeight"/> + margin so it clears the title band,
-    /// and size ClientSize.Height to include the header. Everything is authored in
-    /// logical 96-dpi px; the base auto-scale pass scales it, and the header band /
-    /// fonts are re-stamped to the exact device size in OnHandleCreated.
+    /// The header is Dock=Top so it always spans the full client width (no gap on
+    /// the right). Inherits DpiAwareForm's PMv2 + auto-scale behavior unchanged.
+    /// Fixed-size to keep the custom chrome simple.
     /// </summary>
     public class ChromeDpiAwareForm : DpiAwareForm
     {
         /// <summary>Logical (96-dpi) height of the blue title band.</summary>
         protected const int HeaderHeight = 30;
 
-        /// <summary>SG brand blue — the same #085990 the ribbon accent uses
-        /// (RibbonStyling.AccentColor is a WPF color, so we restate it here as a
-        /// System.Drawing color).</summary>
+        /// <summary>SG brand blue — the same #085990 the ribbon accent uses.</summary>
         protected static readonly Color HeaderColor = Color.FromArgb(0x08, 0x59, 0x90);
         private static readonly Color HeaderHover = Color.FromArgb(0x2A, 0x74, 0xAD);
 
         private Panel _header;
         private Label _titleLabel;
         private Button _closeBtn;
+        private Panel _content;
+
+        /// <summary>Add dialog content here — it fills the area below the title band.</summary>
+        protected Panel Content => _content;
 
         protected override bool UseOsBorder => false;
 
@@ -45,21 +42,30 @@ namespace SgRevitAddin
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.CenterScreen;
 
-            _header = new Panel { BackColor = HeaderColor, Location = new Point(0, 0) };
+            // Content fills below the header. Add it FIRST so the Top-docked header
+            // claims the top strip and Content fills the remainder.
+            _content = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+            Controls.Add(_content);
+
+            _header = new Panel { Dock = DockStyle.Top, Height = HeaderHeight, BackColor = HeaderColor };
+            _header.MouseDown += Header_MouseDown;
 
             _titleLabel = new Label
             {
-                AutoSize = false,
+                Dock = DockStyle.Fill,
                 Text = Text,
                 ForeColor = Color.White,
                 BackColor = HeaderColor,
                 Font = new Font("Segoe UI", 10f, FontStyle.Bold),
-                TextAlign = ContentAlignment.MiddleLeft
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(10, 0, 0, 0)
             };
             _titleLabel.MouseDown += Header_MouseDown;
 
             _closeBtn = new Button
             {
+                Dock = DockStyle.Right,
+                Width = HeaderHeight,
                 Text = "✕",
                 ForeColor = Color.White,
                 BackColor = HeaderColor,
@@ -71,33 +77,26 @@ namespace SgRevitAddin
             _closeBtn.FlatAppearance.MouseOverBackColor = HeaderHover;
             _closeBtn.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
 
-            _header.MouseDown += Header_MouseDown;
+            // Fill added first, Right (close) added last so it claims the right edge.
             _header.Controls.Add(_titleLabel);
             _header.Controls.Add(_closeBtn);
-            Controls.Add(_header);
+            Controls.Add(_header);   // Top docked after Content
 
             TextChanged += (s, e) => { if (_titleLabel != null) _titleLabel.Text = Text; };
         }
 
         protected override void OnHandleCreated(EventArgs e)
         {
-            base.OnHandleCreated(e);   // PMv2 auto-scale + (no) autoflex
+            base.OnHandleCreated(e);   // PMv2 auto-scale
 
-            // Re-stamp the header band + fonts to the exact device size. Setting
-            // absolute values is idempotent whether or not auto-scale already
-            // touched them.
+            // Re-stamp band height + fonts to the exact device size (docking handles width).
             float f = DeviceDpi / 96f;
             int hh = (int)Math.Round(HeaderHeight * f);
-
-            _header.Bounds = new Rectangle(0, 0, ClientSize.Width, hh);
-            _closeBtn.Bounds = new Rectangle(_header.Width - hh, 0, hh, hh);
-            _titleLabel.Bounds = new Rectangle((int)Math.Round(10 * f), 0,
-                Math.Max(0, _header.Width - hh - (int)Math.Round(14 * f)), hh);
-
+            _header.Height = hh;
+            _closeBtn.Width = hh;
             _titleLabel.Font = new Font(_titleLabel.Font.FontFamily, 13f * f, FontStyle.Bold, GraphicsUnit.Pixel);
             _closeBtn.Font = new Font(_closeBtn.Font.FontFamily, 12f * f, FontStyle.Regular, GraphicsUnit.Pixel);
             _titleLabel.Text = Text;
-            _header.BringToFront();
         }
 
         // ── Drag the header to move the window (OS-driven move loop) ──

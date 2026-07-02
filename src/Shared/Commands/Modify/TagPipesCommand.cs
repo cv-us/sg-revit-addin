@@ -11,14 +11,11 @@ namespace SgRevitAddin.Commands.Modify
 {
     /// <summary>
     /// "Tag Pipes" — places pipe length/stocklist tags, recreating HydraCAD's Tag
-    /// Pipes workflow with our own loaded tag families.
-    ///
-    /// Each of the four tag types (Center-to-Center, Cut, Dynamic, Stocklisting)
-    /// just places the family the user picked for it — the family's own label reads
-    /// whatever parameter it's built on (we don't compute lengths). Selection is
-    /// either the user's pre-selected pipes or a System-Walker sweep of the whole
-    /// connected piping network from the selected seed pipe(s). Drops (vertical
-    /// pipes to a head) can be excluded, included, or tagged exclusively.
+    /// Pipes workflow with our own loaded tag families. Each tag type places the
+    /// family AND type the user picked; the family's label reads whatever parameter
+    /// it's built on (we don't compute lengths). Stocklisting splits into a "line"
+    /// tag and a "main" tag chosen by the pipe's name. Selection is either the
+    /// user's pre-selected pipes or a System-Walker sweep of the connected network.
     ///
     /// Invoked from the Modify-tab SG button via <see cref="DeferredActionHandler"/>.
     /// </summary>
@@ -26,14 +23,13 @@ namespace SgRevitAddin.Commands.Modify
     [Regeneration(RegenerationOption.Manual)]
     public class TagPipesCommand : IExternalCommand
     {
-        // HydraCAD length parameters (for the Reset options). Read defensively —
-        // if a project doesn't have them, those options simply no-op.
         private const string PCenterCenter = "Length-Center_Center (Hydratec)";
         private const string PCutLength = "Length-Cut_Length (Hydratec)";
         private const string PAdjustment = "Length-Adjustment (Hydratec)";
 
         private const double VerticalTolDeg = 30.0;
         private const int MaxWalk = 20000;
+        private static readonly StringComparison OIC = StringComparison.OrdinalIgnoreCase;
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
@@ -48,96 +44,96 @@ namespace SgRevitAddin.Commands.Modify
             Document doc = uidoc.Document;
             View view = doc.ActiveView;
 
-            // Loaded pipe-tag families for the dropdowns.
-            var pipeTagFamilies = new FilteredElementCollector(doc)
-                .OfClass(typeof(FamilySymbol))
-                .OfCategory(BuiltInCategory.OST_PipeTags)
-                .Cast<FamilySymbol>()
-                .Select(fs => fs.Family?.Name)
-                .Where(n => !string.IsNullOrEmpty(n))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            // Loaded pipe-tag families → names + type lists for the dropdowns.
+            var allSyms = new FilteredElementCollector(doc)
+                .OfClass(typeof(FamilySymbol)).OfCategory(BuiltInCategory.OST_PipeTags)
+                .Cast<FamilySymbol>().ToList();
 
-            if (pipeTagFamilies.Count == 0)
+            var familyToTypes = new Dictionary<string, IList<string>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var fs in allSyms)
+            {
+                string fam = fs.Family?.Name;
+                if (string.IsNullOrEmpty(fam)) continue;
+                if (!familyToTypes.TryGetValue(fam, out var list)) { list = new List<string>(); familyToTypes[fam] = list; }
+                list.Add(fs.Name);
+            }
+            foreach (var kv in familyToTypes) ((List<string>)kv.Value).Sort(StringComparer.OrdinalIgnoreCase);
+            var familyNames = familyToTypes.Keys.OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+
+            if (familyNames.Count == 0)
             {
                 TaskDialog.Show("Tag Pipes",
-                    "No Pipe Tag families are loaded in this project.\n\n" +
-                    "Load your pipe tag families first, then run Tag Pipes.");
+                    "No Pipe Tag families are loaded in this project.\n\nLoad your pipe tag families first.");
                 return;
             }
 
             TagPipesDialog dlg;
-            using (dlg = new TagPipesDialog(pipeTagFamilies))
+            using (dlg = new TagPipesDialog(familyNames, familyToTypes))
             {
                 if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
             }
 
-            // ── Seed pipes = current selection ──
-            var seeds = uidoc.Selection.GetElementIds()
-                .Select(id => doc.GetElement(id) as Pipe)
-                .Where(p => p != null)
-                .ToList();
+            bool stock = dlg.TagTypeIndex == 3;
 
+            // Resolve the tag symbols we'll place.
+            FamilySymbol mainSym = stock ? null : ResolveTagSymbol(allSyms, dlg.SelFamily, dlg.SelType, dlg.Transparent);
+            FamilySymbol lineSym = stock ? ResolveTagSymbol(allSyms, dlg.StockLineFamily, dlg.StockLineType, dlg.Transparent) : null;
+            FamilySymbol mainStockSym = stock ? ResolveTagSymbol(allSyms, dlg.StockMainFamily, dlg.StockMainType, dlg.Transparent) : null;
+            FamilySymbol dropSym = ResolveTagSymbol(allSyms, dlg.DropFamily, dlg.DropType, dlg.Transparent);
+
+            if (!stock && mainSym == null)
+            { TaskDialog.Show("Tag Pipes", $"Tag family/type \"{dlg.SelFamily} : {dlg.SelType}\" not found."); return; }
+            if (stock && lineSym == null && mainStockSym == null)
+            { TaskDialog.Show("Tag Pipes", "No Stocklisting line/main tag family/type found."); return; }
+
+            // Seed pipes = current selection.
+            var seeds = uidoc.Selection.GetElementIds()
+                .Select(id => doc.GetElement(id) as Pipe).Where(p => p != null).ToList();
             if (seeds.Count == 0)
             {
                 TaskDialog.Show("Tag Pipes",
-                    dlg.UseSystemWalker
-                        ? "Select one pipe to start the System Walker, then run Tag Pipes."
-                        : "Select the pipes to tag, then run Tag Pipes.");
+                    dlg.UseSystemWalker ? "Select one pipe to start the System Walker, then run Tag Pipes."
+                                        : "Select the pipes to tag, then run Tag Pipes.");
                 return;
             }
 
-            // ── Targets: walk the network, or use the selection ──
-            List<Pipe> targets = dlg.UseSystemWalker ? WalkNetwork(seeds) : seeds;
-
-            // ── Drops filter ──
-            if (dlg.TagDropsOnly)
-                targets = targets.Where(p => IsDrop(p)).ToList();
-            else if (!dlg.IncludeDrops)
-                targets = targets.Where(p => !IsDrop(p)).ToList();
-            // else IncludeDrops → keep everything
-
+            var targets = (dlg.UseSystemWalker ? WalkNetwork(seeds) : seeds);
+            if (dlg.TagDropsOnly) targets = targets.Where(IsDrop).ToList();
+            else if (!dlg.IncludeDrops) targets = targets.Where(p => !IsDrop(p)).ToList();
             targets = targets.GroupBy(p => p.Id).Select(g => g.First()).ToList();
             if (targets.Count == 0)
-            {
-                TaskDialog.Show("Tag Pipes", "No pipes matched (check the Drops options).");
-                return;
-            }
+            { TaskDialog.Show("Tag Pipes", "No pipes matched (check the Drops options)."); return; }
 
-            // ── Resolve tag symbols ──
-            FamilySymbol mainSym = ResolveTagSymbol(doc, dlg.TagFamily, dlg.Transparent);
-            if (mainSym == null)
-            {
-                TaskDialog.Show("Tag Pipes",
-                    $"Tag family \"{dlg.TagFamily}\" not found in this project.");
-                return;
-            }
-            FamilySymbol dropSym = string.IsNullOrEmpty(dlg.DropFamily)
-                ? mainSym
-                : (ResolveTagSymbol(doc, dlg.DropFamily, dlg.Transparent) ?? mainSym);
-
-            int tagged = 0, skippedDup = 0, resetCount = 0, homogenized = 0;
+            int tagged = 0, skDup = 0, skNoName = 0, skNoFam = 0, resetCount = 0, homogenized = 0;
 
             using (var tw = new TransactionWrapper(doc, "Tag Pipes"))
             {
-                if (!mainSym.IsActive) mainSym.Activate();
-                if (!dropSym.IsActive) dropSym.Activate();
+                foreach (var s in new[] { mainSym, lineSym, mainStockSym, dropSym })
+                    if (s != null && !s.IsActive) s.Activate();
 
-                // Pipes already carrying a tag of the target family (skip duplicates).
-                var alreadyTagged = PipesTaggedWithFamily(doc, view, mainSym.Family.Name);
-
+                var taggedByFam = PipesTaggedByFamily(doc, view);   // family → pipe ids already tagged
                 var placed = new List<IndependentTag>();
+
                 foreach (var pipe in targets)
                 {
-                    bool drop = (dlg.TagDropsOnly || dlg.IncludeDrops) && IsDrop(pipe);
-                    FamilySymbol sym = drop ? dropSym : mainSym;
+                    bool isDrop = (dlg.TagDropsOnly || dlg.IncludeDrops) && IsDrop(pipe);
+                    FamilySymbol sym;
+                    if (isDrop && dropSym != null) sym = dropSym;
+                    else if (stock)
+                    {
+                        if (NameContains(pipe, "main")) sym = mainStockSym;
+                        else if (NameContains(pipe, "line")) sym = lineSym;
+                        else { skNoName++; continue; }   // neither "line" nor "main"
+                    }
+                    else sym = mainSym;
 
-                    if (alreadyTagged.Contains(pipe.Id)) { skippedDup++; continue; }
+                    if (sym == null) { skNoFam++; continue; }
+
+                    string fam = sym.Family?.Name ?? "";
+                    if (taggedByFam.TryGetValue(fam, out var set) && set.Contains(pipe.Id)) { skDup++; continue; }
 
                     XYZ mid = MidPoint(pipe);
                     if (mid == null) continue;
-
                     try
                     {
                         var tag = IndependentTag.Create(doc, view.Id, new Reference(pipe),
@@ -146,23 +142,24 @@ namespace SgRevitAddin.Commands.Modify
                         {
                             tag.ChangeTypeId(sym.Id);
                             placed.Add(tag);
-                            alreadyTagged.Add(pipe.Id);
+                            if (!taggedByFam.ContainsKey(fam)) taggedByFam[fam] = new HashSet<ElementId>();
+                            taggedByFam[fam].Add(pipe.Id);
                             tagged++;
                         }
                     }
-                    catch { /* view can't tag this pipe — skip */ }
+                    catch { }
 
                     if (dlg.ResetTakeOut && ResetTakeOut(pipe)) resetCount++;
                     else if (dlg.ResetCut && ResetCut(pipe)) resetCount++;
                 }
 
-                // Homogenize: retype every existing pipe tag in the view to the chosen type.
                 if (dlg.Homogenize)
-                    homogenized = HomogenizePipeTags(doc, view, mainSym);
+                {
+                    FamilySymbol homoTarget = mainSym ?? lineSym ?? mainStockSym;
+                    if (homoTarget != null) homogenized = HomogenizePipeTags(doc, view, homoTarget);
+                }
 
-                // Cleanup: first-pass anti-overlap on the placed tags.
-                if (dlg.RunCleanup && placed.Count > 1)
-                    DecollideTags(doc, view, placed);
+                if (dlg.RunCleanup && placed.Count > 1) DecollideTags(doc, view, placed);
 
                 tw.Commit();
             }
@@ -171,11 +168,25 @@ namespace SgRevitAddin.Commands.Modify
                             $"Tags placed: {tagged}\n" +
                             $"Pipes considered: {targets.Count}" +
                             (dlg.UseSystemWalker ? "  (System Walker)" : "  (User Selection)") + "\n";
-            if (skippedDup > 0) report += $"Skipped (already tagged): {skippedDup}\n";
+            if (skDup > 0) report += $"Skipped (already tagged): {skDup}\n";
+            if (skNoName > 0) report += $"Skipped (name has neither 'line' nor 'main'): {skNoName}\n";
+            if (skNoFam > 0) report += $"Skipped (no tag family/type resolved): {skNoFam}\n";
             if (dlg.Homogenize) report += $"Existing pipe tags re-typed: {homogenized}\n";
             if (dlg.ResetTakeOut || dlg.ResetCut) report += $"Lengths reset: {resetCount}\n";
             if (dlg.RunCleanup) report += "Cleanup: overlap pass run on new tags\n";
             TaskDialog.Show("Tag Pipes", report);
+        }
+
+        // ── Pipe-name classification for stocklisting ──
+        private static bool NameContains(Pipe p, string token)
+        {
+            try
+            {
+                if ((p.Name ?? "").IndexOf(token, OIC) >= 0) return true;
+                string tn = p.Document.GetElement(p.GetTypeId())?.Name ?? "";
+                return tn.IndexOf(token, OIC) >= 0;
+            }
+            catch { return false; }
         }
 
         // ══════════════════════════════════════════════════════════════
@@ -187,7 +198,7 @@ namespace SgRevitAddin.Commands.Modify
             var found = new Dictionary<ElementId, Pipe>();
             var visited = new HashSet<ElementId>();
             var queue = new Queue<Element>();
-            foreach (var s in seeds) { queue.Enqueue(s); }
+            foreach (var s in seeds) queue.Enqueue(s);
 
             while (queue.Count > 0 && found.Count < MaxWalk)
             {
@@ -207,9 +218,7 @@ namespace SgRevitAddin.Commands.Modify
                         Element owner = other.Owner;
                         if (owner == null || visited.Contains(owner.Id)) continue;
                         int cat = owner.Category?.Id.IntegerValue ?? 0;
-                        // Traverse through pipes, flex pipes and pipe fittings only.
-                        if (owner is Pipe || owner is FlexPipe ||
-                            cat == (int)BuiltInCategory.OST_PipeFitting)
+                        if (owner is Pipe || owner is FlexPipe || cat == (int)BuiltInCategory.OST_PipeFitting)
                             queue.Enqueue(owner);
                     }
                 }
@@ -224,7 +233,6 @@ namespace SgRevitAddin.Commands.Modify
         private static bool IsDrop(Pipe pipe)
         {
             if (!IsVertical(pipe)) return false;
-            // Vertical AND a sprinkler reachable within 2 hops of either end.
             var cm = pipe.ConnectorManager?.Connectors;
             if (cm == null) return false;
             foreach (Connector c in cm.Cast<Connector>().Where(c => c.ConnectorType == ConnectorType.End))
@@ -277,44 +285,50 @@ namespace SgRevitAddin.Commands.Modify
         //  TAG SYMBOL RESOLUTION / EXISTING TAGS
         // ══════════════════════════════════════════════════════════════
 
-        private static FamilySymbol ResolveTagSymbol(Document doc, string familyName, bool transparent)
+        private static FamilySymbol ResolveTagSymbol(List<FamilySymbol> syms, string familyName, string typeName, bool transparent)
         {
             if (string.IsNullOrEmpty(familyName)) return null;
-            var syms = new FilteredElementCollector(doc)
-                .OfClass(typeof(FamilySymbol))
-                .OfCategory(BuiltInCategory.OST_PipeTags)
-                .Cast<FamilySymbol>()
-                .ToList();
 
-            if (transparent)
+            string fam = familyName;
+            if (transparent && !familyName.EndsWith("-T", OIC))
             {
-                // HydraCAD's transparent variant is a "-T" family. Prefer it if present.
-                var t = syms.FirstOrDefault(s =>
-                    string.Equals(s.Family?.Name, familyName + "-T", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(s.Family?.Name, familyName + " -T", StringComparison.OrdinalIgnoreCase));
-                if (t != null) return t;
+                string tName = familyName + "-T";
+                if (syms.Any(s => string.Equals(s.Family?.Name, tName, OIC))) fam = tName;
             }
-            return syms.FirstOrDefault(s =>
-                string.Equals(s.Family?.Name, familyName, StringComparison.OrdinalIgnoreCase));
+
+            var inFam = syms.Where(s => string.Equals(s.Family?.Name, fam, OIC)).ToList();
+            if (inFam.Count == 0) inFam = syms.Where(s => string.Equals(s.Family?.Name, familyName, OIC)).ToList();
+            if (inFam.Count == 0) return null;
+
+            if (!string.IsNullOrEmpty(typeName))
+            {
+                var m = inFam.FirstOrDefault(s => string.Equals(s.Name, typeName, OIC));
+                if (m != null) return m;
+            }
+            return inFam.First();
         }
 
-        private static HashSet<ElementId> PipesTaggedWithFamily(Document doc, View view, string familyName)
+        private static Dictionary<string, HashSet<ElementId>> PipesTaggedByFamily(Document doc, View view)
         {
-            var set = new HashSet<ElementId>();
+            var map = new Dictionary<string, HashSet<ElementId>>();
             foreach (var tag in new FilteredElementCollector(doc, view.Id)
                          .OfClass(typeof(IndependentTag)).Cast<IndependentTag>())
             {
                 var sym = doc.GetElement(tag.GetTypeId()) as FamilySymbol;
-                if (sym?.Family?.Name != familyName) continue;
+                string fam = sym?.Family?.Name;
+                if (string.IsNullOrEmpty(fam)) continue;
                 try
                 {
                     foreach (var lid in tag.GetTaggedElementIds())
-                        if (lid.HostElementId != ElementId.InvalidElementId)
-                            set.Add(lid.HostElementId);
+                    {
+                        if (lid.HostElementId == ElementId.InvalidElementId) continue;
+                        if (!map.TryGetValue(fam, out var set)) { set = new HashSet<ElementId>(); map[fam] = set; }
+                        set.Add(lid.HostElementId);
+                    }
                 }
                 catch { }
             }
-            return set;
+            return map;
         }
 
         private static int HomogenizePipeTags(Document doc, View view, FamilySymbol target)
@@ -323,7 +337,6 @@ namespace SgRevitAddin.Commands.Modify
             foreach (var tag in new FilteredElementCollector(doc, view.Id)
                          .OfClass(typeof(IndependentTag)).Cast<IndependentTag>().ToList())
             {
-                // Only re-type tags whose host is a pipe.
                 bool hostsPipe = false;
                 try
                 {
@@ -332,15 +345,14 @@ namespace SgRevitAddin.Commands.Modify
                             doc.GetElement(lid.HostElementId) is Pipe) { hostsPipe = true; break; }
                 }
                 catch { }
-                if (!hostsPipe) continue;
-                if (tag.GetTypeId() == target.Id) continue;
+                if (!hostsPipe || tag.GetTypeId() == target.Id) continue;
                 try { tag.ChangeTypeId(target.Id); n++; } catch { }
             }
             return n;
         }
 
         // ══════════════════════════════════════════════════════════════
-        //  LENGTH RESETS (arithmetic on existing HydraCAD params)
+        //  LENGTH RESETS
         // ══════════════════════════════════════════════════════════════
 
         private static bool ResetTakeOut(Pipe pipe)
@@ -348,7 +360,7 @@ namespace SgRevitAddin.Commands.Modify
             double? cc = ReadDouble(pipe, PCenterCenter);
             double? cut = ReadDouble(pipe, PCutLength);
             if (cc == null || cut == null) return false;
-            return WriteDouble(pipe, PAdjustment, cc.Value - cut.Value);   // adj = C-C − cut
+            return WriteDouble(pipe, PAdjustment, cc.Value - cut.Value);
         }
 
         private static bool ResetCut(Pipe pipe)
@@ -356,7 +368,7 @@ namespace SgRevitAddin.Commands.Modify
             double? cc = ReadDouble(pipe, PCenterCenter);
             double? adj = ReadDouble(pipe, PAdjustment);
             if (cc == null || adj == null) return false;
-            return WriteDouble(pipe, PCutLength, cc.Value - adj.Value);    // cut = C-C − adj
+            return WriteDouble(pipe, PCutLength, cc.Value - adj.Value);
         }
 
         private static double? ReadDouble(Element e, string name)
@@ -379,10 +391,7 @@ namespace SgRevitAddin.Commands.Modify
 
         private static void DecollideTags(Document doc, View view, List<IndependentTag> tags)
         {
-            // Snapshot each tag's bbox rectangle + head, then greedily push
-            // overlapping ones up (+Y) using our own tracked rectangles (avoids a
-            // Regenerate per move). Apply the accumulated dy at the end.
-            var items = new List<(IndependentTag Tag, XYZ Head, double MinX, double MinY, double MaxX, double MaxY, double Dy)>();
+            var items = new List<(IndependentTag Tag, XYZ Head, double MinX, double MinY, double MaxX, double MaxY)>();
             foreach (var t in tags)
             {
                 BoundingBoxXYZ bb;
@@ -390,18 +399,16 @@ namespace SgRevitAddin.Commands.Modify
                 if (bb == null) continue;
                 XYZ head;
                 try { head = t.TagHeadPosition; } catch { continue; }
-                items.Add((t, head, bb.Min.X, bb.Min.Y, bb.Max.X, bb.Max.Y, 0.0));
+                items.Add((t, head, bb.Min.X, bb.Min.Y, bb.Max.X, bb.Max.Y));
             }
             if (items.Count < 2) return;
 
-            // Process top-to-bottom, left-to-right.
             var order = items.OrderByDescending(i => i.MaxY).ThenBy(i => i.MinX).ToList();
             var settled = new List<(double MinX, double MinY, double MaxX, double MaxY)>();
-            const double gap = 0.02; // ~1/4" model gap; scaled by tag geometry already
+            const double gap = 0.02;
 
-            for (int k = 0; k < order.Count; k++)
+            foreach (var it in order)
             {
-                var it = order[k];
                 double dy = 0;
                 for (int guard = 0; guard < 200; guard++)
                 {
@@ -410,12 +417,7 @@ namespace SgRevitAddin.Commands.Modify
                     {
                         bool overlap = it.MinX < s.MaxX && it.MaxX > s.MinX &&
                                        (it.MinY + dy) < s.MaxY && (it.MaxY + dy) > s.MinY;
-                        if (overlap)
-                        {
-                            dy += (s.MaxY - (it.MinY + dy)) + gap; // push above this one
-                            hit = true;
-                            break;
-                        }
+                        if (overlap) { dy += (s.MaxY - (it.MinY + dy)) + gap; hit = true; break; }
                     }
                     if (!hit) break;
                 }

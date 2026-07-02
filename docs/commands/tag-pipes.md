@@ -17,13 +17,20 @@ The dialog uses the SG-blue custom title bar (`ChromeDpiAwareForm`).
 
 | Group | Control | Notes |
 |---|---|---|
-| **Pipe Tag Type** | Radios: Center to Center Length / Cut Length / Dynamic Length / Stocklisting Tags | Each radio has its **own family dropdown**. The selected radio's family is what gets placed. |
+| **Pipe Tag Type** | Radios: Center to Center Length / Cut Length / Dynamic Length / Stocklisting Tags | Each radio has its own **family + type** dropdowns (the type list repopulates when you change the family). Stocklisting is special — it has a **Line** and a **Main** family/type pair, applied by pipe name (see below). |
 | **Selection Method** | User Selection / System Walker Selection | See below. |
 | **Drops** | Tag Drops Only · Include Drops with Selection · Drop family | A "drop" = a vertical pipe reaching a sprinkler. |
 | **Options** | Reset Take-Out · Reset Cut · Run Cleanup · Transparent Backgrounds · Homogenize | See below. |
 
 Every control (radios, all four family dropdowns, checkboxes, drop family) is
 **remembered between runs** via DialogMemory.
+
+## Stocklisting: line vs. main
+
+When **Stocklisting Tags** is selected, each pipe is tagged based on its name:
+- pipe name (or type name) contains **"main"** → the **Main** family/type
+- else contains **"line"** → the **Line** family/type
+- neither → skipped (reported in the summary)
 
 ## Selection Method
 
