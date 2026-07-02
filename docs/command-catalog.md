@@ -93,3 +93,10 @@ Master list of all SG Revit Addin commands.
 - `PipesTooShortCommand` - Flag pipes shorter than the minimum fabricable nipple length for their size and type (threaded vs welded)
 - `HangerGapCheckCommand` - Flag selected hangers whose top-of-pipe to structure gap exceeds a threshold (per-Type-Code math, default 6"); appears on the Seismic panel
 
+## Modify (Modify-tab SG panel)
+Injected onto Revit's built-in Modify tab via AdWindows; these buttons fire outside the API context, so document changes route through `DeferredActionHandler` (an ExternalEvent). The panel holds Tag Pipes, Pretty Sprinklers, and two placeholder slots.
+- `TagPipesCommand` - Place pipe length/stocklist tags (HydraCAD-style) using your loaded tag families. SG-blue custom-titlebar dialog: 4 tag types each with a family dropdown, User vs System-Walker selection, drops handling, and options (Homogenize, Transparent -T variant, Reset Take-Out/Cut arithmetic on HydraCAD params, first-pass anti-overlap Cleanup). Remembers all settings
+- `PrettySprinklersCommand` - Place opaque `HeadN` head-symbol overlays (category Sprinkler Tags) coincident with each selected sprinkler, chosen from the type's `Symbol - HeadN` / `HeadSymbol` params. Run with nothing selected to remove all overlays in the view
+- `DeferredActionHandler` - Generic IExternalEventHandler that lets the AdWindows-injected Modify-tab buttons run document-modifying work in a valid API context
+- `ChromeDpiAwareForm` - DpiAwareForm variant with a borderless SG-blue (#085990) custom title bar (white title + close, draggable), used by the Tag Pipes dialog
+

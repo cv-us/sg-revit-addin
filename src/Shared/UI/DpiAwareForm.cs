@@ -50,6 +50,11 @@ namespace SgRevitAddin
         protected bool AllowResize { get; set; } = true;
         /// <summary>Set false in a derived ctor to skip remembering the size.</summary>
         protected bool RememberSize { get; set; } = true;
+        /// <summary>
+        /// Chrome subclasses return false to keep their own <see cref="FormBorderStyle.None"/>
+        /// (custom title bar). When false, OnHandleCreated will NOT force the OS border back on.
+        /// </summary>
+        protected virtual bool UseOsBorder => true;
 
         public DpiAwareForm()
         {
@@ -87,7 +92,7 @@ namespace SgRevitAddin
             // (2) Resizable + scrollbars (safety net: an undersized window gets
             //     scrollbars instead of clipping). Overrides the derived ctor's
             //     FixedDialog because this runs after it.
-            if (AllowResize)
+            if (AllowResize && UseOsBorder)
             {
                 FormBorderStyle = FormBorderStyle.Sizable;
                 MaximizeBox = true;

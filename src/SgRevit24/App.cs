@@ -328,12 +328,32 @@ namespace SgRevitAddin
                     "SgRevitAddin.Commands.ModelCheck.PipesTooShortCommand",
                     "pipes-too-short-16.png", "Flag pipes shorter than the minimum fabricable nipple length for their size."));
 
-            // ── Modify-tab SG panel (placeholders) ──
+            // ── Modify-tab SG panel ──
             // Tab.Modify isn't in the Revit API enum, so we inject through
-            // AdWindows. Each button just shows a scratch text dialog for
-            // now — reserved slots for future quick-edit tools.
+            // AdWindows. These buttons fire OUTSIDE Revit's API context, so any
+            // that modify the document route through DeferredActionHandler (an
+            // ExternalEvent) to reach a valid context; dialog-only ones don't.
+            DeferredActionHandler.Initialize();
             var modifyButtons = new List<ModifyButton>
             {
+                new ModifyButton
+                {
+                    Id = "SgTagPipes",
+                    Label = "Tag\nPipes",
+                    Tooltip = "Tag pipes with length / stocklist tags (HydraCAD-style). Blue dialog: pick tag type + family, User vs System-Walker selection, drops, and options.",
+                    LargeImage = IconHelper.LoadIcon("tag-pipes-32.png"),
+                    SmallImage = IconHelper.LoadIcon("tag-pipes-16.png"),
+                    OnClick = () => DeferredActionHandler.Run(TagPipesCommand.Run)
+                },
+                new ModifyButton
+                {
+                    Id = "SgPrettySprinklers",
+                    Label = "Pretty\nSprinklers",
+                    Tooltip = "Place opaque head-symbol overlays above selected sprinklers (matched to each type's head symbol). Run with nothing selected to remove them.",
+                    LargeImage = IconHelper.LoadIcon("pretty-sprinklers-32.png"),
+                    SmallImage = IconHelper.LoadIcon("pretty-sprinklers-16.png"),
+                    OnClick = () => DeferredActionHandler.Run(PrettySprinklersCommand.Run)
+                },
                 new ModifyButton
                 {
                     Id = "SgPlaceholderOne",
