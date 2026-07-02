@@ -61,6 +61,26 @@ if ($legacyRemoved -gt 0) {
     Write-Host "Removed $legacyRemoved legacy SSG file(s) from $revitAddinsFolder" -ForegroundColor DarkYellow
 }
 
+# -- Installer-copy guard --
+# The Inno Setup installer drops an ALL-USERS copy under %ProgramData% with the
+# SAME <ClientId> as this per-user deploy. Revit refuses to load two add-ins with
+# the same ClientId, so a leftover installer copy shadows this deploy (or vice
+# versa) and you end up running the wrong build. Remove the all-users copy for
+# this version before deploying per-user.
+$allUsersFolder   = "$env:ProgramData\Autodesk\Revit\Addins\$RevitVersion"
+$allUsersManifest = Join-Path $allUsersFolder "$projectName.addin"
+$allUsersDllDir   = Join-Path $allUsersFolder "SgRevitAddin"
+$auRemoved = 0
+foreach ($p in @($allUsersManifest, $allUsersDllDir)) {
+    if (Test-Path $p) {
+        try { Remove-Item $p -Recurse -Force -ErrorAction Stop; $auRemoved++ }
+        catch { Write-Host "  WARNING: couldn't remove installer copy '$p' - run this as Administrator to clear it." -ForegroundColor Yellow }
+    }
+}
+if ($auRemoved -gt 0) {
+    Write-Host "Removed all-users installer copy for Revit $RevitVersion (avoids duplicate-ClientId conflict)." -ForegroundColor DarkYellow
+}
+
 # Copy DLL
 Write-Host "Deploying $projectName to Revit $RevitVersion..." -ForegroundColor Cyan
 

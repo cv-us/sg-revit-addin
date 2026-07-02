@@ -80,6 +80,17 @@ Type: files; Name: "{commonappdata}\Autodesk\Revit\Addins\2023\SSG24.addin"; Che
 Type: files; Name: "{commonappdata}\Autodesk\Revit\Addins\2024\SSG24.addin"; Check: ShouldInstall2024
 Type: files; Name: "{commonappdata}\Autodesk\Revit\Addins\2025\SSG25.addin"; Check: ShouldInstall2025
 Type: files; Name: "{commonappdata}\Autodesk\Revit\Addins\2026\SSG25.addin"; Check: ShouldInstall2026
+; Per-user (deploy) copies share this add-in's ClientId and would shadow the
+; all-users install (Revit refuses duplicate ClientIds), so remove them for the
+; versions being installed. ({userappdata} = the user running Setup.)
+Type: files; Name: "{userappdata}\Autodesk\Revit\Addins\2023\SgRevit24.addin"; Check: ShouldInstall2023
+Type: files; Name: "{userappdata}\Autodesk\Revit\Addins\2023\SgRevit24.dll"; Check: ShouldInstall2023
+Type: files; Name: "{userappdata}\Autodesk\Revit\Addins\2024\SgRevit24.addin"; Check: ShouldInstall2024
+Type: files; Name: "{userappdata}\Autodesk\Revit\Addins\2024\SgRevit24.dll"; Check: ShouldInstall2024
+Type: files; Name: "{userappdata}\Autodesk\Revit\Addins\2025\SgRevit25.addin"; Check: ShouldInstall2025
+Type: files; Name: "{userappdata}\Autodesk\Revit\Addins\2025\SgRevit25.dll"; Check: ShouldInstall2025
+Type: files; Name: "{userappdata}\Autodesk\Revit\Addins\2026\SgRevit25.addin"; Check: ShouldInstall2026
+Type: files; Name: "{userappdata}\Autodesk\Revit\Addins\2026\SgRevit25.dll"; Check: ShouldInstall2026
 
 ; ── Custom pages for Revit version selection ──
 [Code]
