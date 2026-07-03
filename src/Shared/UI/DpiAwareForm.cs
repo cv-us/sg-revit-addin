@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using SgRevitAddin.Utils;
@@ -7,63 +8,54 @@ using SgRevitAddin.Utils;
 namespace SgRevitAddin
 {
     /// <summary>
-    /// Base for all hand-coded WinForms dialogs. Makes them scale correctly on
-    /// >100% display scaling, makes them resizable, and remembers their size.
+    /// Base for all hand-coded WinForms dialogs. Gives every dialog:
+    ///   • correct scaling on &gt;100% display scaling (PMv2 + re-fired auto-scale),
+    ///   • a custom SG-blue title bar with a replaceable square logo, the dialog
+    ///     title, and a close button (borderless — the OS caption is replaced),
+    ///   • resizable + remembered size, with a MinimumSize floor at the natural
+    ///     (design) size so dialogs can only be enlarged — never shrunk into the
+    ///     button/panel overlap that a smaller-than-designed size would cause.
     ///
-    /// THREE things are needed and they interact:
+    /// Derived dialogs are written exactly as before — add controls to the form at
+    /// absolute positions and set ClientSize to the CONTENT size (no header). At
+    /// handle-creation the base builds the header, reparents that content into a
+    /// fill panel below it, and grows the form by the header height so nothing is
+    /// clipped. Set <see cref="Text"/> for the title.
     ///
-    /// (1) PMv2 thread context at handle creation. A WinForms window snapshots its
-    ///     DeviceDpi from the thread's DPI awareness context when its HWND is
-    ///     created. Revit invokes IExternalCommand on a thread pinned to ~96 DPI,
-    ///     so we wrap CreateHandle + ShowDialog in a Per-Monitor-Aware-V2 context
-    ///     (SetThreadDpiAwarenessContext) so the window is born at the real DPI
-    ///     (144 @150%). [Confirmed at runtime: DeviceDpi reads 144.]
-    ///
-    /// (2) Re-fire the auto-scale AFTER the handle exists. AutoScaleMode.Dpi runs a
-    ///     ONE-SHOT layout pass whose factor = DeviceDpi / AutoScaleDimensions. The
-    ///     AutoScaleDimensions setter has a side effect: with no SuspendLayout (our
-    ///     hand-coded forms have none) it runs PerformAutoScale SYNCHRONOUSLY. So
-    ///     setting it in the ctor fired that one shot handle-less at 96 DPI →
-    ///     factor 96/96 = 1.0 → it scaled nothing and stamped itself "done". The
-    ///     later 144-DPI handle then only enlarged the FONT (a separate paint-time
-    ///     path), leaving the 96-px layout → cramped. Fix: do NOT set
-    ///     AutoScaleDimensions in the ctor; re-stamp it in OnHandleCreated (handle
-    ///     now reports 144) so the single pass fires at 144/96 = 1.5 and scales
-    ///     ClientSize + every child rect + the font (the font-correct supported
-    ///     path — unlike Control.Scale, which would double the already-144 font).
-    ///
-    /// (3) Resizable + AutoScroll + remembered size, applied in OnHandleCreated
-    ///     (AFTER the derived ctor set FixedDialog, so we win) and AFTER the DPI
-    ///     scale (so a remembered size isn't scaled twice). Size is persisted in
-    ///     logical 96-px units so it's portable across machines at different DPI.
-    ///
-    /// We never touch process-level awareness (SetProcessDpiAwareness*,
-    /// SetHighDpiMode) — Revit owns that. No manifest/app.config/runtimeconfig.
-    /// Identical on .NET Framework 4.8 (Revit 2023/24) and .NET 8 (Revit 2025/26).
+    /// The logo is an embedded "logo.png" (square) — replace that file to rebrand.
     /// </summary>
     public class DpiAwareForm : Form
     {
-        private bool _dpiInit;
+        private bool _chromeInit;
         private bool _layoutInit;
 
         /// <summary>Set false in a derived ctor to keep the dialog fixed-size.</summary>
         protected bool AllowResize { get; set; } = true;
         /// <summary>Set false in a derived ctor to skip remembering the size.</summary>
         protected bool RememberSize { get; set; } = true;
-        /// <summary>
-        /// Chrome subclasses return false to keep their own <see cref="FormBorderStyle.None"/>
-        /// (custom title bar). When false, OnHandleCreated will NOT force the OS border back on.
-        /// </summary>
-        protected virtual bool UseOsBorder => true;
+
+        /// <summary>Logical (96-dpi) height of the blue title band.</summary>
+        protected const int HeaderHeight = 38;
+
+        private static readonly Color HeaderColor = Color.FromArgb(0x08, 0x59, 0x90);  // SG blue #085990
+        private static readonly Color HeaderHover = Color.FromArgb(0x2A, 0x74, 0xAD);
+        private static Image _logoImage;
+        private static bool _logoTried;
+
+        private Panel _header;
+        private Panel _content;
+        private Label _titleLabel;
+        private Button _closeBtn;
+        private PictureBox _logo;
+        private int _resizeBorder = 6;
 
         public DpiAwareForm()
         {
             AutoScaleMode = AutoScaleMode.Dpi;
-            // AutoScaleDimensions is set in OnHandleCreated, NOT here — setting it
-            // now fires the one-shot scale handle-less at 96 DPI and disarms it.
+            FormBorderStyle = FormBorderStyle.None;   // custom SG chrome replaces the OS caption
+            // AutoScaleDimensions is set in OnHandleCreated, NOT here.
         }
 
-        /// <summary>The window's DeviceDpi is fixed here — create it under PMv2.</summary>
         protected override void CreateHandle()
         {
             using (DpiContext.PerMonitorV2())
@@ -73,15 +65,12 @@ namespace SgRevitAddin
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
-            if (_dpiInit) return;     // guard against handle recreation
-            _dpiInit = true;
+            if (_chromeInit) return;      // guard against handle recreation
+            _chromeInit = true;
 
             float factor = DeviceDpi / 96f;
 
-            // (1) DPI scale FIRST — re-fire the swallowed pass now the handle
-            //     reports the real DPI. Clear the stale 96 baseline (busts the
-            //     cached CurrentAutoScaleDimensions), then re-stamp it: the setter
-            //     recomputes from DeviceDpi (144) and runs PerformAutoScale at 1.5.
+            // (1) DPI scale FIRST — re-fire the swallowed pass at the real DPI.
             if (DeviceDpi != 96)
             {
                 AutoScaleDimensions = SizeF.Empty;
@@ -89,50 +78,138 @@ namespace SgRevitAddin
                 PerformAutoScale();
             }
 
-            // (2) Resizable + scrollbars (safety net: an undersized window gets
-            //     scrollbars instead of clipping). Overrides the derived ctor's
-            //     FixedDialog because this runs after it.
-            if (AllowResize && UseOsBorder)
-            {
-                FormBorderStyle = FormBorderStyle.Sizable;
-                MaximizeBox = true;
-            }
-            AutoScroll = true;
+            int hh = (int)Math.Round(HeaderHeight * factor);
+            _resizeBorder = Math.Max(4, (int)Math.Round(6 * factor));
 
-            // (2b) Auto-flex on resize: widen wide controls (combos, grids, lists,
-            //      full-width groups/labels/text) and pin buttons to the bottom
-            //      corner. Widen-only + bottom-anchored buttons is overlap-safe in
-            //      these vertically-stacked layouts (no control grows DOWN into the
-            //      one below it). Anchors only affect resize — the default view is
-            //      unchanged.
-            if (AllowResize) ApplyAutoFlex(this);
+            // (2) The derived dialog's content is currently direct children of the
+            //     form at their design (now scaled) positions. Capture that content
+            //     size, build the header, and reparent the content into a fill panel
+            //     below the header.
+            Size natural = ClientSize;
 
-            // (3) MinimumSize floor (scaled px) so content can't be squeezed away.
-            if (MinimumSize.Width <= 0 || MinimumSize.Height <= 0)
-                MinimumSize = new Size((int)Math.Round(Width * 0.6f), (int)Math.Round(Height * 0.6f));
+            _content = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+            Controls.Add(_content);
+            BuildHeader(hh);
 
-            // (4) Restore remembered size LAST, logical 96-px -> device px. A plain
-            //     geometry set (autoscale already stamped its baseline), not re-scaled.
-            if (RememberSize)
+            foreach (var c in Controls.Cast<Control>().Where(c => c != _content && c != _header).ToList())
+                c.Parent = _content;      // preserves bounds + anchors, now relative to _content
+
+            // (3) Grow the form by the header so the content panel keeps its size.
+            FormBorderStyle = FormBorderStyle.None;   // override any FixedDialog a derived ctor set
+            ClientSize = new Size(natural.Width, natural.Height + hh);
+
+            // (4) Flex content on resize (widen-only + bottom-pinned buttons).
+            if (AllowResize) ApplyAutoFlex(_content);
+
+            // (5) Floor at the natural size so it can only be ENLARGED — never shrunk
+            //     into overlap. Fixed dialogs are locked to that size.
+            MinimumSize = Size;
+            if (!AllowResize) MaximumSize = Size;
+
+            // (6) Restore remembered size (logical 96-px -> device px), clamped.
+            if (RememberSize && AllowResize)
             {
                 string key = GetType().Name;
                 int w = DialogMemory.GetInt(key, "WinW", 0);
                 int h = DialogMemory.GetInt(key, "WinH", 0);
                 if (w > 0 && h > 0)
-                {
                     Size = new Size(
                         Math.Max((int)Math.Round(w * factor), MinimumSize.Width),
                         Math.Max((int)Math.Round(h * factor), MinimumSize.Height));
-                }
             }
             _layoutInit = true;
         }
 
+        private void BuildHeader(int hh)
+        {
+            _header = new Panel { Dock = DockStyle.Top, Height = hh, BackColor = HeaderColor };
+            _header.MouseDown += Header_MouseDown;
+
+            _titleLabel = new Label
+            {
+                Dock = DockStyle.Fill,
+                Text = Text,
+                ForeColor = Color.White,
+                BackColor = HeaderColor,
+                Font = new Font("Segoe UI", (float)(hh * 0.42), FontStyle.Bold, GraphicsUnit.Pixel),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(8, 0, 0, 0)
+            };
+            _titleLabel.MouseDown += Header_MouseDown;
+
+            _closeBtn = new Button
+            {
+                Dock = DockStyle.Right,
+                Width = hh,
+                Text = "✕",
+                ForeColor = Color.White,
+                BackColor = HeaderColor,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", (float)(hh * 0.34), FontStyle.Regular, GraphicsUnit.Pixel),
+                TabStop = false
+            };
+            _closeBtn.FlatAppearance.BorderSize = 0;
+            _closeBtn.FlatAppearance.MouseOverBackColor = HeaderHover;
+            _closeBtn.Click += (s, e) =>
+            {
+                if (CancelButton is Button cb) cb.PerformClick();   // run any Cancel-side logic
+                else { DialogResult = DialogResult.Cancel; Close(); }
+            };
+
+            // Fill added first (resolves last); logo (Left) + close (Right) claim edges.
+            _header.Controls.Add(_titleLabel);
+
+            Image logo = LoadLogo();
+            if (logo != null)
+            {
+                _logo = new PictureBox
+                {
+                    Dock = DockStyle.Left,
+                    Width = hh,
+                    Image = logo,
+                    SizeMode = PictureBoxImageMode(),
+                    BackColor = HeaderColor,
+                    Padding = new Padding((int)(hh * 0.12))
+                };
+                _logo.MouseDown += Header_MouseDown;
+                _header.Controls.Add(_logo);
+            }
+
+            _header.Controls.Add(_closeBtn);
+            Controls.Add(_header);   // Top docked after Content
+
+            TextChanged += (s, e) => { if (_titleLabel != null) _titleLabel.Text = Text; };
+        }
+
+        private static PictureBoxSizeMode PictureBoxImageMode() => PictureBoxSizeMode.Zoom;
+
+        private static Image LoadLogo()
+        {
+            if (_logoTried) return _logoImage;
+            _logoTried = true;
+            try
+            {
+                var asm = typeof(DpiAwareForm).Assembly;
+                string name = asm.GetManifestResourceNames()
+                    .FirstOrDefault(n => n.EndsWith(".Icons.logo.png", StringComparison.OrdinalIgnoreCase)
+                                      || n.EndsWith(".logo.png", StringComparison.OrdinalIgnoreCase));
+                if (name == null) return null;
+                using (var s = asm.GetManifestResourceStream(name))
+                {
+                    if (s == null) return null;
+                    using (var tmp = Image.FromStream(s))
+                        _logoImage = new Bitmap(tmp);   // copy so the stream can close
+                }
+            }
+            catch { _logoImage = null; }
+            return _logoImage;
+        }
+
         /// <summary>
-        /// Recursively set Anchors so resizing the dialog flexes the content:
-        /// wide controls (≥55% of their parent's width) widen with the window, and
-        /// buttons pin to the bottom (and the nearer horizontal edge). Widen-only
-        /// keeps vertically-stacked sections from overlapping on resize.
+        /// Recursively set Anchors so resizing flexes the content: wide controls
+        /// (≥55% of parent width) widen with the window, and buttons pin to the
+        /// bottom (and nearer horizontal edge). Widen-only keeps stacked sections
+        /// from overlapping on resize.
         /// </summary>
         private void ApplyAutoFlex(Control parent)
         {
@@ -157,13 +234,13 @@ namespace SgRevitAddin
                 }
 
                 if (c is GroupBox || c is Panel || c is TableLayoutPanel || c is FlowLayoutPanel)
-                    ApplyAutoFlex(c); // widen wide children inside containers too
+                    ApplyAutoFlex(c);
             }
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            if (_layoutInit && RememberSize && WindowState == FormWindowState.Normal)
+            if (_layoutInit && RememberSize && AllowResize && WindowState == FormWindowState.Normal)
             {
                 try
                 {
@@ -178,8 +255,58 @@ namespace SgRevitAddin
             base.OnFormClosing(e);
         }
 
-        // Wrap both ShowDialog overloads so the whole modal show runs PMv2 (belt-
-        // and-suspenders with the CreateHandle override).
+        // ── Drag the header to move the window ──
+        private const int WM_NCLBUTTONDOWN = 0xA1;
+        private const int HT_CAPTION = 0x2;
+        private const int WM_NCHITTEST = 0x84;
+        private const int HTLEFT = 10, HTRIGHT = 11, HTTOP = 12, HTTOPLEFT = 13,
+            HTTOPRIGHT = 14, HTBOTTOM = 15, HTBOTTOMLEFT = 16, HTBOTTOMRIGHT = 17;
+
+        [DllImport("user32.dll")] private static extern bool ReleaseCapture();
+        [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+        private void Header_MouseDown(object sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left) return;
+            ReleaseCapture();
+            SendMessage(Handle, WM_NCLBUTTONDOWN, (IntPtr)HT_CAPTION, IntPtr.Zero);
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WM_NCHITTEST && AllowResize)
+            {
+                base.WndProc(ref m);
+                Point pos = PointToClient(new Point(m.LParam.ToInt32()));
+                int b = _resizeBorder;
+                int hh = _header != null ? _header.Height : 0;
+                bool left = pos.X <= b, right = pos.X >= ClientSize.Width - b;
+                bool bottom = pos.Y >= ClientSize.Height - b;
+                // No TOP-edge resize — the blue header owns the top (drag zone), and
+                // side resize only BELOW the header so header clicks aren't eaten.
+                bool belowHeader = pos.Y >= hh;
+                if (bottom && left) m.Result = (IntPtr)HTBOTTOMLEFT;
+                else if (bottom && right) m.Result = (IntPtr)HTBOTTOMRIGHT;
+                else if (bottom) m.Result = (IntPtr)HTBOTTOM;
+                else if (left && belowHeader) m.Result = (IntPtr)HTLEFT;
+                else if (right && belowHeader) m.Result = (IntPtr)HTRIGHT;
+                return;
+            }
+            base.WndProc(ref m);
+        }
+
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                const int CS_DROPSHADOW = 0x20000;
+                var cp = base.CreateParams;
+                cp.ClassStyle |= CS_DROPSHADOW;
+                return cp;
+            }
+        }
+
+        // Wrap both ShowDialog overloads so the whole modal show runs PMv2.
         public new DialogResult ShowDialog()
         {
             using (DpiContext.PerMonitorV2())
@@ -201,7 +328,6 @@ namespace SgRevitAddin
     /// </summary>
     internal sealed class DpiContext : IDisposable
     {
-        // DPI_AWARENESS_CONTEXT pseudo-handle for PER_MONITOR_AWARE_V2 is (-4).
         private static readonly IntPtr PerMonitorAwareV2 = new IntPtr(-4);
 
         private readonly IntPtr _previous;
@@ -214,7 +340,7 @@ namespace SgRevitAddin
             try
             {
                 if (!IsValidDpiAwarenessContext(PerMonitorAwareV2))
-                    return; // OS too old / context unsupported -> no-op
+                    return;
 
                 IntPtr prev = SetThreadDpiAwarenessContext(PerMonitorAwareV2);
                 if (prev != IntPtr.Zero)
@@ -223,8 +349,8 @@ namespace SgRevitAddin
                     _restore = true;
                 }
             }
-            catch (EntryPointNotFoundException) { /* pre-1607 user32 -> no-op */ }
-            catch (DllNotFoundException) { /* no user32 (shouldn't happen) -> no-op */ }
+            catch (EntryPointNotFoundException) { }
+            catch (DllNotFoundException) { }
         }
 
         public static DpiContext PerMonitorV2() => new DpiContext();

@@ -7,12 +7,12 @@ using SgRevitAddin.Utils;
 namespace SgRevitAddin.Commands.Modify
 {
     /// <summary>
-    /// Dialog for Tag Pipes — SG-blue custom title bar (ChromeDpiAwareForm).
+    /// Dialog for Tag Pipes — inherits the SG-blue custom title bar from DpiAwareForm.
     /// Each pipe-tag type picks a family AND a type within it. Stocklisting splits
     /// into a "line" tag and a "main" tag (chosen by pipe name). Every control is
     /// remembered between runs via DialogMemory.
     /// </summary>
-    public class TagPipesDialog : ChromeDpiAwareForm
+    public class TagPipesDialog : DpiAwareForm
     {
         private const string MemKey = "TagPipes";
 
@@ -62,7 +62,7 @@ namespace SgRevitAddin.Commands.Modify
         private void InitializeComponent()
         {
             Text = "Tag Pipes";
-            ClientSize = new Size(636, HeaderHeight + 396);
+            ClientSize = new Size(636, 396);
 
             int margin = 12;
             const int colW = 300;
@@ -92,14 +92,14 @@ namespace SgRevitAddin.Commands.Modify
             _stockMainType = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(186, gy + 44), Size = new Size(98, 22) };
             WireFamilyType(_stockMainFam, _stockMainType, DialogMemory.Get(MemKey, "Fam_StockMain", ""), DialogMemory.Get(MemKey, "Type_StockMain", ""));
             grpType.Controls.AddRange(new Control[] { _fam[3], _type[3], _stockMainFam, _stockMainType });
-            Content.Controls.Add(grpType);
+            Controls.Add(grpType);
 
             // ── Selection Method (left) ──
             var grpSel = new GroupBox { Text = "Selection Method", Location = new Point(leftX, margin + 244 + margin), Size = new Size(colW, 74) };
             _rbUser = new RadioButton { Text = "User Selection", Location = new Point(10, 22), Size = new Size(colW - 24, 20), Checked = true };
             _rbWalker = new RadioButton { Text = "System Walker Selection", Location = new Point(10, 44), Size = new Size(colW - 24, 20) };
             grpSel.Controls.AddRange(new Control[] { _rbUser, _rbWalker });
-            Content.Controls.Add(grpSel);
+            Controls.Add(grpSel);
 
             // ── Options (right) ──
             var grpOpt = new GroupBox { Text = "Options", Location = new Point(rightX, margin), Size = new Size(colW, 160) };
@@ -109,7 +109,7 @@ namespace SgRevitAddin.Commands.Modify
             _chkTransparent = MakeCheck("Transparent Tag Backgrounds", 10, 96, colW);
             _chkHomogenize = MakeCheck("Homogenize Tags", 10, 118, colW);
             grpOpt.Controls.AddRange(new Control[] { _chkResetTakeOut, _chkResetCut, _chkCleanup, _chkTransparent, _chkHomogenize });
-            Content.Controls.Add(grpOpt);
+            Controls.Add(grpOpt);
 
             // ── Drops (right) ──
             var grpDrops = new GroupBox { Text = "Drops", Location = new Point(rightX, margin + 160 + margin), Size = new Size(colW, 132) };
@@ -121,17 +121,17 @@ namespace SgRevitAddin.Commands.Modify
             _dropType = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(64, 98), Size = new Size(colW - 78, 22) };
             WireFamilyType(_dropFam, _dropType, DialogMemory.Get(MemKey, "DropFam", ""), DialogMemory.Get(MemKey, "DropType", ""));
             grpDrops.Controls.AddRange(new Control[] { _chkDropsOnly, _chkIncludeDrops, _dropFam, _dropType });
-            Content.Controls.Add(grpDrops);
+            Controls.Add(grpDrops);
 
             // ── Buttons ──
             int by = 354;
             var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(636 - margin - 85, by), Size = new Size(85, 30) };
             CancelButton = btnCancel;
-            Content.Controls.Add(btnCancel);
+            Controls.Add(btnCancel);
             var btnOK = new Button { Text = "Continue", DialogResult = DialogResult.OK, Location = new Point(636 - margin - 85 - 10 - 110, by), Size = new Size(110, 30) };
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
-            Content.Controls.Add(btnOK);
+            Controls.Add(btnOK);
 
             // ── Restore remembered radios / checkboxes ──
             int t = DialogMemory.GetInt(MemKey, "TagType", 0);

@@ -28,8 +28,7 @@ namespace SgRevitAddin.Commands.Setup
         private void InitializeComponents()
         {
             Text = "Load Custom Families";
-            Size = new Size(560, 200);
-            MinimumSize = new Size(460, 200);
+            ClientSize = new Size(520, 170);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
