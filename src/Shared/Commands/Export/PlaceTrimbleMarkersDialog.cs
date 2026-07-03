@@ -1,11 +1,14 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Export
 {
     public class PlaceTrimbleMarkersDialog : DpiAwareForm
     {
+        private const string MemKey = "PlaceTrimbleMarkers";
+
         public enum TrimbleMode { PlaceOnly, ClearAndPlace, ClearOnly }
 
         public TrimbleMode SelectedMode { get; private set; } = TrimbleMode.ClearAndPlace;
@@ -24,6 +27,7 @@ namespace SgRevitAddin.Commands.Export
         private void InitializeComponent()
         {
             Text = "Trimble Markers";
+            AllowResize = false;   // fixed action stack — resizing adds nothing
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
@@ -36,8 +40,8 @@ namespace SgRevitAddin.Commands.Export
             var grpActions = new GroupBox
             {
                 Text = "Actions",
-                Location = new Point(12, y),
-                Size = new Size(440, 125)
+                Location = new Point(15, y),
+                Size = new Size(450, 125)
             };
             Controls.Add(grpActions);
 
@@ -45,7 +49,7 @@ namespace SgRevitAddin.Commands.Export
             {
                 Text = "Place Markers",
                 Location = new Point(15, 25),
-                Size = new Size(410, 28),
+                Size = new Size(420, 28),
                 TextAlign = ContentAlignment.MiddleCenter
             };
             btnPlace.Click += (s, e) =>
@@ -60,7 +64,7 @@ namespace SgRevitAddin.Commands.Export
             {
                 Text = "Place new markers at selected hangers/braces (keeps existing markers)",
                 Location = new Point(15, 55),
-                Size = new Size(410, 15),
+                Size = new Size(420, 15),
                 ForeColor = Color.FromArgb(110, 110, 110),
                 Font = new Font(Font.FontFamily, 7.5f, FontStyle.Italic)
             };
@@ -70,7 +74,7 @@ namespace SgRevitAddin.Commands.Export
             {
                 Text = "Clear && Place Markers",
                 Location = new Point(15, 73),
-                Size = new Size(200, 28),
+                Size = new Size(205, 28),
                 TextAlign = ContentAlignment.MiddleCenter
             };
             btnClearAndPlace.Click += (s, e) =>
@@ -80,12 +84,13 @@ namespace SgRevitAddin.Commands.Export
                 DialogResult = DialogResult.OK;
             };
             grpActions.Controls.Add(btnClearAndPlace);
+            AcceptButton = btnClearAndPlace;   // Enter = default action
 
             var btnClearOnly = new Button
             {
                 Text = "Clear Markers Only",
-                Location = new Point(225, 73),
-                Size = new Size(200, 28),
+                Location = new Point(230, 73),
+                Size = new Size(205, 28),
                 TextAlign = ContentAlignment.MiddleCenter
             };
             btnClearOnly.Click += (s, e) =>
@@ -100,7 +105,7 @@ namespace SgRevitAddin.Commands.Export
             {
                 Text = "Clear removes Trimble families from the active view before or instead of placing",
                 Location = new Point(15, 103),
-                Size = new Size(410, 15),
+                Size = new Size(420, 15),
                 ForeColor = Color.FromArgb(110, 110, 110),
                 Font = new Font(Font.FontFamily, 7.5f, FontStyle.Italic)
             };
@@ -112,8 +117,8 @@ namespace SgRevitAddin.Commands.Export
             var grpFilter = new GroupBox
             {
                 Text = "Clear Filter",
-                Location = new Point(12, y),
-                Size = new Size(440, 105)
+                Location = new Point(15, y),
+                Size = new Size(450, 105)
             };
             Controls.Add(grpFilter);
 
@@ -121,7 +126,7 @@ namespace SgRevitAddin.Commands.Export
             {
                 Text = "By default, clears families starting with \"-Trimble-\" and \"Trmb_FieldPoints_\"",
                 Location = new Point(15, 22),
-                Size = new Size(410, 18),
+                Size = new Size(420, 18),
                 ForeColor = Color.FromArgb(100, 100, 100)
             };
             grpFilter.Controls.Add(lblDefault);
@@ -142,7 +147,7 @@ namespace SgRevitAddin.Commands.Export
             txtPrefix = new TextBox
             {
                 Location = new Point(240, 45),
-                Size = new Size(125, 22),
+                Size = new Size(195, 22),
                 Enabled = false,
                 Text = "",
                 ForeColor = Color.Gray
@@ -170,12 +175,22 @@ namespace SgRevitAddin.Commands.Export
             {
                 Text = "Comma-separate multiple prefixes: FP-, SG-",
                 Location = new Point(15, 74),
-                Size = new Size(410, 18),
+                Size = new Size(420, 18),
                 ForeColor = Color.FromArgb(130, 130, 130),
                 Font = new Font(Font.FontFamily, 7.5f, FontStyle.Italic),
                 Visible = false
             };
             grpFilter.Controls.Add(lblPrefixHint);
+
+            // Restore the remembered custom-prefix filter (after all the
+            // controls the CheckedChanged handler touches exist).
+            string remPrefix = DialogMemory.Get(MemKey, "PrefixText", "");
+            if (!string.IsNullOrEmpty(remPrefix))
+            {
+                txtPrefix.Text = remPrefix;
+                txtPrefix.ForeColor = Color.Black;
+            }
+            chkCustomPrefix.Checked = DialogMemory.GetBool(MemKey, "CustomPrefix", false);
 
             y += 115;
 
@@ -197,6 +212,11 @@ namespace SgRevitAddin.Commands.Export
         {
             ClearCustomPrefix = chkCustomPrefix.Checked;
             ClearFamilyPrefix = (txtPrefix.ForeColor == Color.Gray) ? "" : txtPrefix.Text.Trim();
+
+            // Remember for next time.
+            DialogMemory.SetBool(MemKey, "CustomPrefix", ClearCustomPrefix);
+            DialogMemory.Set(MemKey, "PrefixText", ClearFamilyPrefix);
+            DialogMemory.Flush();
         }
     }
 }

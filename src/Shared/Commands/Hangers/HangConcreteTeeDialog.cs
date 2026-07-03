@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Hangers
 {
@@ -19,6 +20,8 @@ namespace SgRevitAddin.Commands.Hangers
     /// </summary>
     public class HangConcreteTeeDialog : DpiAwareForm
     {
+        private const string MemKey = "HangConcreteTee";
+
         // ── Results ──
         public string PipeTypeFilter { get; private set; } = "ALL Pipes";
         public string SelectedFamily { get; private set; } = "";
@@ -49,6 +52,30 @@ namespace SgRevitAddin.Commands.Hangers
             _hangerFamilies = hangerFamilies;
             _pipeTypeNames = pipeTypeNames;
             InitializeComponent();
+            RestoreMemory();
+        }
+
+        /// <summary>Last-used values win over the built-in defaults.</summary>
+        private void RestoreMemory()
+        {
+            string memFilter = DialogMemory.Get(MemKey, "PipeFilter", "");
+            if (memFilter.Length > 0 && cboPipeFilter.Items.Contains(memFilter))
+                cboPipeFilter.SelectedItem = memFilter;
+
+            string memFamily = DialogMemory.Get(MemKey, "Family", "");
+            if (memFamily.Length > 0 && cboHangerFamily.Items.Contains(memFamily))
+                cboHangerFamily.SelectedItem = memFamily;
+
+            txtTypeCode.Text = DialogMemory.Get(MemKey, "TypeCode", txtTypeCode.Text);
+            txtLinkKeyword.Text = DialogMemory.Get(MemKey, "LinkKeyword", txtLinkKeyword.Text);
+
+            decimal rod = (decimal)DialogMemory.GetDouble(MemKey, "RodOffset", (double)numRodOffset.Value);
+            if (rod >= numRodOffset.Minimum && rod <= numRodOffset.Maximum)
+                numRodOffset.Value = rod;
+
+            decimal anchor = (decimal)DialogMemory.GetDouble(MemKey, "AnchorAbove", (double)numAnchorAbove.Value);
+            if (anchor >= numAnchorAbove.Minimum && anchor <= numAnchorAbove.Maximum)
+                numAnchorAbove.Value = anchor;
         }
 
         private void InitializeComponent()
@@ -58,7 +85,7 @@ namespace SgRevitAddin.Commands.Hangers
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(500, 500);
+            ClientSize = new Size(500, 470);
 
             int margin = 15;
             int y = margin;
@@ -250,13 +277,13 @@ namespace SgRevitAddin.Commands.Hangers
             Controls.Add(grpLink);
             y += 60;
 
-            // ── Buttons ──
+            // ── Buttons (right-aligned, 10px gap, 15px right margin) ──
             var btnOK = new Button
             {
                 Text = "Place Hangers",
                 DialogResult = DialogResult.OK,
-                Location = new Point(310, y),
-                Size = new Size(100, 30)
+                Location = new Point(290, y),
+                Size = new Size(110, 30)
             };
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
@@ -266,7 +293,7 @@ namespace SgRevitAddin.Commands.Hangers
             {
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
-                Location = new Point(415, y),
+                Location = new Point(410, y),
                 Size = new Size(75, 30)
             };
             CancelButton = btnCancel;
@@ -281,6 +308,15 @@ namespace SgRevitAddin.Commands.Hangers
             RodOffsetFromStemInches = (double)numRodOffset.Value;
             AnchorAboveBottomInches = (double)numAnchorAbove.Value;
             LinkedModelKeyword = txtLinkKeyword.Text.Trim();
+
+            // Remember for next time.
+            DialogMemory.Set(MemKey, "PipeFilter", PipeTypeFilter);
+            DialogMemory.Set(MemKey, "Family", SelectedFamily);
+            DialogMemory.Set(MemKey, "TypeCode", HangerTypeCode);
+            DialogMemory.Set(MemKey, "LinkKeyword", LinkedModelKeyword);
+            DialogMemory.SetDouble(MemKey, "RodOffset", RodOffsetFromStemInches);
+            DialogMemory.SetDouble(MemKey, "AnchorAbove", AnchorAboveBottomInches);
+            DialogMemory.Flush();
         }
     }
 }

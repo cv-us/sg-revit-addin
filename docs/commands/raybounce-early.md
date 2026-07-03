@@ -13,8 +13,18 @@ This is the dependable fallback kept on the ribbon alongside **Raybounce Dev** (
 ## What it does (and doesn't)
 
 - ✅ Native Revit structure (floors, roofs, framing, stairs), host or linked Revit model.
-- ✅ Simple, fast, predictable — no mesh triangulation, no diagnostics.
-- ❌ Does **not** specially handle imported CAD `ImportInstance` geometry (linked DWG). Against a raw CAD import the native intersector returns bounding-box proximity, so the rod can overshoot — that's exactly the case Raybounce Dev exists to solve.
+- ✅ **Geometry-verified distances** — every intersector hit is re-measured against the hit element's real triangulated geometry along the hanger's own vertical (via `StructureRayScanner`). This fixes rods stretching under **sloped decks in linked structural files**: the raw `Proximity` can be a phantom (element-extent / wrong-face) distance, and a candidate whose real geometry never touches the vertical is rejected in favor of the next-closest one.
+- ✅ **Linked IFC DirectShapes** — a triangle index of DirectShapes (host + all links, structural categories) is ray-cast manually, so IFC beams that the native ray passes straight through are still found.
+- ✅ Single straight-up ray — no multi-ray fan, predictable.
+- ❌ Does **not** handle imported CAD `ImportInstance` geometry (linked DWG) or Generic Model / Mass imports — that's Raybounce Dev's job.
+
+## Diagnostic mode
+
+The dialog's diagnostic checkbox produces a copyable report instead of writing parameters (rod changes are rolled back). Columns now include **corr"** (raw Proximity minus verified distance, inches — how far the raw raycast was off) and **via** (`source:quality`):
+
+- `native:centered` — intersector hit, re-measured on the element's real geometry at the hanger's XY (best).
+- `mesh:centered` — found by the DirectShape triangle index (linked IFC path).
+- `native:proximity` — element couldn't be triangulated; raw intersector value used (last resort).
 
 ## Workflow
 

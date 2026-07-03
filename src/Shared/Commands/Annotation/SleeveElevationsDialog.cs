@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Annotation
 {
@@ -15,6 +16,8 @@ namespace SgRevitAddin.Commands.Annotation
     /// </summary>
     public class SleeveElevationsDialog : DpiAwareForm
     {
+        private const string MemKey = "SleeveElevations";
+
         // ── Results ──
         public int AFFLinkIndex { get; private set; } = -1;
         public int BBDLinkIndex { get; private set; } = -1;
@@ -39,7 +42,7 @@ namespace SgRevitAddin.Commands.Annotation
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(460, 290);
+            ClientSize = new Size(460, 265);
 
             int margin = 15;
             int y = margin;
@@ -67,6 +70,7 @@ namespace SgRevitAddin.Commands.Annotation
             foreach (var name in _linkNames)
                 cboAFFLink.Items.Add(name);
             if (cboAFFLink.Items.Count > 0) cboAFFLink.SelectedIndex = 0;
+            RestoreComboText(cboAFFLink, DialogMemory.Get(MemKey, "AFFLink", ""));
 
             var lblBBD = new Label
             {
@@ -87,6 +91,7 @@ namespace SgRevitAddin.Commands.Annotation
                 cboBBDLink.SelectedIndex = 1;
             else if (cboBBDLink.Items.Count > 0)
                 cboBBDLink.SelectedIndex = 0;
+            RestoreComboText(cboBBDLink, DialogMemory.Get(MemKey, "BBDLink", ""));
 
             grpLinks.Controls.AddRange(new Control[] { lblAFF, cboAFFLink, lblBBD, cboBBDLink });
             Controls.Add(grpLinks);
@@ -100,18 +105,20 @@ namespace SgRevitAddin.Commands.Annotation
                 Size = new Size(430, 75)
             };
 
+            bool useDecimal = DialogMemory.GetBool(MemKey, "DecimalFeet", true);
             rbDecimal = new RadioButton
             {
                 Text = "Decimal Feet  (+10.50')",
                 Location = new Point(15, 22),
                 Size = new Size(200, 20),
-                Checked = true
+                Checked = useDecimal
             };
             rbFeetInches = new RadioButton
             {
                 Text = "Feet and Inches  (+10'-6\" AFF)",
                 Location = new Point(15, 46),
-                Size = new Size(250, 20)
+                Size = new Size(250, 20),
+                Checked = !useDecimal
             };
 
             grpFormat.Controls.AddRange(new Control[] { rbDecimal, rbFeetInches });
@@ -125,7 +132,8 @@ namespace SgRevitAddin.Commands.Annotation
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
                 Location = new Point(370, y),
-                Size = new Size(75, 30)
+                Size = new Size(75, 30),
+                TabIndex = 101
             };
             CancelButton = btnCancel;
             Controls.Add(btnCancel);
@@ -135,11 +143,19 @@ namespace SgRevitAddin.Commands.Annotation
                 Text = "Select Sleeves",
                 DialogResult = DialogResult.OK,
                 Location = new Point(240, y),
-                Size = new Size(120, 30)
+                Size = new Size(120, 30),
+                TabIndex = 100
             };
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
             Controls.Add(btnOK);
+        }
+
+        private static void RestoreComboText(ComboBox cbo, string value)
+        {
+            if (string.IsNullOrEmpty(value)) return;
+            int idx = cbo.Items.IndexOf(value);
+            if (idx >= 0) cbo.SelectedIndex = idx;   // only if it still exists
         }
 
         private void BtnOK_Click(object sender, EventArgs e)
@@ -156,6 +172,12 @@ namespace SgRevitAddin.Commands.Annotation
             AFFLinkIndex = cboAFFLink.SelectedIndex;
             BBDLinkIndex = cboBBDLink.SelectedIndex;
             UseDecimalFeet = rbDecimal.Checked;
+
+            // Remember for next time.
+            DialogMemory.Set(MemKey, "AFFLink", cboAFFLink.SelectedItem?.ToString() ?? "");
+            DialogMemory.Set(MemKey, "BBDLink", cboBBDLink.SelectedItem?.ToString() ?? "");
+            DialogMemory.SetBool(MemKey, "DecimalFeet", UseDecimalFeet);
+            DialogMemory.Flush();
         }
     }
 }

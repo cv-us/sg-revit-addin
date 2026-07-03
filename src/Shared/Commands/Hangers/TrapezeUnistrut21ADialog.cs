@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Hangers
 {
@@ -15,9 +16,14 @@ namespace SgRevitAddin.Commands.Hangers
     ///   - Trapeze hanger type default: "21A"
     ///   - Distance to unistrut default: "6"
     ///   - Extension distance default: "1"
+    ///
+    /// All inputs persist between runs via <see cref="DialogMemory"/>
+    /// (combo selections are restored only when still present).
     /// </summary>
     public class TrapezeUnistrut21ADialog : DpiAwareForm
     {
+        private const string MemKey = "TrapezeUnistrut21A";
+
         // ── Results ──
         public string SelectedFamily { get; private set; }
         public string PipeTypeFilter { get; private set; }
@@ -63,7 +69,7 @@ namespace SgRevitAddin.Commands.Hangers
             IList<string> linkNames)
         {
             Text = "Auto Trapeze Hang — Unistrut 21A — Auto Spaced";
-            ClientSize = new Size(620, 780);
+            ClientSize = new Size(620, 723);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
@@ -79,7 +85,9 @@ namespace SgRevitAddin.Commands.Hangers
             cboPipeFilter = new ComboBox
             {
                 Left = inputX, Top = y - 2, Width = inputW,
-                DropDownStyle = ComboBoxStyle.DropDownList
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                // Widen with the window so long type names stay readable.
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
             };
             cboPipeFilter.Items.Add("ALL Pipes");
             foreach (string name in pipeTypeNames.OrderBy(n => n))
@@ -93,7 +101,8 @@ namespace SgRevitAddin.Commands.Hangers
             cboFamily = new ComboBox
             {
                 Left = inputX, Top = y - 2, Width = inputW,
-                DropDownStyle = ComboBoxStyle.DropDownList
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
             };
             foreach (string name in trapezeFamilyNames.OrderBy(n => n))
                 cboFamily.Items.Add(name);
@@ -223,6 +232,8 @@ namespace SgRevitAddin.Commands.Hangers
             AddLabel("Max Clash Height (ft):", 15, y);
             txtMaxClashHeight = new TextBox { Left = inputX, Top = y - 2, Width = 60, Text = "10" };
             Controls.Add(txtMaxClashHeight);
+            new ToolTip().SetToolTip(txtMaxClashHeight,
+                "How far above the pipe to search for structural elements (feet).");
             y += 35;
 
             // ── Structural Source ──
@@ -247,7 +258,8 @@ namespace SgRevitAddin.Commands.Hangers
             {
                 Left = 180, Top = y - 2, Width = 420,
                 DropDownStyle = ComboBoxStyle.DropDownList,
-                Enabled = false
+                Enabled = false,
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
             };
             foreach (string name in linkNames.OrderBy(n => n))
                 cboStructuralLink.Items.Add(name);
@@ -284,6 +296,62 @@ namespace SgRevitAddin.Commands.Hangers
             btnOK.Click += BtnOK_Click;
             Controls.Add(btnOK);
             AcceptButton = btnOK;
+
+            RestoreFromMemory();
+        }
+
+        /// <summary>Re-applies the last-used values (combo picks only when still present).</summary>
+        private void RestoreFromMemory()
+        {
+            int i = cboPipeFilter.Items.IndexOf(DialogMemory.Get(MemKey, "PipeFilter", ""));
+            if (i >= 0) cboPipeFilter.SelectedIndex = i;
+
+            i = cboFamily.Items.IndexOf(DialogMemory.Get(MemKey, "Family", ""));
+            if (i >= 0) cboFamily.SelectedIndex = i;
+
+            if (DialogMemory.Get(MemKey, "RodPosition", "C") == "M") rbMiddle.Checked = true;
+            if (!DialogMemory.GetBool(MemKey, "EvenlyDistributed", true)) rbExactSpacing.Checked = true;
+
+            string spacing = DialogMemory.Get(MemKey, "SpacingChoice", "10.5");
+            if (spacing == "12") rbSpacing12.Checked = true;
+            else if (spacing == "15") rbSpacing15.Checked = true;
+            else if (spacing == "custom") rbCustomSpacing.Checked = true;
+            txtCustomSpacing.Text = DialogMemory.Get(MemKey, "CustomSpacing", txtCustomSpacing.Text);
+
+            txtPipeTypeCode.Text = DialogMemory.Get(MemKey, "PipeTypeCode", txtPipeTypeCode.Text);
+            txtTrapezeTypeCode.Text = DialogMemory.Get(MemKey, "TrapezeTypeCode", txtTrapezeTypeCode.Text);
+            txtDistanceDown.Text = DialogMemory.Get(MemKey, "DistanceDown", txtDistanceDown.Text);
+            txtMaxClashHeight.Text = DialogMemory.Get(MemKey, "MaxClashHeight", txtMaxClashHeight.Text);
+
+            if (DialogMemory.Get(MemKey, "ExtFrom", "F") == "R") rbExtFromRod.Checked = true;
+            txtExtensionDistance.Text = DialogMemory.Get(MemKey, "ExtDistance", txtExtensionDistance.Text);
+
+            if (!DialogMemory.GetBool(MemKey, "UseLocalFraming", true) && rbLinkedModel.Enabled)
+                rbLinkedModel.Checked = true;
+            i = cboStructuralLink.Items.IndexOf(DialogMemory.Get(MemKey, "LinkName", ""));
+            if (i >= 0) cboStructuralLink.SelectedIndex = i;
+        }
+
+        private void SaveToMemory()
+        {
+            DialogMemory.Set(MemKey, "PipeFilter", PipeTypeFilter);
+            DialogMemory.Set(MemKey, "Family", SelectedFamily);
+            DialogMemory.Set(MemKey, "RodPosition", RodPositionMode);
+            DialogMemory.SetBool(MemKey, "EvenlyDistributed", EvenlyDistributed);
+            string spacingChoice = rbSpacing12.Checked ? "12"
+                : rbSpacing15.Checked ? "15"
+                : rbCustomSpacing.Checked ? "custom" : "10.5";
+            DialogMemory.Set(MemKey, "SpacingChoice", spacingChoice);
+            DialogMemory.Set(MemKey, "CustomSpacing", txtCustomSpacing.Text.Trim());
+            DialogMemory.Set(MemKey, "PipeTypeCode", PipeHangerTypeCode);
+            DialogMemory.Set(MemKey, "TrapezeTypeCode", TrapezeTypeCode);
+            DialogMemory.Set(MemKey, "DistanceDown", txtDistanceDown.Text.Trim());
+            DialogMemory.Set(MemKey, "MaxClashHeight", txtMaxClashHeight.Text.Trim());
+            DialogMemory.Set(MemKey, "ExtFrom", ExtensionMeasuredFrom);
+            DialogMemory.Set(MemKey, "ExtDistance", txtExtensionDistance.Text.Trim());
+            DialogMemory.SetBool(MemKey, "UseLocalFraming", UseLocalFraming);
+            DialogMemory.Set(MemKey, "LinkName", SelectedLinkName);
+            DialogMemory.Flush();
         }
 
         private void AddLabel(string text, int x, int y)
@@ -373,6 +441,8 @@ namespace SgRevitAddin.Commands.Hangers
             SelectedLinkName = cboStructuralLink.SelectedItem?.ToString() ?? "";
             ExtensionMeasuredFrom = rbExtFromFraming.Checked ? "F" : "R";
             ExtensionDistanceFeet = extDist / 12.0;
+
+            SaveToMemory();
         }
     }
 }

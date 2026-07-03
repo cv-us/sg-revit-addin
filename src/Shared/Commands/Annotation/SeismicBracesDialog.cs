@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Annotation
 {
@@ -13,6 +14,8 @@ namespace SgRevitAddin.Commands.Annotation
     /// </summary>
     public class SeismicBracesDialog : DpiAwareForm
     {
+        private const string MemKey = "SeismicBraces";
+
         // ── Results ──
         public int BraceMode { get; private set; }              // 0=Lateral, 1=Longitudinal, 2=Both
         public int LateralFamilyIndex { get; private set; }
@@ -55,8 +58,7 @@ namespace SgRevitAddin.Commands.Annotation
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(500, 614);
-            AutoScroll = true;
+            ClientSize = new Size(500, 490);
 
             int margin = 12;
             int y = margin;
@@ -95,6 +97,7 @@ namespace SgRevitAddin.Commands.Annotation
             };
             foreach (var f in _lateralFamilies) cboLatFamily.Items.Add(f);
             if (cboLatFamily.Items.Count > 0) cboLatFamily.SelectedIndex = 0;
+            RestoreComboText(cboLatFamily, DialogMemory.Get(MemKey, "LatFamily", ""));
             grpLateral.Controls.Add(cboLatFamily);
 
             grpLateral.Controls.Add(new Label { Text = "Max Spacing (ft):", Location = new Point(10, 52), Size = new Size(110, 18) });
@@ -104,6 +107,7 @@ namespace SgRevitAddin.Commands.Annotation
                 Size = new Size(70, 24),
                 Minimum = 1, Maximum = 40, Value = 40, DecimalPlaces = 0, Increment = 1
             };
+            RestoreNud(nudLatSpacing, DialogMemory.GetDouble(MemKey, "LatSpacing", 40));
             grpLateral.Controls.Add(nudLatSpacing);
 
             grpLateral.Controls.Add(new Label { Text = "Max Dist from End (ft):", Location = new Point(220, 52), Size = new Size(155, 18) });
@@ -113,11 +117,13 @@ namespace SgRevitAddin.Commands.Annotation
                 Size = new Size(70, 24),
                 Minimum = 1, Maximum = 6, Value = 6, DecimalPlaces = 1, Increment = 0.5m
             };
+            RestoreNud(nudLatDistEnd, DialogMemory.GetDouble(MemKey, "LatDistEnd", 6));
             grpLateral.Controls.Add(nudLatDistEnd);
 
+            bool latLeft = DialogMemory.GetInt(MemKey, "LatOrient", 0) == 0;
             grpLateral.Controls.Add(new Label { Text = "Orientation:", Location = new Point(10, 82), Size = new Size(75, 18) });
-            rbLatLeft = new RadioButton { Text = "Left of Pipe / Above Pipe", Location = new Point(90, 80), Size = new Size(180, 20), Checked = true };
-            rbLatRight = new RadioButton { Text = "Right of Pipe / Below Pipe", Location = new Point(280, 80), Size = new Size(185, 20) };
+            rbLatLeft = new RadioButton { Text = "Left of Pipe / Above Pipe", Location = new Point(90, 80), Size = new Size(180, 20), Checked = latLeft };
+            rbLatRight = new RadioButton { Text = "Right of Pipe / Below Pipe", Location = new Point(280, 80), Size = new Size(185, 20), Checked = !latLeft };
             grpLateral.Controls.AddRange(new Control[] { rbLatLeft, rbLatRight });
 
             // Warn if no lateral families found
@@ -152,6 +158,7 @@ namespace SgRevitAddin.Commands.Annotation
             };
             foreach (var f in _longitudinalFamilies) cboLongFamily.Items.Add(f);
             if (cboLongFamily.Items.Count > 0) cboLongFamily.SelectedIndex = 0;
+            RestoreComboText(cboLongFamily, DialogMemory.Get(MemKey, "LongFamily", ""));
             grpLongitudinal.Controls.Add(cboLongFamily);
 
             grpLongitudinal.Controls.Add(new Label { Text = "Max Spacing (ft):", Location = new Point(10, 52), Size = new Size(110, 18) });
@@ -161,11 +168,13 @@ namespace SgRevitAddin.Commands.Annotation
                 Size = new Size(70, 24),
                 Minimum = 1, Maximum = 80, Value = 80, DecimalPlaces = 0, Increment = 1
             };
+            RestoreNud(nudLongSpacing, DialogMemory.GetDouble(MemKey, "LongSpacing", 80));
             grpLongitudinal.Controls.Add(nudLongSpacing);
 
+            bool longRight = DialogMemory.GetInt(MemKey, "LongOrient", 0) == 0;
             grpLongitudinal.Controls.Add(new Label { Text = "Orientation:", Location = new Point(10, 82), Size = new Size(75, 18) });
-            rbLongRight = new RadioButton { Text = "Right or Upward Along Pipe", Location = new Point(90, 80), Size = new Size(190, 20), Checked = true };
-            rbLongLeft = new RadioButton { Text = "Left or Downward Along Pipe", Location = new Point(290, 80), Size = new Size(180, 20) };
+            rbLongRight = new RadioButton { Text = "Right or Upward Along Pipe", Location = new Point(90, 80), Size = new Size(190, 20), Checked = longRight };
+            rbLongLeft = new RadioButton { Text = "Left or Downward Along Pipe", Location = new Point(290, 80), Size = new Size(180, 20), Checked = !longRight };
             grpLongitudinal.Controls.AddRange(new Control[] { rbLongRight, rbLongLeft });
 
             if (_longitudinalFamilies.Count == 0)
@@ -198,6 +207,7 @@ namespace SgRevitAddin.Commands.Annotation
             };
             foreach (var n in _linkNames) cboArchLink.Items.Add(n);
             if (cboArchLink.Items.Count > 0) cboArchLink.SelectedIndex = 0;
+            RestoreComboText(cboArchLink, DialogMemory.Get(MemKey, "LinkName", ""));
             grpLink.Controls.Add(cboArchLink);
             Controls.Add(grpLink);
             y += 65;
@@ -209,7 +219,8 @@ namespace SgRevitAddin.Commands.Annotation
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
                 Location = new Point(410, y),
-                Size = new Size(75, 30)
+                Size = new Size(75, 30),
+                TabIndex = 101
             };
             CancelButton = btnCancel;
             Controls.Add(btnCancel);
@@ -219,11 +230,34 @@ namespace SgRevitAddin.Commands.Annotation
                 Text = "Select Pipes",
                 DialogResult = DialogResult.OK,
                 Location = new Point(290, y),
-                Size = new Size(110, 30)
+                Size = new Size(110, 30),
+                TabIndex = 100
             };
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
             Controls.Add(btnOK);
+
+            // Restore the remembered brace mode (after both groups exist — the
+            // CheckedChanged handlers touch them).
+            int mode = DialogMemory.GetInt(MemKey, "Mode", 2);
+            if (mode == 0) rbLateral.Checked = true;
+            else if (mode == 1) rbLongitudinal.Checked = true;
+            UpdatePanelVisibility();
+        }
+
+        private static void RestoreComboText(ComboBox cbo, string value)
+        {
+            if (string.IsNullOrEmpty(value)) return;
+            int idx = cbo.Items.IndexOf(value);
+            if (idx >= 0) cbo.SelectedIndex = idx;   // only if it still exists
+        }
+
+        private static void RestoreNud(NumericUpDown nud, double value)
+        {
+            decimal v = (decimal)value;
+            if (v < nud.Minimum) v = nud.Minimum;
+            if (v > nud.Maximum) v = nud.Maximum;
+            nud.Value = v;
         }
 
         private void UpdatePanelVisibility()
@@ -273,6 +307,18 @@ namespace SgRevitAddin.Commands.Annotation
             LateralOrientation = rbLatLeft.Checked ? 0 : 1;
             LongitudinalOrientation = rbLongRight.Checked ? 0 : 1;
             ArchLinkIndex = cboArchLink.SelectedIndex;
+
+            // Remember for next time.
+            DialogMemory.SetInt(MemKey, "Mode", BraceMode);
+            DialogMemory.Set(MemKey, "LatFamily", cboLatFamily.SelectedItem?.ToString() ?? "");
+            DialogMemory.SetDouble(MemKey, "LatSpacing", LateralSpacingFt);
+            DialogMemory.SetDouble(MemKey, "LatDistEnd", LateralDistFromEndFt);
+            DialogMemory.Set(MemKey, "LongFamily", cboLongFamily.SelectedItem?.ToString() ?? "");
+            DialogMemory.SetDouble(MemKey, "LongSpacing", LongitudinalSpacingFt);
+            DialogMemory.SetInt(MemKey, "LatOrient", LateralOrientation);
+            DialogMemory.SetInt(MemKey, "LongOrient", LongitudinalOrientation);
+            DialogMemory.Set(MemKey, "LinkName", cboArchLink.SelectedItem?.ToString() ?? "");
+            DialogMemory.Flush();
         }
     }
 }

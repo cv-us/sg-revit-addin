@@ -36,7 +36,8 @@ namespace SgRevitAddin.Commands.Hangers
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(480, 250);
+            AllowResize = false;   // confirmation dialog — nothing gains from resizing
+            ClientSize = new Size(480, 237);
 
             const int Margin = 15;
             int y = Margin;

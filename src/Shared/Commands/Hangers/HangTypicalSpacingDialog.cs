@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Hangers
 {
@@ -20,6 +21,8 @@ namespace SgRevitAddin.Commands.Hangers
     /// </summary>
     public class HangTypicalSpacingDialog : DpiAwareForm
     {
+        private const string MemKey = "HangTypicalSpacing";
+
         // ── Results ──
         public string SelectedFamily { get; private set; }
         public string PipeTypeFilter { get; private set; }
@@ -55,6 +58,39 @@ namespace SgRevitAddin.Commands.Hangers
         {
             InitializeForm(hangerFamilyNames, pipeTypeNames, linkNames,
                 defaultFamily, defaultTypeCode, defaultMaxClash);
+            RestoreMemory(defaultTypeCode, defaultMaxClash);
+        }
+
+        /// <summary>Last-used values win over the passed-in defaults.</summary>
+        private void RestoreMemory(string defaultTypeCode, double defaultMaxClash)
+        {
+            string memFilter = DialogMemory.Get(MemKey, "PipeFilter", "");
+            if (memFilter.Length > 0 && cboPipeFilter.Items.Contains(memFilter))
+                cboPipeFilter.SelectedItem = memFilter;
+
+            string memFamily = DialogMemory.Get(MemKey, "Family", "");
+            if (memFamily.Length > 0 && cboFamily.Items.Contains(memFamily))
+                cboFamily.SelectedItem = memFamily;
+
+            bool evenly = DialogMemory.GetBool(MemKey, "Evenly", true);
+            rbEvenlySpaced.Checked = evenly;
+            rbExactSpacing.Checked = !evenly;
+
+            switch (DialogMemory.GetInt(MemKey, "SpacingChoice", 0))
+            {
+                case 1: rb12_0.Checked = true; break;
+                case 2: rb15_0.Checked = true; break;
+                case 3: rbCustom.Checked = true; break;
+                default: rb10_6.Checked = true; break;
+            }
+            txtCustomSpacing.Text = DialogMemory.Get(MemKey, "CustomSpacing", "");
+
+            txtTypeCode.Text = DialogMemory.Get(MemKey, "TypeCode", defaultTypeCode);
+            txtMaxClash.Text = DialogMemory.Get(MemKey, "MaxClash", defaultMaxClash.ToString());
+
+            string memLink = DialogMemory.Get(MemKey, "StructLink", "");
+            if (memLink.Length > 0 && cboStructLink.Items.Contains(memLink))
+                cboStructLink.SelectedItem = memLink;
         }
 
         private void InitializeForm(
@@ -63,7 +99,7 @@ namespace SgRevitAddin.Commands.Hangers
             string defaultFamily, string defaultTypeCode, double defaultMaxClash)
         {
             Text = "Auto Hang — Typical Spaced Straight Runs";
-            ClientSize = new Size(520, 620);
+            ClientSize = new Size(520, 516);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
@@ -178,15 +214,18 @@ namespace SgRevitAddin.Commands.Hangers
             AddLabel("Max Clash Height (ft):", 15, y);
             txtMaxClash = new TextBox { Left = inputX, Top = y - 2, Width = 80, Text = defaultMaxClash.ToString() };
             Controls.Add(txtMaxClash);
+            new ToolTip().SetToolTip(txtMaxClash,
+                "Maximum distance above the pipe to search for structure.");
             y += 45;
 
-            // ── OK / Cancel ──
-            btnOK = new Button { Text = "Place Hangers", Left = 275, Top = y, Width = 110, Height = 32, DialogResult = DialogResult.OK };
+            // ── OK / Cancel (right-aligned) ──
+            // Form width 520, margin 15 → Cancel right edge at 505.
+            btnOK = new Button { Text = "Place Hangers", Left = 295, Top = y, Width = 110, Height = 32, DialogResult = DialogResult.OK };
             btnOK.Click += BtnOK_Click;
             Controls.Add(btnOK);
             AcceptButton = btnOK;
 
-            btnCancel = new Button { Text = "Cancel", Left = 395, Top = y, Width = 90, Height = 32, DialogResult = DialogResult.Cancel };
+            btnCancel = new Button { Text = "Cancel", Left = 415, Top = y, Width = 90, Height = 32, DialogResult = DialogResult.Cancel };
             Controls.Add(btnCancel);
             CancelButton = btnCancel;
         }
@@ -254,6 +293,18 @@ namespace SgRevitAddin.Commands.Hangers
             SelectedStructuralLink = cboStructLink.SelectedIndex > 0
                 ? cboStructLink.SelectedItem.ToString() : null;
             MaxClashHeightFeet = maxClash;
+
+            // Remember for next time.
+            DialogMemory.Set(MemKey, "PipeFilter", PipeTypeFilter);
+            DialogMemory.Set(MemKey, "Family", SelectedFamily);
+            DialogMemory.SetBool(MemKey, "Evenly", EvenlyDistributed);
+            DialogMemory.SetInt(MemKey, "SpacingChoice",
+                rb10_6.Checked ? 0 : rb12_0.Checked ? 1 : rb15_0.Checked ? 2 : 3);
+            DialogMemory.Set(MemKey, "CustomSpacing", txtCustomSpacing.Text.Trim());
+            DialogMemory.Set(MemKey, "TypeCode", HangerTypeCode);
+            DialogMemory.Set(MemKey, "MaxClash", txtMaxClash.Text.Trim());
+            DialogMemory.Set(MemKey, "StructLink", SelectedStructuralLink ?? "");
+            DialogMemory.Flush();
         }
     }
 }

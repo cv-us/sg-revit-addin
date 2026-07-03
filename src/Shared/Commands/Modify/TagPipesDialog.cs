@@ -62,6 +62,7 @@ namespace SgRevitAddin.Commands.Modify
         private void InitializeComponent()
         {
             Text = "Tag Pipes";
+            AllowResize = false;   // dense fixed two-column layout — resizing adds nothing
             ClientSize = new Size(636, 396);
 
             int margin = 12;
@@ -123,15 +124,15 @@ namespace SgRevitAddin.Commands.Modify
             grpDrops.Controls.AddRange(new Control[] { _chkDropsOnly, _chkIncludeDrops, _dropFam, _dropType });
             Controls.Add(grpDrops);
 
-            // ── Buttons ──
+            // ── Buttons (added left→right for tab order) ──
             int by = 354;
-            var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(636 - margin - 85, by), Size = new Size(85, 30) };
-            CancelButton = btnCancel;
-            Controls.Add(btnCancel);
             var btnOK = new Button { Text = "Continue", DialogResult = DialogResult.OK, Location = new Point(636 - margin - 85 - 10 - 110, by), Size = new Size(110, 30) };
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
             Controls.Add(btnOK);
+            var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(636 - margin - 85, by), Size = new Size(85, 30) };
+            CancelButton = btnCancel;
+            Controls.Add(btnCancel);
 
             // ── Restore remembered radios / checkboxes ──
             int t = DialogMemory.GetInt(MemKey, "TagType", 0);

@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.ModelCheck
 {
@@ -10,9 +11,13 @@ namespace SgRevitAddin.Commands.ModelCheck
     ///   - Distance type: Unobstructed (1-12"), Obstructed (1-22"), or Custom
     ///   - Sprinkler head height (inches)
     ///   - Annotation mode: All sprinklers or Exceeding only
+    ///
+    /// All inputs persist between runs via <see cref="DialogMemory"/>.
     /// </summary>
     public class DeflectorDistanceCheckDialog : DpiAwareForm
     {
+        private const string MemKey = "DeflectorDistanceCheck";
+
         /// <summary>Maximum allowable deflector distance in feet.</summary>
         public double MaxDistance { get; private set; } = 12.0 / 12.0; // 12 inches
 
@@ -29,6 +34,7 @@ namespace SgRevitAddin.Commands.ModelCheck
         public DeflectorDistanceCheckDialog(int sprinklerCount)
         {
             Text = "Deflector Distance Check";
+            AllowResize = false;   // fixed option stack — resizing adds nothing
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
@@ -93,6 +99,15 @@ namespace SgRevitAddin.Commands.ModelCheck
 
             rbCustom.CheckedChanged += (s, e) => nudCustom.Enabled = rbCustom.Checked;
 
+            // Restore remembered distance mode + custom value.
+            int remCustom = DialogMemory.GetInt(MemKey, "CustomMax", 12);
+            if (remCustom >= (int)nudCustom.Minimum && remCustom <= (int)nudCustom.Maximum)
+                nudCustom.Value = remCustom;
+            int remMode = DialogMemory.GetInt(MemKey, "DistMode", 0);
+            rbObstructed.Checked = remMode == 1;
+            rbCustom.Checked = remMode == 2;   // fires CheckedChanged → enables nud
+            rbUnobstructed.Checked = !rbObstructed.Checked && !rbCustom.Checked;
+
             grpDist.Controls.AddRange(new Control[] {
                 rbUnobstructed, rbObstructed, rbCustom, nudCustom, lblInches });
             Controls.Add(grpDist);
@@ -129,6 +144,12 @@ namespace SgRevitAddin.Commands.ModelCheck
                 AutoSize = true,
                 ForeColor = Color.Gray
             };
+            // Restore remembered head height (stored in tenths of an inch).
+            int remHead = DialogMemory.GetInt(MemKey, "HeadHeightTenths", 30);
+            decimal remHeadIn = remHead / 10m;
+            if (remHeadIn >= nudHeadHeight.Minimum && remHeadIn <= nudHeadHeight.Maximum)
+                nudHeadHeight.Value = remHeadIn;
+
             grpHead.Controls.AddRange(new Control[] { lblHead, nudHeadHeight, lblIn2 });
             Controls.Add(grpHead);
             y += 65;
@@ -153,22 +174,14 @@ namespace SgRevitAddin.Commands.ModelCheck
                 Location = new Point(270, 22),
                 Size = new Size(150, 20)
             };
+            rbAnnotateAll.Checked = DialogMemory.GetBool(MemKey, "AnnotateAll", false);
+            rbAnnotateExceeds.Checked = !rbAnnotateAll.Checked;
             grpAnnot.Controls.AddRange(new Control[] { rbAnnotateExceeds, rbAnnotateAll });
             Controls.Add(grpAnnot);
             y += 65;
 
-            // ── Buttons (right-aligned with 10px gap) ──
+            // ── Buttons (right-aligned with 10px gap, added left→right for tab order) ──
             // Form width 540, margin 15 → Cancel right edge at 525.
-            var btnCancel = new Button
-            {
-                Text = "Cancel",
-                DialogResult = DialogResult.Cancel,
-                Location = new Point(445, y),
-                Size = new Size(80, 30)
-            };
-            CancelButton = btnCancel;
-            Controls.Add(btnCancel);
-
             var btnOK = new Button
             {
                 Text = "Check",
@@ -187,9 +200,26 @@ namespace SgRevitAddin.Commands.ModelCheck
 
                 HeadHeight = (double)nudHeadHeight.Value / 12.0;
                 AnnotateAll = rbAnnotateAll.Checked;
+
+                // Remember for next time.
+                DialogMemory.SetInt(MemKey, "DistMode", rbObstructed.Checked ? 1 : rbCustom.Checked ? 2 : 0);
+                DialogMemory.SetInt(MemKey, "CustomMax", (int)nudCustom.Value);
+                DialogMemory.SetInt(MemKey, "HeadHeightTenths", (int)(nudHeadHeight.Value * 10m));
+                DialogMemory.SetBool(MemKey, "AnnotateAll", AnnotateAll);
+                DialogMemory.Flush();
             };
             AcceptButton = btnOK;
             Controls.Add(btnOK);
+
+            var btnCancel = new Button
+            {
+                Text = "Cancel",
+                DialogResult = DialogResult.Cancel,
+                Location = new Point(445, y),
+                Size = new Size(80, 30)
+            };
+            CancelButton = btnCancel;
+            Controls.Add(btnCancel);
         }
     }
 }

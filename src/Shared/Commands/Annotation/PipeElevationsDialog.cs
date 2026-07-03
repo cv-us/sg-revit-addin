@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Annotation
 {
@@ -16,6 +17,8 @@ namespace SgRevitAddin.Commands.Annotation
     /// </summary>
     public class PipeElevationsDialog : DpiAwareForm
     {
+        private const string MemKey = "PipeElevations";
+
         // ── Results ──
         public string TOSMethod { get; private set; }       // "Deck", "Plane", "Z", "Level"
         public string TOSReferencePlaneName { get; private set; }
@@ -67,7 +70,7 @@ namespace SgRevitAddin.Commands.Annotation
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(440, 450);
+            ClientSize = new Size(440, 415);
 
             int margin = 15;
             int y = margin;
@@ -115,14 +118,14 @@ namespace SgRevitAddin.Commands.Annotation
                 Text = "Pipes",
                 Location = new Point(15, 22),
                 Size = new Size(100, 20),
-                Checked = true
+                Checked = DialogMemory.GetBool(MemKey, "Pipes", true)
             };
             chkFittings = new CheckBox
             {
                 Text = "Fittings && Accessories",
                 Location = new Point(140, 22),
                 Size = new Size(200, 20),
-                Checked = true
+                Checked = DialogMemory.GetBool(MemKey, "Fittings", true)
             };
             grpType.Controls.AddRange(new Control[] { chkPipes, chkFittings });
             Controls.Add(grpType);
@@ -135,7 +138,8 @@ namespace SgRevitAddin.Commands.Annotation
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
                 Location = new Point(350, y),
-                Size = new Size(75, 30)
+                Size = new Size(75, 30),
+                TabIndex = 101
             };
             CancelButton = btnCancel;
             Controls.Add(btnCancel);
@@ -145,11 +149,36 @@ namespace SgRevitAddin.Commands.Annotation
                 Text = "Calculate Elevations",
                 DialogResult = DialogResult.OK,
                 Location = new Point(210, y),
-                Size = new Size(130, 30)
+                Size = new Size(130, 30),
+                TabIndex = 100
             };
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
             Controls.Add(btnOK);
+
+            // Restore remembered settings — the method combos' change handlers
+            // are wired by now, so setting SelectedIndex swaps the sub-panels.
+            RestoreCombo(cboTOSMethod, DialogMemory.GetInt(MemKey, "TOSMethodIdx", 0));
+            RestoreCombo(cboAFFMethod, DialogMemory.GetInt(MemKey, "AFFMethodIdx", 0));
+            RestoreComboText(cboTOSPlane, DialogMemory.Get(MemKey, "TOSPlane", ""));
+            RestoreComboText(cboAFFPlane, DialogMemory.Get(MemKey, "AFFPlane", ""));
+            RestoreComboText(cboTOSLevel, DialogMemory.Get(MemKey, "TOSLevel", ""));
+            RestoreComboText(cboAFFLevel, DialogMemory.Get(MemKey, "AFFLevel", ""));
+            txtTOSZ.Text = DialogMemory.Get(MemKey, "TOSZ", "0");
+            txtAFFZ.Text = DialogMemory.Get(MemKey, "AFFZ", "0");
+        }
+
+        private static void RestoreCombo(ComboBox cbo, int index)
+        {
+            if (index >= 0 && index < cbo.Items.Count)
+                cbo.SelectedIndex = index;
+        }
+
+        private static void RestoreComboText(ComboBox cbo, string value)
+        {
+            if (string.IsNullOrEmpty(value)) return;
+            int idx = cbo.Items.IndexOf(value);
+            if (idx >= 0) cbo.SelectedIndex = idx;   // only if it still exists
         }
 
         private void BuildReferenceSection(GroupBox grp, string prefix,
@@ -241,12 +270,44 @@ namespace SgRevitAddin.Commands.Annotation
             TOSMethod = MethodKeys[cboTOSMethod.SelectedIndex];
             AFFMethod = MethodKeys[cboAFFMethod.SelectedIndex];
 
+            // Method-specific validation — fail gracefully, keep the dialog open.
+            double tosZ = 0, affZ = 0;
+            if (TOSMethod == "Z" && !double.TryParse(txtTOSZ.Text.Trim(), out tosZ))
+            {
+                MessageBox.Show("Enter a valid numeric TOS Z elevation in feet.",
+                    "Invalid Elevation", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                DialogResult = DialogResult.None;
+                return;
+            }
+            if (AFFMethod == "Z" && !double.TryParse(txtAFFZ.Text.Trim(), out affZ))
+            {
+                MessageBox.Show("Enter a valid numeric AFF Z elevation in feet.",
+                    "Invalid Elevation", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                DialogResult = DialogResult.None;
+                return;
+            }
+            if ((TOSMethod == "Plane" && cboTOSPlane.SelectedIndex < 0) ||
+                (AFFMethod == "Plane" && cboAFFPlane.SelectedIndex < 0))
+            {
+                MessageBox.Show("No reference plane is selected. Create a named\n" +
+                    "reference plane in the project or choose another method.",
+                    "No Reference Plane", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                DialogResult = DialogResult.None;
+                return;
+            }
+            if ((TOSMethod == "Level" && cboTOSLevel.SelectedIndex < 0) ||
+                (AFFMethod == "Level" && cboAFFLevel.SelectedIndex < 0))
+            {
+                MessageBox.Show("No level is selected. Choose another method.",
+                    "No Level", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                DialogResult = DialogResult.None;
+                return;
+            }
+
             TOSReferencePlaneName = cboTOSPlane.SelectedItem?.ToString() ?? "";
             AFFReferencePlaneName = cboAFFPlane.SelectedItem?.ToString() ?? "";
 
-            double.TryParse(txtTOSZ.Text, out double tosZ);
             TOSZElevationFeet = tosZ;
-            double.TryParse(txtAFFZ.Text, out double affZ);
             AFFZElevationFeet = affZ;
 
             TOSLevelName = cboTOSLevel.SelectedItem?.ToString() ?? "";
@@ -254,6 +315,19 @@ namespace SgRevitAddin.Commands.Annotation
 
             ProcessPipes = chkPipes.Checked;
             ProcessFittings = chkFittings.Checked;
+
+            // Remember for next time.
+            DialogMemory.SetInt(MemKey, "TOSMethodIdx", cboTOSMethod.SelectedIndex);
+            DialogMemory.SetInt(MemKey, "AFFMethodIdx", cboAFFMethod.SelectedIndex);
+            DialogMemory.Set(MemKey, "TOSPlane", TOSReferencePlaneName);
+            DialogMemory.Set(MemKey, "AFFPlane", AFFReferencePlaneName);
+            DialogMemory.Set(MemKey, "TOSLevel", TOSLevelName);
+            DialogMemory.Set(MemKey, "AFFLevel", AFFLevelName);
+            DialogMemory.Set(MemKey, "TOSZ", txtTOSZ.Text.Trim());
+            DialogMemory.Set(MemKey, "AFFZ", txtAFFZ.Text.Trim());
+            DialogMemory.SetBool(MemKey, "Pipes", ProcessPipes);
+            DialogMemory.SetBool(MemKey, "Fittings", ProcessFittings);
+            DialogMemory.Flush();
         }
     }
 }

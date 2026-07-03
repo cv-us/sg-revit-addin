@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 using static SgRevitAddin.Commands.Coordination.MarkFamilyInstancesCommand;
 
 namespace SgRevitAddin.Commands.Coordination
@@ -27,6 +28,8 @@ namespace SgRevitAddin.Commands.Coordination
     /// </summary>
     public class MarkFamilyInstancesDialog : DpiAwareForm
     {
+        private const string MemKey = "MarkFamilyInstances";
+
         public enum MarkAction { None, Place, DeleteAll }
 
         // ── Results ──
@@ -137,11 +140,14 @@ namespace SgRevitAddin.Commands.Coordination
             y += 32;
 
             // ── Side-by-side: Families | Worksets ──
+            // Both groups are the dialog's vertical-flex elements: enlarging
+            // the window grows the lists. Everything below is bottom-anchored.
             var grpFamilies = new GroupBox
             {
                 Text = "Families (click to select)",
                 Location = new Point(Margin, y),
-                Size = new Size(FamiliesW, RowH)
+                Size = new Size(FamiliesW, RowH),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom
             };
             Controls.Add(grpFamilies);
 
@@ -150,7 +156,8 @@ namespace SgRevitAddin.Commands.Coordination
                 Text = "",
                 Location = new Point(10, 22),
                 Size = new Size(FamiliesW - 25, 18),
-                ForeColor = SystemColors.GrayText
+                ForeColor = SystemColors.GrayText,
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
             };
             grpFamilies.Controls.Add(lblCount);
 
@@ -159,7 +166,8 @@ namespace SgRevitAddin.Commands.Coordination
                 Location = new Point(10, 46),
                 Size = new Size(FamiliesW - 25, RowH - 56),
                 IntegralHeight = false,
-                Font = new Font(FontFamily.GenericSansSerif, 9f)
+                Font = new Font(FontFamily.GenericSansSerif, 9f),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom
             };
             grpFamilies.Controls.Add(lstFamilies);
 
@@ -167,7 +175,8 @@ namespace SgRevitAddin.Commands.Coordination
             {
                 Text = "Worksets",
                 Location = new Point(Margin + FamiliesW + 15, y),
-                Size = new Size(WorksetsW, RowH)
+                Size = new Size(WorksetsW, RowH),
+                Anchor = AnchorStyles.Top | AnchorStyles.Right | AnchorStyles.Bottom
             };
             Controls.Add(grpWorksets);
 
@@ -175,30 +184,13 @@ namespace SgRevitAddin.Commands.Coordination
 
             if (isWorkshared)
             {
-                btnAllWorksets = new Button
-                {
-                    Text = "Select All",
-                    Location = new Point(10, 22),
-                    Size = new Size(85, 26)
-                };
-                btnAllWorksets.Click += (s, e) => SetAllWorksets(true);
-                grpWorksets.Controls.Add(btnAllWorksets);
-
-                btnNoneWorksets = new Button
-                {
-                    Text = "Select None",
-                    Location = new Point(100, 22),
-                    Size = new Size(95, 26)
-                };
-                btnNoneWorksets.Click += (s, e) => SetAllWorksets(false);
-                grpWorksets.Controls.Add(btnNoneWorksets);
-
                 clbWorksets = new CheckedListBox
                 {
-                    Location = new Point(10, 56),
-                    Size = new Size(WorksetsW - 25, RowH - 70),
+                    Location = new Point(10, 22),
+                    Size = new Size(WorksetsW - 25, RowH - 64),
                     CheckOnClick = true,
-                    IntegralHeight = false
+                    IntegralHeight = false,
+                    Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom
                 };
                 clbWorksets.ItemCheck += (s, e) =>
                 {
@@ -208,6 +200,26 @@ namespace SgRevitAddin.Commands.Coordination
                     BeginInvoke(new Action(RefreshList));
                 };
                 grpWorksets.Controls.Add(clbWorksets);
+
+                btnAllWorksets = new Button
+                {
+                    Text = "Select All",
+                    Location = new Point(10, RowH - 36),
+                    Size = new Size(85, 26),
+                    Anchor = AnchorStyles.Bottom | AnchorStyles.Left
+                };
+                btnAllWorksets.Click += (s, e) => SetAllWorksets(true);
+                grpWorksets.Controls.Add(btnAllWorksets);
+
+                btnNoneWorksets = new Button
+                {
+                    Text = "Select None",
+                    Location = new Point(100, RowH - 36),
+                    Size = new Size(95, 26),
+                    Anchor = AnchorStyles.Bottom | AnchorStyles.Left
+                };
+                btnNoneWorksets.Click += (s, e) => SetAllWorksets(false);
+                grpWorksets.Controls.Add(btnNoneWorksets);
             }
             else
             {
@@ -228,23 +240,25 @@ namespace SgRevitAddin.Commands.Coordination
             {
                 Text = "Scope",
                 Location = new Point(Margin, y),
-                Size = new Size(FullW, 55)
+                Size = new Size(FullW, 55),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
             };
             Controls.Add(grpScope);
 
+            bool remWholeProject = DialogMemory.GetBool(MemKey, "WholeProject", true);
             rbView = new RadioButton
             {
                 Text = "Active view only",
                 Location = new Point(15, 22),
                 Size = new Size(180, 22),
-                Checked = false
+                Checked = !remWholeProject
             };
             rbProject = new RadioButton
             {
                 Text = "Whole project",
                 Location = new Point(200, 22),
                 Size = new Size(180, 22),
-                Checked = true
+                Checked = remWholeProject
             };
             grpScope.Controls.AddRange(new Control[] { rbView, rbProject });
             y += 65;
@@ -254,7 +268,8 @@ namespace SgRevitAddin.Commands.Coordination
             {
                 Text = "Markers",
                 Location = new Point(Margin, y),
-                Size = new Size(FullW, 75)
+                Size = new Size(FullW, 75),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
             };
             Controls.Add(grpMarkers);
 
@@ -275,6 +290,7 @@ namespace SgRevitAddin.Commands.Coordination
             };
             btnPlace.Click += BtnPlace_Click;
             grpMarkers.Controls.Add(btnPlace);
+            AcceptButton = btnPlace;   // Enter = primary action
 
             btnDeleteAll = new Button
             {
@@ -297,7 +313,8 @@ namespace SgRevitAddin.Commands.Coordination
                 Text = "Close",
                 DialogResult = DialogResult.Cancel,
                 Location = new Point(FormWidth - Margin - 90, y),
-                Size = new Size(90, 28)
+                Size = new Size(90, 28),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right
             };
             CancelButton = btnClose;
             Controls.Add(btnClose);
@@ -422,6 +439,11 @@ namespace SgRevitAddin.Commands.Coordination
             ActiveViewOnly = rbView.Checked;
             SelectedWorksetIds = CurrentlyCheckedWorksets(); // null when not workshared
             Action = MarkAction.Place;
+
+            // Remember scope for next time (family/worksets are model-specific).
+            DialogMemory.SetBool(MemKey, "WholeProject", rbProject.Checked);
+            DialogMemory.Flush();
+
             DialogResult = DialogResult.OK;
         }
     }

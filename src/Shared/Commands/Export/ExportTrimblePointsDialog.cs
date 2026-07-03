@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Export
 {
@@ -19,6 +20,8 @@ namespace SgRevitAddin.Commands.Export
     /// </summary>
     public class ExportTrimblePointsDialog : DpiAwareForm
     {
+        private const string MemKey = "ExportTrimblePoints";
+
         // ── Results ──
         public ScopeMode Scope { get; private set; } = ScopeMode.ActiveView;
         public int SelectedLevelIndex { get; private set; } = -1;
@@ -59,11 +62,12 @@ namespace SgRevitAddin.Commands.Export
         private void InitializeComponent()
         {
             Text = "Export Trimble Layout Points";
+            AllowResize = false;   // fixed option stack — resizing adds nothing
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(480, 480);
+            ClientSize = new Size(480, 460);
 
             int margin = 15;
             int y = margin;
@@ -110,6 +114,25 @@ namespace SgRevitAddin.Commands.Export
 
             rbByLevel.CheckedChanged += (s, e) => { cboLevel.Enabled = rbByLevel.Checked; };
 
+            // Restore remembered scope (selection scope only if a selection exists)
+            // and level (only if that level still exists in this model). The
+            // radios aren't parented yet, so uncheck siblings explicitly.
+            int remScope = DialogMemory.GetInt(MemKey, "Scope", -1);
+            if (remScope == (int)ScopeMode.ActiveView)
+            {
+                rbSelection.Checked = false; rbByLevel.Checked = false; rbActiveView.Checked = true;
+            }
+            else if (remScope == (int)ScopeMode.ByLevel)
+            {
+                rbSelection.Checked = false; rbActiveView.Checked = false; rbByLevel.Checked = true;
+            }
+            else if (remScope == (int)ScopeMode.Selection && rbSelection.Enabled)
+            {
+                rbActiveView.Checked = false; rbByLevel.Checked = false; rbSelection.Checked = true;
+            }
+            int remLevel = cboLevel.Items.IndexOf(DialogMemory.Get(MemKey, "Level", ""));
+            if (remLevel >= 0) cboLevel.SelectedIndex = remLevel;
+
             grpScope.Controls.AddRange(new Control[] { rbSelection, rbActiveView, rbByLevel, cboLevel });
             Controls.Add(grpScope);
             y += 100;
@@ -122,8 +145,9 @@ namespace SgRevitAddin.Commands.Export
                 Size = new Size(450, 72)
             };
 
-            rbShared = new RadioButton { Text = "Shared Coordinates (survey/real-world)", Location = new Point(10, 18), Size = new Size(280, 20), Checked = true };
-            rbProject = new RadioButton { Text = "Project Internal Coordinates", Location = new Point(10, 40), Size = new Size(280, 20) };
+            bool remShared = DialogMemory.GetBool(MemKey, "Shared", true);
+            rbShared = new RadioButton { Text = "Shared Coordinates (survey/real-world)", Location = new Point(10, 18), Size = new Size(280, 20), Checked = remShared };
+            rbProject = new RadioButton { Text = "Project Internal Coordinates", Location = new Point(10, 40), Size = new Size(280, 20), Checked = !remShared };
             grpCoords.Controls.AddRange(new Control[] { rbShared, rbProject });
             Controls.Add(grpCoords);
             y += 82;
@@ -135,8 +159,9 @@ namespace SgRevitAddin.Commands.Export
                 Location = new Point(margin, y),
                 Size = new Size(220, 65)
             };
-            rbNorthingEasting = new RadioButton { Text = "Northing, Easting", Location = new Point(10, 18), Size = new Size(180, 20), Checked = true };
-            rbEastingNorthing = new RadioButton { Text = "Easting, Northing", Location = new Point(10, 40), Size = new Size(180, 20) };
+            bool remNorthing = DialogMemory.GetBool(MemKey, "NorthingFirst", true);
+            rbNorthingEasting = new RadioButton { Text = "Northing, Easting", Location = new Point(10, 18), Size = new Size(180, 20), Checked = remNorthing };
+            rbEastingNorthing = new RadioButton { Text = "Easting, Northing", Location = new Point(10, 40), Size = new Size(180, 20), Checked = !remNorthing };
             grpOrder.Controls.AddRange(new Control[] { rbNorthingEasting, rbEastingNorthing });
             Controls.Add(grpOrder);
 
@@ -146,8 +171,9 @@ namespace SgRevitAddin.Commands.Export
                 Location = new Point(245, y),
                 Size = new Size(220, 65)
             };
-            rbFeet = new RadioButton { Text = "US Feet", Location = new Point(10, 18), Size = new Size(120, 20), Checked = true };
-            rbMeters = new RadioButton { Text = "Meters", Location = new Point(10, 40), Size = new Size(120, 20) };
+            bool remFeet = DialogMemory.GetBool(MemKey, "Feet", true);
+            rbFeet = new RadioButton { Text = "US Feet", Location = new Point(10, 18), Size = new Size(120, 20), Checked = remFeet };
+            rbMeters = new RadioButton { Text = "Meters", Location = new Point(10, 40), Size = new Size(120, 20), Checked = !remFeet };
             grpUnits.Controls.AddRange(new Control[] { rbFeet, rbMeters });
             Controls.Add(grpUnits);
             y += 75;
@@ -160,11 +186,11 @@ namespace SgRevitAddin.Commands.Export
                 Size = new Size(450, 55)
             };
             grpNaming.Controls.Add(new Label { Text = "Prefix:", Location = new Point(10, 22), Size = new Size(45, 18) });
-            txtPrefix = new TextBox { Text = "H", Location = new Point(60, 19), Size = new Size(60, 22) };
+            txtPrefix = new TextBox { Text = DialogMemory.Get(MemKey, "Prefix", "H"), Location = new Point(60, 19), Size = new Size(60, 22) };
             grpNaming.Controls.Add(txtPrefix);
 
             grpNaming.Controls.Add(new Label { Text = "Code:", Location = new Point(140, 22), Size = new Size(40, 18) });
-            txtCode = new TextBox { Text = "HANGER-INSERT", Location = new Point(185, 19), Size = new Size(250, 22) };
+            txtCode = new TextBox { Text = DialogMemory.Get(MemKey, "Code", "HANGER-INSERT"), Location = new Point(185, 19), Size = new Size(250, 22) };
             grpNaming.Controls.Add(txtCode);
             Controls.Add(grpNaming);
             y += 65;
@@ -182,7 +208,7 @@ namespace SgRevitAddin.Commands.Export
                 Location = new Point(10, 22),
                 Size = new Size(130, 18)
             });
-            txtElevOffset = new TextBox { Text = "0", Location = new Point(145, 19), Size = new Size(80, 22) };
+            txtElevOffset = new TextBox { Text = DialogMemory.Get(MemKey, "ElevOffset", "0"), Location = new Point(145, 19), Size = new Size(80, 22) };
             grpElev.Controls.Add(txtElevOffset);
             grpElev.Controls.Add(new Label
             {
@@ -200,18 +226,8 @@ namespace SgRevitAddin.Commands.Export
             Controls.Add(grpElev);
             y += 78;
 
-            // ── Buttons (right-aligned with 10px gap) ──
+            // ── Buttons (right-aligned with 10px gap, added left→right for tab order) ──
             // Form width 480, margin 15 → Cancel right edge at 465.
-            var btnCancel = new Button
-            {
-                Text = "Cancel",
-                DialogResult = DialogResult.Cancel,
-                Location = new Point(390, y),
-                Size = new Size(75, 30)
-            };
-            CancelButton = btnCancel;
-            Controls.Add(btnCancel);
-
             var btnOK = new Button
             {
                 Text = "Export CSV",
@@ -222,10 +238,34 @@ namespace SgRevitAddin.Commands.Export
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
             Controls.Add(btnOK);
+
+            var btnCancel = new Button
+            {
+                Text = "Cancel",
+                DialogResult = DialogResult.Cancel,
+                Location = new Point(390, y),
+                Size = new Size(75, 30)
+            };
+            CancelButton = btnCancel;
+            Controls.Add(btnCancel);
         }
 
         private void BtnOK_Click(object sender, EventArgs e)
         {
+            // Validate the elevation offset before anything else — a typo here
+            // would silently shift every exported point.
+            string offsetText = txtElevOffset.Text.Trim();
+            double offset = 0;
+            if (offsetText.Length > 0 && !double.TryParse(offsetText, out offset))
+            {
+                MessageBox.Show(this,
+                    "Elevation datum offset must be a number (e.g. 1272.35), or blank for 0.",
+                    "Export Trimble Points", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                DialogResult = DialogResult.None;   // keep the dialog open
+                return;
+            }
+            ElevationOffset = offset;
+
             if (rbSelection.Checked) Scope = ScopeMode.Selection;
             else if (rbActiveView.Checked) Scope = ScopeMode.ActiveView;
             else Scope = ScopeMode.ByLevel;
@@ -237,12 +277,19 @@ namespace SgRevitAddin.Commands.Export
             PointPrefix = txtPrefix.Text.Trim();
             PointCode = txtCode.Text.Trim();
 
-            if (!double.TryParse(txtElevOffset.Text.Trim(), out double offset))
-                offset = 0;
-            ElevationOffset = offset;
-
             if (string.IsNullOrEmpty(PointPrefix))
                 PointPrefix = "H";
+
+            // Remember for next time.
+            DialogMemory.SetInt(MemKey, "Scope", (int)Scope);
+            DialogMemory.Set(MemKey, "Level", cboLevel.SelectedItem?.ToString() ?? "");
+            DialogMemory.SetBool(MemKey, "Shared", UseSharedCoordinates);
+            DialogMemory.SetBool(MemKey, "NorthingFirst", NorthingFirst);
+            DialogMemory.SetBool(MemKey, "Feet", UseFeet);
+            DialogMemory.Set(MemKey, "Prefix", PointPrefix);
+            DialogMemory.Set(MemKey, "Code", PointCode);
+            DialogMemory.Set(MemKey, "ElevOffset", offsetText.Length > 0 ? offsetText : "0");
+            DialogMemory.Flush();
         }
     }
 }

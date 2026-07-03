@@ -2,15 +2,19 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Export
 {
     /// <summary>
     /// Dialog for ImportASPipesCommand.
     /// Collects: level, pipe type, and piping system type to use when creating pipes.
+    /// Selections are remembered between runs via <see cref="DialogMemory"/>.
     /// </summary>
     public class ImportASPipesDialog : DpiAwareForm
     {
+        private const string MemKey = "ImportASPipes";
+
         public string SelectedLevelName    { get; private set; } = "";
         public string SelectedPipeTypeName { get; private set; } = "";
         public string SelectedSystemName   { get; private set; } = "";
@@ -25,6 +29,7 @@ namespace SgRevitAddin.Commands.Export
             IList<string> systemTypeNames)
         {
             Text = "Import AutoSPRINK Pipes from CSV";
+            AllowResize = false;   // fixed option stack — resizing adds nothing
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
@@ -41,6 +46,7 @@ namespace SgRevitAddin.Commands.Export
             _cboLevel = new ComboBox { Location = new Point(margin + labelW, y), Size = new Size(ctrlW, 22), DropDownStyle = ComboBoxStyle.DropDownList };
             foreach (var n in levelNames) _cboLevel.Items.Add(n);
             if (_cboLevel.Items.Count > 0) _cboLevel.SelectedIndex = 0;
+            RestoreRemembered(_cboLevel, "Level");
             Controls.Add(_cboLevel);
             y += 35;
 
@@ -49,6 +55,7 @@ namespace SgRevitAddin.Commands.Export
             _cboPipeType = new ComboBox { Location = new Point(margin + labelW, y), Size = new Size(ctrlW, 22), DropDownStyle = ComboBoxStyle.DropDownList };
             foreach (var n in pipeTypeNames) _cboPipeType.Items.Add(n);
             SelectDefault(_cboPipeType, pipeTypeNames, "-SS FP Mains");
+            RestoreRemembered(_cboPipeType, "PipeType");
             Controls.Add(_cboPipeType);
             y += 35;
 
@@ -57,6 +64,7 @@ namespace SgRevitAddin.Commands.Export
             _cboSystem = new ComboBox { Location = new Point(margin + labelW, y), Size = new Size(ctrlW, 22), DropDownStyle = ComboBoxStyle.DropDownList };
             foreach (var n in systemTypeNames) _cboSystem.Items.Add(n);
             SelectDefault(_cboSystem, systemTypeNames, "Fire Protection Wet");
+            RestoreRemembered(_cboSystem, "System");
             Controls.Add(_cboSystem);
             y += 50;
 
@@ -75,21 +83,33 @@ namespace SgRevitAddin.Commands.Export
             // Form width 440, margin 15 → Cancel right edge at 425.
             var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(335, y), Size = new Size(90, 28) };
             var btnOk = new Button { Text = "Import", DialogResult = DialogResult.OK, Location = new Point(235, y), Size = new Size(90, 28) };
+            btnOk.Click += BtnOk_Click;
             Controls.Add(btnOk);
             Controls.Add(btnCancel);
             AcceptButton = btnOk;
             CancelButton = btnCancel;
         }
 
-        protected override void OnFormClosing(FormClosingEventArgs e)
+        private void BtnOk_Click(object sender, EventArgs e)
         {
-            if (DialogResult == DialogResult.OK)
-            {
-                SelectedLevelName    = _cboLevel.SelectedItem?.ToString() ?? "";
-                SelectedPipeTypeName = _cboPipeType.SelectedItem?.ToString() ?? "";
-                SelectedSystemName   = _cboSystem.SelectedItem?.ToString() ?? "";
-            }
-            base.OnFormClosing(e);
+            SelectedLevelName    = _cboLevel.SelectedItem?.ToString() ?? "";
+            SelectedPipeTypeName = _cboPipeType.SelectedItem?.ToString() ?? "";
+            SelectedSystemName   = _cboSystem.SelectedItem?.ToString() ?? "";
+
+            // Remember for next time.
+            DialogMemory.Set(MemKey, "Level", SelectedLevelName);
+            DialogMemory.Set(MemKey, "PipeType", SelectedPipeTypeName);
+            DialogMemory.Set(MemKey, "System", SelectedSystemName);
+            DialogMemory.Flush();
+        }
+
+        /// <summary>Re-select the remembered item, but only if it still exists in the model.</summary>
+        private static void RestoreRemembered(ComboBox cbo, string field)
+        {
+            string remembered = DialogMemory.Get(MemKey, field, "");
+            if (string.IsNullOrEmpty(remembered)) return;
+            int i = cbo.Items.IndexOf(remembered);
+            if (i >= 0) cbo.SelectedIndex = i;
         }
 
         private static void SelectDefault(ComboBox cbo, IList<string> names, string fragment)

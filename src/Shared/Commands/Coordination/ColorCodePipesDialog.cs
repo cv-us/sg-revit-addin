@@ -1,14 +1,18 @@
 using System.Drawing;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Coordination
 {
     /// <summary>
     /// Dialog for the Color Code Pipes command.
     /// Lets the user choose: By Size, By Type, or Reset.
+    /// The last-used mode is remembered via <see cref="DialogMemory"/>.
     /// </summary>
     public class ColorCodePipesDialog : DpiAwareForm
     {
+        private const string MemKey = "ColorCodePipes";
+
         public enum ColorMode { BySize, ByType, Reset }
         public ColorMode SelectedMode { get; private set; } = ColorMode.BySize;
 
@@ -17,11 +21,12 @@ namespace SgRevitAddin.Commands.Coordination
         public ColorCodePipesDialog(int pipeCount)
         {
             Text = "Color Code Pipes";
+            AllowResize = false;   // fixed option stack — resizing adds nothing
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(440, 230);
+            ClientSize = new Size(440, 210);
 
             int y = 15;
 
@@ -64,18 +69,14 @@ namespace SgRevitAddin.Commands.Coordination
             Controls.Add(grp);
             y += 120;
 
+            // Restore the last-used mode.
+            int remMode = DialogMemory.GetInt(MemKey, "Mode", 0);
+            rbByType.Checked = remMode == (int)ColorMode.ByType;
+            rbReset.Checked = remMode == (int)ColorMode.Reset;
+            rbBySize.Checked = !rbByType.Checked && !rbReset.Checked;
+
             // Buttons (right-aligned with 10px gap)
             // Form width 440, margin 15 → Cancel right edge at 425.
-            var btnCancel = new Button
-            {
-                Text = "Cancel",
-                DialogResult = DialogResult.Cancel,
-                Location = new Point(350, y),
-                Size = new Size(75, 30)
-            };
-            CancelButton = btnCancel;
-            Controls.Add(btnCancel);
-
             var btnOK = new Button
             {
                 Text = "Apply",
@@ -88,9 +89,21 @@ namespace SgRevitAddin.Commands.Coordination
                 SelectedMode = rbBySize.Checked ? ColorMode.BySize :
                                rbByType.Checked ? ColorMode.ByType :
                                ColorMode.Reset;
+                DialogMemory.SetInt(MemKey, "Mode", (int)SelectedMode);
+                DialogMemory.Flush();
             };
             AcceptButton = btnOK;
             Controls.Add(btnOK);
+
+            var btnCancel = new Button
+            {
+                Text = "Cancel",
+                DialogResult = DialogResult.Cancel,
+                Location = new Point(350, y),
+                Size = new Size(75, 30)
+            };
+            CancelButton = btnCancel;
+            Controls.Add(btnCancel);
         }
     }
 }

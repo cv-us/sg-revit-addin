@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Hangers
 {
@@ -22,6 +23,8 @@ namespace SgRevitAddin.Commands.Hangers
     /// </summary>
     public class UniformRodLengthsDialog : DpiAwareForm
     {
+        private const string MemKey = "UniformRodLengths";
+
         // ── Results ──
         public string TypeCode { get; private set; }
         public double MaxInches { get; private set; }
@@ -36,7 +39,15 @@ namespace SgRevitAddin.Commands.Hangers
 
         public UniformRodLengthsDialog(int hangerCount, List<string> availableCodes)
         {
+            AllowResize = false;   // fixed stack of options — resizing adds nothing
             InitializeComponent(hangerCount, availableCodes);
+        }
+
+        private static decimal Clamp(decimal value, decimal min, decimal max)
+        {
+            if (value < min) return min;
+            if (value > max) return max;
+            return value;
         }
 
         private void InitializeComponent(int hangerCount, List<string> availableCodes)
@@ -105,6 +116,10 @@ namespace SgRevitAddin.Commands.Hangers
                 cbTypeCode.Items.Add(code);
             if (cbTypeCode.Items.Count > 0)
                 cbTypeCode.SelectedIndex = 0;
+            // Re-select the last-used code if it exists in this selection.
+            int remembered = cbTypeCode.Items.IndexOf(DialogMemory.Get(MemKey, "TypeCode", ""));
+            if (remembered >= 0)
+                cbTypeCode.SelectedIndex = remembered;
             Controls.Add(cbTypeCode);
             y += 24 + SectionGap;
 
@@ -126,7 +141,7 @@ namespace SgRevitAddin.Commands.Hangers
                 Maximum = 1000m,
                 DecimalPlaces = 2,
                 Increment = 0.25m,
-                Value = 24.00m
+                Value = Clamp((decimal)DialogMemory.GetDouble(MemKey, "MaxInches", 24.0), 0.25m, 1000m)
             };
             Controls.Add(nudMax);
             y += 24 + RowGap;
@@ -160,7 +175,7 @@ namespace SgRevitAddin.Commands.Hangers
                 Maximum = 1000m,
                 DecimalPlaces = 2,
                 Increment = 0.25m,
-                Value = 12.00m
+                Value = Clamp((decimal)DialogMemory.GetDouble(MemKey, "TargetInches", 12.0), 0.25m, 1000m)
             };
             Controls.Add(nudTarget);
             y += 24 + RowGap;
@@ -236,6 +251,12 @@ namespace SgRevitAddin.Commands.Hangers
                 DialogResult = DialogResult.None;
                 return;
             }
+
+            // Remember for next time.
+            DialogMemory.Set(MemKey, "TypeCode", TypeCode);
+            DialogMemory.SetDouble(MemKey, "MaxInches", MaxInches);
+            DialogMemory.SetDouble(MemKey, "TargetInches", TargetInches);
+            DialogMemory.Flush();
         }
     }
 }

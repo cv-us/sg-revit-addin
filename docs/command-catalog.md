@@ -15,8 +15,8 @@ Master list of all SG Revit Addin commands.
 - `HangTypicalSpacingCommand` - (merged into Place Hangers) Place hangers at typical spacing along straight pipe runs with raybounce rod length to decks
 - `HangParallelStructuralCommand` - (merged into Place Hangers) Place hangers at typical spacing, attached to parallel structural framing with clamp angle and widemouth detection
 - `HangUserLocationsCommand` - Place hangers at user-marked detail line locations with raybounce rod length to structure above
-- `RaybounceEarlyCommand` - **STABLE** raybounce: rod lengths straight up to native structural elements (floors/roofs/framing) incl. linked models. The reliable fallback
-- `SyncHangersRaybounceCommand` - "Raybounce Dev" — **UNDER DEVELOPMENT**: adds imported CAD/IFC mesh detection + a multi-ray fan. Still being refined for imported steel
+- `RaybounceEarlyCommand` - **STABLE** raybounce: rod lengths straight up to native structural elements (floors/roofs/framing) incl. linked models. Geometry-verified distances (fixes rods stretching under sloped linked decks) + a DirectShape triangle index for linked IFC
+- `SyncHangersRaybounceCommand` - "Raybounce Dev" — **UNDER DEVELOPMENT**: same verified engine (`StructureRayScanner`) plus imported CAD (DWG/STEP) mesh detection, Generic Model/Mass (STEP-in-family) indexing, and a center-priority multi-ray fan
 - `TrapezeHangCommand` - Place standard pipe trapeze hangers at auto-spaced intervals with two-rod structural attachment
 - `TrapezeUserLocationsCommand` - Place trapeze hangers at user-marked detail line locations with two-rod structural attachment
 - `TrapezeUnistrutCommand` - Place unistrut pipe trapeze hangers at auto-spaced intervals with channel extensions

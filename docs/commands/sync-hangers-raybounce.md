@@ -6,10 +6,42 @@
 
 > ⚠️ **UNDER DEVELOPMENT.** This is the experimental raybounce that also tries
 > imported CAD / IFC mesh geometry (via a custom triangle raycaster) and a
-> multi-ray fan to tolerate small plan misalignment. It works for native
-> structure but is **still being refined for imported steel** (DWG-linked
-> STEP, linked IFC). If a result looks wrong, use **Raybounce Early**
-> ([raybounce-early.md](raybounce-early.md)), the stable native-only fallback.
+> multi-ray fan to tolerate small plan misalignment. If a result looks wrong,
+> use **Raybounce Early** ([raybounce-early.md](raybounce-early.md)), the
+> stable fallback (which shares the same verified core engine, minus the fan
+> and CAD handling).
+
+## Engine (StructureRayScanner)
+
+Both raybounce commands now run on `Utils/StructureRayScanner`, which merges
+three sources per hanger and takes the **closest verified** hit:
+
+1. **Native** `ReferenceIntersector` (`Find()` + proximity sort — never
+   `FindNearest`, which has returned farther faces). Every candidate is
+   **re-measured against the hit element's real triangulated geometry along
+   the hanger's own vertical**. This fixes rods stretching under **sloped
+   decks in linked structural files** — raw `Proximity` can be a phantom
+   (element-extent / wrong-face) distance. A candidate whose real geometry
+   never touches the vertical is rejected and the next-closest candidate is
+   tried. The intersector filter also ORs in the `RevitLinkInstance` class
+   and re-checks the resolved element's category, so link hits behave the
+   same across Revit versions.
+2. **DirectShape mesh index** — DirectShapes from the host doc and every
+   linked doc (structural categories, + Generic Models/Masses when that
+   option is on, including STEP-in-a-family `FamilyInstance`s) are
+   triangulated once (spatially bounded by the hangers' footprint) and
+   ray-cast manually. This covers **linked IFC**, where the native
+   intersector has been observed passing straight through beams.
+3. **CAD import raycaster** (`CadMeshRaycaster`) — `ImportInstance` DWG /
+   DGN / SAT geometry, when the linked-CAD option is on.
+
+**Ray fan, center-priority:** the fan (8-spoke rings at 2" and 4") exists to
+catch narrow steel a couple of inches off in plan. Fan hits are re-measured
+along the **center** line, so on a sloped deck all rays converge to the exact
+rod length at the hanger's XY (the old fan took the minimum across rays — the
+downhill sample). A genuinely-offset hit only wins when it's **shorter than
+the centered hit by more than 6"** (nearby lower steel / deck-joint guard).
+Hits beyond **120 ft** are ignored.
 
 ## Purpose
 
@@ -95,6 +127,10 @@ Reports:
 - Total hangers re-synced
 - Breakdown by structural category (Floors: N, Roofs: N, etc.)
 - Number of hangers that missed (no structure above)
+- **Geometry verification stats** — mesh-index size, how many rods the
+  verification pass corrected (and the largest correction), and how many
+  phantom references were rejected
+- CAD detection diagnostics + spatial probes (when linked-CAD is on)
 
 ## Comparison with Reference Plane Sync
 

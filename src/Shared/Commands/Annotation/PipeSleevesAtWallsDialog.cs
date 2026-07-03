@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Annotation
 {
@@ -17,6 +18,8 @@ namespace SgRevitAddin.Commands.Annotation
     /// </summary>
     public class PipeSleevesAtWallsDialog : DpiAwareForm
     {
+        private const string MemKey = "SleevesWalls";
+
         // ── Results ──
         public int SelectedLinkIndex { get; private set; } = -1;
         public bool IsSeismic { get; private set; } = false;
@@ -49,7 +52,7 @@ namespace SgRevitAddin.Commands.Annotation
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(500, 530);
+            ClientSize = new Size(500, 505);
 
             int margin = 15;
             int y = margin;
@@ -76,6 +79,9 @@ namespace SgRevitAddin.Commands.Annotation
             foreach (var name in _linkNames)
                 cboLink.Items.Add(name);
             if (cboLink.Items.Count > 0) cboLink.SelectedIndex = 0;
+            // Restore the remembered link only if it is still loaded.
+            int linkIdx = cboLink.Items.IndexOf(DialogMemory.Get(MemKey, "LinkName", ""));
+            if (linkIdx >= 0) cboLink.SelectedIndex = linkIdx;
             grpLink.Controls.AddRange(new Control[] { lblLink, cboLink });
             Controls.Add(grpLink);
             y += 65;
@@ -87,29 +93,32 @@ namespace SgRevitAddin.Commands.Annotation
                 Location = new Point(margin, y),
                 Size = new Size(470, 50)
             };
+            bool seismic = DialogMemory.GetBool(MemKey, "Seismic", false);
             rbNonSeismic = new RadioButton
             {
                 Text = "Non-Seismic",
                 Location = new Point(15, 20),
                 Size = new Size(120, 20),
-                Checked = true
+                Checked = !seismic
             };
             rbSeismic = new RadioButton
             {
                 Text = "Seismic",
                 Location = new Point(160, 20),
-                Size = new Size(120, 20)
+                Size = new Size(120, 20),
+                Checked = seismic
             };
             grpSeismic.Controls.AddRange(new Control[] { rbNonSeismic, rbSeismic });
             Controls.Add(grpSeismic);
             y += 60;
 
-            // ── Wall Types ──
+            // ── Wall Types (grows with the dialog) ──
             var grpWalls = new GroupBox
             {
                 Text = "Wall Types",
                 Location = new Point(margin, y),
-                Size = new Size(470, 310)
+                Size = new Size(470, 310),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom
             };
 
             rbAllWalls = new RadioButton
@@ -133,7 +142,8 @@ namespace SgRevitAddin.Commands.Annotation
             {
                 Location = new Point(10, 70),
                 Size = new Size(450, 230),
-                Visible = false
+                Visible = false,
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom
             };
 
             var lblSearchFilters = new Label
@@ -148,33 +158,36 @@ namespace SgRevitAddin.Commands.Annotation
                 Text = "Interior",
                 Location = new Point(5, 20),
                 Size = new Size(100, 20),
-                Checked = true
+                Checked = DialogMemory.GetBool(MemKey, "FltInterior", true)
             };
             chkExterior = new CheckBox
             {
                 Text = "Exterior",
                 Location = new Point(115, 20),
                 Size = new Size(100, 20),
-                Checked = true
+                Checked = DialogMemory.GetBool(MemKey, "FltExterior", true)
             };
             chkFireRated = new CheckBox
             {
                 Text = "Fire Rated (HR, HOUR)",
                 Location = new Point(225, 20),
-                Size = new Size(160, 20)
+                Size = new Size(160, 20),
+                Checked = DialogMemory.GetBool(MemKey, "FltFireRated", false)
             };
             chkStructural = new CheckBox
             {
                 Text = "Structural (CONCRETE, CMU)",
                 Location = new Point(5, 42),
-                Size = new Size(200, 20)
+                Size = new Size(200, 20),
+                Checked = DialogMemory.GetBool(MemKey, "FltStructural", false)
             };
 
             btnApplyFilter = new Button
             {
                 Text = "Apply Filters",
                 Location = new Point(340, 38),
-                Size = new Size(100, 25)
+                Size = new Size(100, 25),
+                Anchor = AnchorStyles.Top | AnchorStyles.Right
             };
             btnApplyFilter.Click += BtnApplyFilter_Click;
 
@@ -188,14 +201,16 @@ namespace SgRevitAddin.Commands.Annotation
             {
                 Location = new Point(5, 88),
                 Size = new Size(435, 105),
-                CheckOnClick = true
+                CheckOnClick = true,
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom
             };
 
             btnSelectAll = new Button
             {
                 Text = "Select All",
                 Location = new Point(260, 196),
-                Size = new Size(85, 24)
+                Size = new Size(85, 24),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right
             };
             btnSelectAll.Click += (s, e) =>
             {
@@ -207,7 +222,8 @@ namespace SgRevitAddin.Commands.Annotation
             {
                 Text = "Select None",
                 Location = new Point(350, 196),
-                Size = new Size(90, 24)
+                Size = new Size(90, 24),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right
             };
             btnSelectNone.Click += (s, e) =>
             {
@@ -232,7 +248,9 @@ namespace SgRevitAddin.Commands.Annotation
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
                 Location = new Point(410, y),
-                Size = new Size(75, 30)
+                Size = new Size(75, 30),
+                TabIndex = 101,
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right
             };
             CancelButton = btnCancel;
             Controls.Add(btnCancel);
@@ -242,11 +260,18 @@ namespace SgRevitAddin.Commands.Annotation
                 Text = "Select Pipes",
                 DialogResult = DialogResult.OK,
                 Location = new Point(290, y),
-                Size = new Size(110, 30)
+                Size = new Size(110, 30),
+                TabIndex = 100,
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right
             };
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
             Controls.Add(btnOK);
+
+            // Restore the remembered mode (after pnlFilters exists — the
+            // CheckedChanged handlers touch it).
+            if (!DialogMemory.GetBool(MemKey, "AllWalls", true))
+                rbFilterWalls.Checked = true;
         }
 
         private void ToggleFilterPanel()
@@ -315,6 +340,16 @@ namespace SgRevitAddin.Commands.Annotation
                     return;
                 }
             }
+
+            // Remember for next time (wall type picks are project-specific — skip).
+            DialogMemory.Set(MemKey, "LinkName", cboLink.SelectedItem?.ToString() ?? "");
+            DialogMemory.SetBool(MemKey, "Seismic", IsSeismic);
+            DialogMemory.SetBool(MemKey, "AllWalls", UseAllWalls);
+            DialogMemory.SetBool(MemKey, "FltInterior", chkInterior.Checked);
+            DialogMemory.SetBool(MemKey, "FltExterior", chkExterior.Checked);
+            DialogMemory.SetBool(MemKey, "FltFireRated", chkFireRated.Checked);
+            DialogMemory.SetBool(MemKey, "FltStructural", chkStructural.Checked);
+            DialogMemory.Flush();
         }
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Hangers
 {
@@ -21,6 +22,8 @@ namespace SgRevitAddin.Commands.Hangers
     /// </summary>
     public class ChangeTypeCodeDialog : DpiAwareForm
     {
+        private const string MemKey = "ChangeTypeCode";
+
         // ── Results ──
         public string FromCode { get; private set; }
         public string ToCode { get; private set; }
@@ -33,6 +36,7 @@ namespace SgRevitAddin.Commands.Hangers
 
         public ChangeTypeCodeDialog(int hangerCount, int hangersWithNoCode, List<string> availableCodes)
         {
+            AllowResize = false;   // fixed stack of two inputs — resizing adds nothing
             InitializeComponent(hangerCount, hangersWithNoCode, availableCodes);
         }
 
@@ -117,7 +121,8 @@ namespace SgRevitAddin.Commands.Hangers
             txtToCode = new TextBox
             {
                 Location = new Point(InputX, y),
-                Size = new Size(FormWidth - InputX - Margin, 24)
+                Size = new Size(FormWidth - InputX - Margin, 24),
+                Text = DialogMemory.Get(MemKey, "ToCode", "")
             };
             Controls.Add(txtToCode);
             y += 24 + SectionGap + 6;
@@ -126,16 +131,6 @@ namespace SgRevitAddin.Commands.Hangers
             const int BtnW = 95;
             const int BtnH = 30;
             const int BtnGap = 10;
-
-            btnCancel = new Button
-            {
-                Text = "Cancel",
-                DialogResult = DialogResult.Cancel,
-                Location = new Point(FormWidth - Margin - BtnW, y),
-                Size = new Size(BtnW, BtnH)
-            };
-            CancelButton = btnCancel;
-            Controls.Add(btnCancel);
 
             btnOK = new Button
             {
@@ -147,6 +142,16 @@ namespace SgRevitAddin.Commands.Hangers
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
             Controls.Add(btnOK);
+
+            btnCancel = new Button
+            {
+                Text = "Cancel",
+                DialogResult = DialogResult.Cancel,
+                Location = new Point(FormWidth - Margin - BtnW, y),
+                Size = new Size(BtnW, BtnH)
+            };
+            CancelButton = btnCancel;
+            Controls.Add(btnCancel);
 
             y += BtnH + Margin;
             ClientSize = new Size(FormWidth, y);
@@ -178,6 +183,10 @@ namespace SgRevitAddin.Commands.Hangers
                 DialogResult = DialogResult.None;
                 return;
             }
+
+            // Remember for next time (From is selection-dependent — skip it).
+            DialogMemory.Set(MemKey, "ToCode", ToCode);
+            DialogMemory.Flush();
         }
     }
 }

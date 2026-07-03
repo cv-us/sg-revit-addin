@@ -78,7 +78,8 @@ namespace SgRevitAddin.Commands.Hangers
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(540, 510);
+            AllowResize = false;   // fixed stack of options — nothing gains from resizing
+            ClientSize = new Size(540, 432);
 
             int margin = 15;
             int y = margin;
@@ -169,6 +170,15 @@ namespace SgRevitAddin.Commands.Hangers
                 txtFraming.Enabled = !disabled;
             };
             Controls.Add(chkKeepTypes);
+            // Apply the enabled state for the restored value (Checked was set
+            // before the handler above was wired, so it didn't fire).
+            if (chkKeepTypes.Checked)
+            {
+                txtFloors.Enabled = false;
+                txtStairs.Enabled = false;
+                txtRoofs.Enabled = false;
+                txtFraming.Enabled = false;
+            }
             y += 26;
 
             // ── Include non-structural geometry ──
@@ -195,6 +205,17 @@ namespace SgRevitAddin.Commands.Hangers
 
             // ── Buttons (right-aligned with 10px gap) ──
             // Form width 540, margin 15 → Cancel right edge at 525.
+            var btnOK = new Button
+            {
+                Text = "Sync Rod Lengths",
+                DialogResult = DialogResult.OK,
+                Location = new Point(320, y),
+                Size = new Size(120, 30)
+            };
+            btnOK.Click += BtnOK_Click;
+            AcceptButton = btnOK;
+            Controls.Add(btnOK);
+
             var btnCancel = new Button
             {
                 Text = "Cancel",
@@ -204,17 +225,6 @@ namespace SgRevitAddin.Commands.Hangers
             };
             CancelButton = btnCancel;
             Controls.Add(btnCancel);
-
-            var btnOK = new Button
-            {
-                Text = "Sync Rod Lengths",
-                DialogResult = DialogResult.OK,
-                Location = new Point(330, y),
-                Size = new Size(110, 30)
-            };
-            btnOK.Click += BtnOK_Click;
-            AcceptButton = btnOK;
-            Controls.Add(btnOK);
         }
 
         private void BtnOK_Click(object sender, EventArgs e)

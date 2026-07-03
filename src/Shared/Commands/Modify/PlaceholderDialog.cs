@@ -40,29 +40,25 @@ namespace SgRevitAddin.Commands.Modify
                 AcceptsTab = true,
                 ScrollBars = ScrollBars.Vertical,
                 Location = new Point(Margin, Margin + 40),
-                Size = new Size(410, 130)
+                Size = new Size(410, 130),
+                // The scratch box is the flex element — enlarging grows it.
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom
             };
             Controls.Add(txt);
 
-            var btnCancel = new Button
+            // Contents are thrown away either way, so one Close button serves
+            // as both the accept (Enter) and cancel (Esc / ✕) action.
+            var btnClose = new Button
             {
-                Text = "Cancel",
+                Text = "Close",
                 DialogResult = DialogResult.Cancel,
                 Location = new Point(440 - Margin - 85, 240 - Margin - 30),
-                Size = new Size(85, 30)
+                Size = new Size(85, 30),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right
             };
-            CancelButton = btnCancel;
-            Controls.Add(btnCancel);
-
-            var btnOK = new Button
-            {
-                Text = "OK",
-                DialogResult = DialogResult.OK,
-                Location = new Point(440 - Margin - 85 - 10 - 85, 240 - Margin - 30),
-                Size = new Size(85, 30)
-            };
-            AcceptButton = btnOK;
-            Controls.Add(btnOK);
+            AcceptButton = btnClose;
+            CancelButton = btnClose;
+            Controls.Add(btnClose);
         }
     }
 }

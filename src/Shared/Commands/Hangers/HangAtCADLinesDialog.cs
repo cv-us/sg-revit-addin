@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Hangers
 {
@@ -12,6 +13,8 @@ namespace SgRevitAddin.Commands.Hangers
     /// </summary>
     public class HangAtCADLinesDialog : DpiAwareForm
     {
+        private const string MemKey = "HangAtCADLines";
+
         // ── Results (read these after ShowDialog() == OK) ──
         public string SelectedFamily { get; private set; }
         public string TypeCode { get; private set; }
@@ -42,15 +45,20 @@ namespace SgRevitAddin.Commands.Hangers
             PopulateFamilies(hangerFamilyNames, defaultFamily);
             PopulateLayers(layersWithCounts);
 
-            txtTypeCode.Text = defaultTypeCode;
-            txtRodLength.Text = defaultRodLength.ToString();
-            txtMinLength.Text = defaultMinLength.ToString();
+            // Last-used values win over the passed-in defaults.
+            txtTypeCode.Text = DialogMemory.Get(MemKey, "TypeCode", defaultTypeCode);
+            txtRodLength.Text = DialogMemory.Get(MemKey, "RodLength", defaultRodLength.ToString());
+            txtMinLength.Text = DialogMemory.Get(MemKey, "MinLineLength", defaultMinLength.ToString());
+
+            string memFamily = DialogMemory.Get(MemKey, "Family", "");
+            if (memFamily.Length > 0 && cboFamily.Items.Contains(memFamily))
+                cboFamily.SelectedItem = memFamily;
         }
 
         private void InitializeForm()
         {
             Text = "Auto Hang — Pipes Crossing CAD Lines";
-            ClientSize = new Size(520, 540);
+            ClientSize = new Size(520, 522);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
@@ -83,36 +91,62 @@ namespace SgRevitAddin.Commands.Hangers
             AddLabel("Min Line Length (ft):", 15, y);
             txtMinLength = new TextBox { Left = inputX, Top = y - 2, Width = 80, Text = "4" };
             Controls.Add(txtMinLength);
+            new ToolTip().SetToolTip(txtMinLength,
+                "CAD lines shorter than this are ignored.");
             y += 40;
 
             // ── Layer Selection ──
             AddLabel("CAD Layers:", 15, y);
             y += 20;
 
-            lstLayers = new CheckedListBox { Left = 15, Top = y, Width = inputW + labelW, Height = 250, CheckOnClick = true };
+            // The layer list is the dominant control — it soaks up any extra
+            // height when the dialog is enlarged; everything below pins bottom.
+            lstLayers = new CheckedListBox
+            {
+                Left = 15, Top = y, Width = inputW + labelW, Height = 250, CheckOnClick = true,
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom
+            };
             Controls.Add(lstLayers);
             y += 255;
 
             // ── Select All / None ──
-            btnSelectAll = new Button { Text = "Select All", Left = 15, Top = y, Width = 90, Height = 28 };
+            btnSelectAll = new Button
+            {
+                Text = "Select All", Left = 15, Top = y, Width = 90, Height = 28,
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left
+            };
             btnSelectAll.Click += (s, e) => { for (int i = 0; i < lstLayers.Items.Count; i++) lstLayers.SetItemChecked(i, true); };
             Controls.Add(btnSelectAll);
 
-            btnSelectNone = new Button { Text = "Select None", Left = 115, Top = y, Width = 90, Height = 28 };
+            btnSelectNone = new Button
+            {
+                Text = "Select None", Left = 115, Top = y, Width = 90, Height = 28,
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left
+            };
             btnSelectNone.Click += (s, e) => { for (int i = 0; i < lstLayers.Items.Count; i++) lstLayers.SetItemChecked(i, false); };
             Controls.Add(btnSelectNone);
             y += 40;
 
             // ── OK / Cancel (right-aligned) ──
             // Form width 520, margin 15 → Cancel right edge at 505.
-            btnCancel = new Button { Text = "Cancel", Left = 415, Top = y, Width = 90, Height = 32, DialogResult = DialogResult.Cancel };
-            Controls.Add(btnCancel);
-            CancelButton = btnCancel;
-
-            btnOK = new Button { Text = "Place Hangers", Left = 295, Top = y, Width = 110, Height = 32, DialogResult = DialogResult.OK };
+            btnOK = new Button
+            {
+                Text = "Place Hangers", Left = 295, Top = y, Width = 110, Height = 32,
+                DialogResult = DialogResult.OK,
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right
+            };
             btnOK.Click += BtnOK_Click;
             Controls.Add(btnOK);
             AcceptButton = btnOK;
+
+            btnCancel = new Button
+            {
+                Text = "Cancel", Left = 415, Top = y, Width = 90, Height = 32,
+                DialogResult = DialogResult.Cancel,
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right
+            };
+            Controls.Add(btnCancel);
+            CancelButton = btnCancel;
         }
 
         private void AddLabel(string text, int x, int y)
@@ -185,6 +219,13 @@ namespace SgRevitAddin.Commands.Hangers
                 string layerName = item.Substring(0, item.LastIndexOf("  ("));
                 SelectedLayers.Add(layerName);
             }
+
+            // Remember for next time (layers are drawing-specific — skip them).
+            DialogMemory.Set(MemKey, "Family", SelectedFamily);
+            DialogMemory.Set(MemKey, "TypeCode", TypeCode);
+            DialogMemory.Set(MemKey, "RodLength", txtRodLength.Text.Trim());
+            DialogMemory.Set(MemKey, "MinLineLength", txtMinLength.Text.Trim());
+            DialogMemory.Flush();
         }
     }
 }

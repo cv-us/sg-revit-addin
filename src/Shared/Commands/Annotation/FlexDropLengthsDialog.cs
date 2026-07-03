@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Annotation
 {
@@ -13,6 +14,8 @@ namespace SgRevitAddin.Commands.Annotation
     /// </summary>
     public class FlexDropLengthsDialog : DpiAwareForm
     {
+        private const string MemKey = "FlexDropSet";
+
         // ── Results ──
         public string SelectedLength { get; private set; }
         public string TagOrientation { get; private set; }
@@ -25,6 +28,9 @@ namespace SgRevitAddin.Commands.Annotation
 
         public FlexDropLengthsDialog()
         {
+            // Last-used values win so the dialog re-opens as it was left.
+            SelectedLength = DialogMemory.Get(MemKey, "Length", "31");
+            TagOrientation = DialogMemory.Get(MemKey, "Orientation", "N");
             InitializeComponent();
         }
 
@@ -35,7 +41,8 @@ namespace SgRevitAddin.Commands.Annotation
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(340, 310);
+            AllowResize = false;   // fixed stack of options — resizing adds nothing
+            ClientSize = new Size(340, 265);
 
             int margin = 15;
             int y = margin;
@@ -60,6 +67,17 @@ namespace SgRevitAddin.Commands.Annotation
             rb72 = new RadioButton { Text = "72 Inches", Location = new Point(15, ry), Size = new Size(120, 20) };
 
             grpLength.Controls.AddRange(new Control[] { rb31, rb36, rb48, rb60, rb72 });
+
+            // Restore the remembered length (after parenting so the radio
+            // auto-uncheck works; rb31 stays checked otherwise).
+            switch (SelectedLength)
+            {
+                case "36": rb36.Checked = true; break;
+                case "48": rb48.Checked = true; break;
+                case "60": rb60.Checked = true; break;
+                case "72": rb72.Checked = true; break;
+            }
+
             Controls.Add(grpLength);
             y += 165;
 
@@ -79,7 +97,8 @@ namespace SgRevitAddin.Commands.Annotation
                 Size = new Size(205, 24)
             };
             cboOrientation.Items.AddRange(new object[] { "N", "NE", "E", "SE", "S", "SW", "W", "NW" });
-            cboOrientation.SelectedIndex = 0;
+            int orientIdx = cboOrientation.Items.IndexOf(TagOrientation);
+            cboOrientation.SelectedIndex = orientIdx >= 0 ? orientIdx : 0;
             Controls.Add(cboOrientation);
             y += 40;
 
@@ -90,17 +109,19 @@ namespace SgRevitAddin.Commands.Annotation
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
                 Location = new Point(250, y),
-                Size = new Size(75, 30)
+                Size = new Size(75, 30),
+                TabIndex = 101
             };
             CancelButton = btnCancel;
             Controls.Add(btnCancel);
 
             btnOK = new Button
             {
-                Text = "Insert Tags",
+                Text = "Tag Drops",
                 DialogResult = DialogResult.OK,
                 Location = new Point(145, y),
-                Size = new Size(95, 30)
+                Size = new Size(95, 30),
+                TabIndex = 100
             };
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
@@ -116,6 +137,11 @@ namespace SgRevitAddin.Commands.Annotation
             else SelectedLength = "72";
 
             TagOrientation = cboOrientation.SelectedItem?.ToString() ?? "N";
+
+            // Remember for next time.
+            DialogMemory.Set(MemKey, "Length", SelectedLength);
+            DialogMemory.Set(MemKey, "Orientation", TagOrientation);
+            DialogMemory.Flush();
         }
     }
 }

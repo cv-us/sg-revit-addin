@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Annotation
 {
@@ -24,6 +25,8 @@ namespace SgRevitAddin.Commands.Annotation
     /// </summary>
     public class FlexDropLengthsAutoDialog : DpiAwareForm
     {
+        private const string MemKey = "FlexDropAuto";
+
         // ── Results ──
         public bool IsWetSystem { get; private set; } = true;
         public string TagOrientation { get; private set; } = "NE";
@@ -38,6 +41,9 @@ namespace SgRevitAddin.Commands.Annotation
         public FlexDropLengthsAutoDialog(int sprinklerCount)
         {
             _sprinklerCount = sprinklerCount;
+            // Last-used values win so the dialog re-opens as it was left.
+            IsWetSystem = DialogMemory.GetBool(MemKey, "Wet", true);
+            TagOrientation = DialogMemory.Get(MemKey, "Orientation", "NE");
             InitializeComponent();
         }
 
@@ -48,6 +54,7 @@ namespace SgRevitAddin.Commands.Annotation
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
+            AllowResize = false;   // fixed stack of options — resizing adds nothing
             ClientSize = new Size(520, 400);
 
             int margin = 15;
@@ -99,13 +106,14 @@ namespace SgRevitAddin.Commands.Annotation
                 Text = "Wet  (48\" / 60\" / 72\"  —  max 5'-6\")",
                 Location = new Point(10, 18),
                 Size = new Size(470, 20),
-                Checked = true
+                Checked = IsWetSystem
             };
             rbDry = new RadioButton
             {
                 Text = "Dry  (38\" / 50\" / 58\"  —  max 4'-4\")",
                 Location = new Point(10, 40),
-                Size = new Size(400, 20)
+                Size = new Size(400, 20),
+                Checked = !IsWetSystem
             };
             grpSystem.Controls.AddRange(new Control[] { rbWet, rbDry });
             Controls.Add(grpSystem);
@@ -150,7 +158,8 @@ namespace SgRevitAddin.Commands.Annotation
                 Size = new Size(80, 22)
             };
             cboOrientation.Items.AddRange(new object[] { "N", "NE", "E", "SE", "S", "SW", "W", "NW" });
-            cboOrientation.SelectedIndex = 1; // NE default
+            int orientIdx = cboOrientation.Items.IndexOf(TagOrientation);
+            cboOrientation.SelectedIndex = orientIdx >= 0 ? orientIdx : 1; // NE default
             grpOrient.Controls.Add(cboOrientation);
             Controls.Add(grpOrient);
             y += 60;
@@ -162,17 +171,19 @@ namespace SgRevitAddin.Commands.Annotation
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
                 Location = new Point(430, y),
-                Size = new Size(75, 30)
+                Size = new Size(75, 30),
+                TabIndex = 101
             };
             CancelButton = btnCancel;
             Controls.Add(btnCancel);
 
             var btnOK = new Button
             {
-                Text = "Insert Tags",
+                Text = "Tag Drops",
                 DialogResult = DialogResult.OK,
                 Location = new Point(320, y),
-                Size = new Size(100, 30)
+                Size = new Size(100, 30),
+                TabIndex = 100
             };
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
@@ -183,6 +194,11 @@ namespace SgRevitAddin.Commands.Annotation
         {
             IsWetSystem = rbWet.Checked;
             TagOrientation = cboOrientation.SelectedItem?.ToString() ?? "NE";
+
+            // Remember for next time.
+            DialogMemory.SetBool(MemKey, "Wet", IsWetSystem);
+            DialogMemory.Set(MemKey, "Orientation", TagOrientation);
+            DialogMemory.Flush();
         }
     }
 }

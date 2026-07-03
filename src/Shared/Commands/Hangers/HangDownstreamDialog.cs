@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Hangers
 {
@@ -18,6 +19,8 @@ namespace SgRevitAddin.Commands.Hangers
     /// </summary>
     public class HangDownstreamDialog : DpiAwareForm
     {
+        private const string MemKey = "HangDownstream";
+
         // ── Results ──
         public string SelectedFamily { get; private set; }
         public string RoofTypeCode { get; private set; }
@@ -53,6 +56,19 @@ namespace SgRevitAddin.Commands.Hangers
             InitializeForm(hangerFamilyNames, defaultFamily,
                 defaultRoofCode, defaultFloorCode, defaultFramingCode, defaultStairsCode,
                 defaultDistFromEnd, defaultMinLength);
+
+            // Last-used values win over the passed-in defaults.
+            string memFamily = DialogMemory.Get(MemKey, "Family", "");
+            if (memFamily.Length > 0 && cboFamily.Items.Contains(memFamily))
+                cboFamily.SelectedItem = memFamily;
+
+            txtRoofCode.Text = DialogMemory.Get(MemKey, "RoofCode", defaultRoofCode);
+            txtFloorCode.Text = DialogMemory.Get(MemKey, "FloorCode", defaultFloorCode);
+            txtFramingCode.Text = DialogMemory.Get(MemKey, "FramingCode", defaultFramingCode);
+            txtStairsCode.Text = DialogMemory.Get(MemKey, "StairsCode", defaultStairsCode);
+            txtDistFromEnd.Text = DialogMemory.Get(MemKey, "DistFromEnd", defaultDistFromEnd.ToString());
+            txtMinLength.Text = DialogMemory.Get(MemKey, "MinLength", defaultMinLength.ToString());
+            cboCClamp.SelectedIndex = DialogMemory.GetInt(MemKey, "CClamp", 0) == 1 ? 1 : 0;
         }
 
         private void InitializeForm(
@@ -62,7 +78,7 @@ namespace SgRevitAddin.Commands.Hangers
             double defaultDistFromEnd, double defaultMinLength)
         {
             Text = "Auto Hang — Threaded Lines (Downstream Ends)";
-            ClientSize = new Size(560, 520);
+            ClientSize = new Size(560, 419);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
@@ -151,14 +167,14 @@ namespace SgRevitAddin.Commands.Hangers
 
             // ── OK / Cancel (right-aligned) ──
             // Form width 560, margin 15 → Cancel right edge at 545.
-            btnCancel = new Button { Text = "Cancel", Left = 455, Top = y, Width = 90, Height = 32, DialogResult = DialogResult.Cancel };
-            Controls.Add(btnCancel);
-            CancelButton = btnCancel;
-
             btnOK = new Button { Text = "Place Hangers", Left = 335, Top = y, Width = 110, Height = 32, DialogResult = DialogResult.OK };
             btnOK.Click += BtnOK_Click;
             Controls.Add(btnOK);
             AcceptButton = btnOK;
+
+            btnCancel = new Button { Text = "Cancel", Left = 455, Top = y, Width = 90, Height = 32, DialogResult = DialogResult.Cancel };
+            Controls.Add(btnCancel);
+            CancelButton = btnCancel;
         }
 
         private void AddLabel(string text, int x, int y, bool bold = true)
@@ -213,6 +229,17 @@ namespace SgRevitAddin.Commands.Hangers
             DistanceFromEndInches = distEnd;
             MinPipeLengthInches = minLen;
             ShowCClamp = cboCClamp.SelectedIndex == 1;
+
+            // Remember for next time.
+            DialogMemory.Set(MemKey, "Family", SelectedFamily);
+            DialogMemory.Set(MemKey, "RoofCode", RoofTypeCode);
+            DialogMemory.Set(MemKey, "FloorCode", FloorDeckTypeCode);
+            DialogMemory.Set(MemKey, "FramingCode", FramingTypeCode);
+            DialogMemory.Set(MemKey, "StairsCode", StairsTypeCode);
+            DialogMemory.Set(MemKey, "DistFromEnd", txtDistFromEnd.Text.Trim());
+            DialogMemory.Set(MemKey, "MinLength", txtMinLength.Text.Trim());
+            DialogMemory.SetInt(MemKey, "CClamp", ShowCClamp ? 1 : 0);
+            DialogMemory.Flush();
         }
     }
 }

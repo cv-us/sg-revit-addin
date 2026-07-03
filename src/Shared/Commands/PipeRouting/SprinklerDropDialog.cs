@@ -59,7 +59,8 @@ namespace SgRevitAddin.Commands.PipeRouting
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(580, 778);
+            AllowResize = false;   // plain fixed stack — resizing adds nothing
+            ClientSize = new Size(580, 726);
 
             const int M = 18, W = 544;
             int y = M;
@@ -150,13 +151,13 @@ namespace SgRevitAddin.Commands.PipeRouting
             Controls.Add(_chkSwallow);
             y += 32;
 
-            var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(580 - M - 90, y), Size = new Size(90, 32) };
-            CancelButton = btnCancel;
-            Controls.Add(btnCancel);
             var btnOK = new Button { Text = "Start Placing", Location = new Point(580 - M - 90 - 10 - 120, y), Size = new Size(120, 32) };
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
             Controls.Add(btnOK);
+            var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(580 - M - 90, y), Size = new Size(90, 32) };
+            CancelButton = btnCancel;
+            Controls.Add(btnCancel);
         }
 
         private void AddCombo(GroupBox grp, string label, ref int gy, out ComboBox cbo, List<(int id, string name)> items)

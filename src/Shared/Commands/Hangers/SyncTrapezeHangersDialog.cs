@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Hangers
 {
@@ -10,9 +11,13 @@ namespace SgRevitAddin.Commands.Hangers
     /// Collects:
     ///   - Minimum clearance distance from structural to pipe (inches)
     ///   - Rod position: closest side or middle of structural elements
+    ///
+    /// Both inputs persist between runs via <see cref="DialogMemory"/>.
     /// </summary>
     public class SyncTrapezeHangersDialog : DpiAwareForm
     {
+        private const string MemKey = "SyncTrapezeHangers";
+
         // ── Results ──
         public double MinClearanceInches { get; private set; } = 7.0;
         public bool UseClosestSide { get; private set; } = true;
@@ -27,7 +32,17 @@ namespace SgRevitAddin.Commands.Hangers
         public SyncTrapezeHangersDialog(int hangerCount)
         {
             _hangerCount = hangerCount;
+            MinClearanceInches = DialogMemory.GetDouble(MemKey, "MinClearanceInches", 7.0);
+            UseClosestSide = DialogMemory.GetBool(MemKey, "UseClosestSide", true);
+            AllowResize = false;   // fixed stack of options — resizing adds nothing
             InitializeComponent();
+        }
+
+        private static decimal Clamp(decimal value, decimal min, decimal max)
+        {
+            if (value < min) return min;
+            if (value > max) return max;
+            return value;
         }
 
         private void InitializeComponent()
@@ -37,7 +52,7 @@ namespace SgRevitAddin.Commands.Hangers
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(460, 310);
+            ClientSize = new Size(460, 320);
 
             int margin = 15;
             int y = margin;
@@ -95,7 +110,7 @@ namespace SgRevitAddin.Commands.Hangers
                 Maximum = 48,
                 DecimalPlaces = 1,
                 Increment = 0.5m,
-                Value = 7,
+                Value = Clamp((decimal)MinClearanceInches, 0, 48),
                 Location = new Point(135, 19),
                 Size = new Size(70, 22)
             };
@@ -115,13 +130,14 @@ namespace SgRevitAddin.Commands.Hangers
                 Text = "Closest side of structural elements (default)",
                 Location = new Point(10, 18),
                 Size = new Size(400, 20),
-                Checked = true
+                Checked = UseClosestSide
             };
             rbMiddle = new RadioButton
             {
                 Text = "Middle of structural elements",
                 Location = new Point(10, 40),
-                Size = new Size(400, 20)
+                Size = new Size(400, 20),
+                Checked = !UseClosestSide
             };
             grpPosition.Controls.AddRange(new Control[] { rbClosest, rbMiddle });
             Controls.Add(grpPosition);
@@ -155,6 +171,11 @@ namespace SgRevitAddin.Commands.Hangers
         {
             MinClearanceInches = (double)numClearance.Value;
             UseClosestSide = rbClosest.Checked;
+
+            // Remember for next time.
+            DialogMemory.SetDouble(MemKey, "MinClearanceInches", MinClearanceInches);
+            DialogMemory.SetBool(MemKey, "UseClosestSide", UseClosestSide);
+            DialogMemory.Flush();
         }
     }
 }

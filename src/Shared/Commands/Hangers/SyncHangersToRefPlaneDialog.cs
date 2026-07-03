@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Hangers
 {
@@ -10,9 +11,14 @@ namespace SgRevitAddin.Commands.Hangers
     ///
     /// Collects:
     ///   - Reference plane selection (dropdown of named reference planes)
+    ///
+    /// The last-picked plane name is remembered via <see cref="DialogMemory"/>
+    /// and re-selected when it still exists in the project.
     /// </summary>
     public class SyncHangersToRefPlaneDialog : DpiAwareForm
     {
+        private const string MemKey = "SyncToRefPlane";
+
         // ── Results ──
         public int SelectedRefPlaneIndex { get; private set; } = -1;
 
@@ -36,7 +42,7 @@ namespace SgRevitAddin.Commands.Hangers
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(460, 280);
+            ClientSize = new Size(460, 265);
 
             int margin = 15;
             int y = margin;
@@ -98,11 +104,15 @@ namespace SgRevitAddin.Commands.Hangers
             foreach (var name in _refPlaneNames)
                 cboRefPlane.Items.Add(name);
             if (cboRefPlane.Items.Count > 0) cboRefPlane.SelectedIndex = 0;
+            // Re-select the last-used plane if it still exists in this project.
+            int remembered = cboRefPlane.Items.IndexOf(DialogMemory.Get(MemKey, "PlaneName", ""));
+            if (remembered >= 0) cboRefPlane.SelectedIndex = remembered;
             grpSettings.Controls.Add(cboRefPlane);
             Controls.Add(grpSettings);
             y += 65;
 
-            // ── Buttons ──
+            // ── Buttons (right-aligned, 10px gap) ──
+            // Form width 460, margin 15 → Cancel right edge at 445.
             var btnOK = new Button
             {
                 Text = "Sync Rod Lengths",
@@ -118,7 +128,7 @@ namespace SgRevitAddin.Commands.Hangers
             {
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
-                Location = new Point(365, y),
+                Location = new Point(370, y),
                 Size = new Size(75, 30)
             };
             CancelButton = btnCancel;
@@ -136,6 +146,13 @@ namespace SgRevitAddin.Commands.Hangers
             }
 
             SelectedRefPlaneIndex = cboRefPlane.SelectedIndex;
+
+            // Remember the picked plane name for next time.
+            if (cboRefPlane.SelectedItem != null)
+            {
+                DialogMemory.Set(MemKey, "PlaneName", cboRefPlane.SelectedItem.ToString());
+                DialogMemory.Flush();
+            }
         }
     }
 }

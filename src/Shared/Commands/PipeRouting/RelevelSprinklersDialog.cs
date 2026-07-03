@@ -34,6 +34,7 @@ namespace SgRevitAddin.Commands.PipeRouting
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
+            AllowResize = false;   // plain fixed stack — resizing adds nothing
             ClientSize = new Size(600, 196);
 
             const int M = 16, W = 568;
@@ -70,13 +71,13 @@ namespace SgRevitAddin.Commands.PipeRouting
             Controls.Add(lblNote);
             y += 30;
 
-            var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(600 - M - 90, y), Size = new Size(90, 30) };
-            CancelButton = btnCancel;
-            Controls.Add(btnCancel);
             var btnOK = new Button { Text = "Re-Level", Location = new Point(600 - M - 90 - 10 - 100, y), Size = new Size(100, 30) };
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
             Controls.Add(btnOK);
+            var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(600 - M - 90, y), Size = new Size(90, 30) };
+            CancelButton = btnCancel;
+            Controls.Add(btnCancel);
         }
 
         private void BtnOK_Click(object sender, EventArgs e)

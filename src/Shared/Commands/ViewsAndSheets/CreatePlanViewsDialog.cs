@@ -89,6 +89,8 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             int margin = 15;
             int y = margin;
             const int GroupW = 440;
+            var growAnchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
+            var belowAnchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
 
             bool hasSources = _sourceModelDisplays.Count > 0;
 
@@ -126,13 +128,15 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             {
                 Text = "Select Levels to Create Views From",
                 Location = new Point(margin, slotY),
-                Size = new Size(GroupW, 150)
+                Size = new Size(GroupW, 150),
+                Anchor = growAnchor   // primary list slot grows with the dialog
             };
             chkLevels = new CheckedListBox
             {
                 Location = new Point(10, 18),
                 Size = new Size(340, 120),
-                CheckOnClick = true
+                CheckOnClick = true,
+                Anchor = growAnchor
             };
             foreach (var name in _levelDisplayNames) chkLevels.Items.Add(name, true);
             grpLevels.Controls.Add(chkLevels);
@@ -147,7 +151,8 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
                 Text = "Copy Plan Views From Another Model",
                 Location = new Point(margin, slotY),
                 Size = new Size(GroupW, 150),
-                Visible = false
+                Visible = false,
+                Anchor = growAnchor
             };
             grpSource.Controls.Add(new Label
             {
@@ -159,7 +164,8 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             {
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 Location = new Point(60, 20),
-                Size = new Size(GroupW - 75, 22)
+                Size = new Size(GroupW - 75, 22),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
             };
             foreach (var m in _sourceModelDisplays) cboSourceModel.Items.Add(m);
             cboSourceModel.SelectedIndexChanged += (s, e) => PopulateSourceViews(cboSourceModel.SelectedIndex);
@@ -169,7 +175,8 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             {
                 Location = new Point(10, 50),
                 Size = new Size(340, 88),
-                CheckOnClick = true
+                CheckOnClick = true,
+                Anchor = growAnchor
             };
             grpSource.Controls.Add(chkSourceViews);
             grpSource.Controls.Add(MakeSmallButton("All", 360, 50,
@@ -185,7 +192,8 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             {
                 Text = "View Types to Create",
                 Location = new Point(margin, y),
-                Size = new Size(GroupW, 80)
+                Size = new Size(GroupW, 80),
+                Anchor = belowAnchor
             };
             rbBoth = new RadioButton { Text = "Floor and Ceiling Plans", Location = new Point(10, 18), Size = new Size(250, 20), Checked = true };
             rbFloor = new RadioButton { Text = "Floor Plans only", Location = new Point(10, 38), Size = new Size(250, 20) };
@@ -194,25 +202,32 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             Controls.Add(grpType);
             y += 85;
 
+            // Restore remembered view-type choice.
+            int viewType = DialogMemory.GetInt(MemKey, "ViewType", 0);
+            rbFloor.Checked = viewType == 1;
+            rbCeiling.Checked = viewType == 2;
+            rbBoth.Checked = viewType != 1 && viewType != 2;
+
             // ── Templates ──
             var grpTemplate = new GroupBox
             {
                 Text = "View Templates",
                 Location = new Point(margin, y),
-                Size = new Size(GroupW, 80)
+                Size = new Size(GroupW, 80),
+                Anchor = belowAnchor
             };
             grpTemplate.Controls.Add(new Label { Text = "Floor Plans:", Location = new Point(10, 22), Size = new Size(80, 18) });
             cboFloorTemplate = new ComboBox { Location = new Point(95, 19), Size = new Size(330, 22), DropDownStyle = ComboBoxStyle.DropDownList };
             cboFloorTemplate.Items.Add("(none)");
             foreach (var t in _floorTemplates) cboFloorTemplate.Items.Add(t);
-            SelectDefaultTemplate(cboFloorTemplate, "00 Working Floor Fine");
+            RestoreOrDefaultTemplate(cboFloorTemplate, "FloorTemplate", "00 Working Floor Fine");
             grpTemplate.Controls.Add(cboFloorTemplate);
 
             grpTemplate.Controls.Add(new Label { Text = "Ceiling Plans:", Location = new Point(10, 52), Size = new Size(80, 18) });
             cboCeilingTemplate = new ComboBox { Location = new Point(95, 49), Size = new Size(330, 22), DropDownStyle = ComboBoxStyle.DropDownList };
             cboCeilingTemplate.Items.Add("(none)");
             foreach (var t in _ceilingTemplates) cboCeilingTemplate.Items.Add(t);
-            SelectDefaultTemplate(cboCeilingTemplate, "00 Working Ceiling Fine");
+            RestoreOrDefaultTemplate(cboCeilingTemplate, "CeilingTemplate", "00 Working Ceiling Fine");
             grpTemplate.Controls.Add(cboCeilingTemplate);
             Controls.Add(grpTemplate);
             y += 85;
@@ -222,7 +237,8 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             {
                 Text = "Sub-Discipline  (browser organization)",
                 Location = new Point(margin, y),
-                Size = new Size(GroupW, 55)
+                Size = new Size(GroupW, 55),
+                Anchor = belowAnchor
             };
             grpSubDisc.Controls.Add(new Label { Text = "Sub-Discipline:", Location = new Point(10, 24), Size = new Size(95, 18) });
             cboSubDiscipline = new ComboBox
@@ -247,7 +263,8 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             {
                 Text = "View Name Suffix  (appended to the view name)",
                 Location = new Point(margin, y),
-                Size = new Size(GroupW, 95)
+                Size = new Size(GroupW, 95),
+                Anchor = belowAnchor
             };
             rbOverall = new RadioButton { Text = "OVERALL", Location = new Point(10, 18), Size = new Size(200, 20), Checked = true };
             rbRefOnly = new RadioButton { Text = "FOR REFERENCE ONLY", Location = new Point(10, 38), Size = new Size(200, 20) };
@@ -258,13 +275,21 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             Controls.Add(grpSuffix);
             y += 100;
 
+            // Restore remembered suffix choice.
+            int suffixMode = DialogMemory.GetInt(MemKey, "SuffixMode", 0);
+            txtCustom.Text = DialogMemory.Get(MemKey, "SuffixCustom", "");
+            rbRefOnly.Checked = suffixMode == 1;
+            rbCustom.Checked = suffixMode == 2;
+            rbOverall.Checked = suffixMode != 1 && suffixMode != 2;
+
             // ── Buttons ──
             var btnOK = new Button
             {
                 Text = "Create Views",
                 DialogResult = DialogResult.OK,
-                Location = new Point(280, y),
-                Size = new Size(100, 30)
+                Location = new Point(270, y),
+                Size = new Size(100, 30),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right
             };
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
@@ -274,8 +299,9 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             {
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
-                Location = new Point(385, y),
-                Size = new Size(75, 30)
+                Location = new Point(380, y),
+                Size = new Size(75, 30),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right
             };
             CancelButton = btnCancel;
             Controls.Add(btnCancel);
@@ -301,7 +327,14 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
 
         private Button MakeSmallButton(string text, int x, int y, Action onClick)
         {
-            var b = new Button { Text = text, Location = new Point(x, y), Size = new Size(65, 25) };
+            var b = new Button
+            {
+                Text = text,
+                Location = new Point(x, y),
+                Size = new Size(65, 25),
+                // Explicit: hug the top-right of the group while its list grows.
+                Anchor = AnchorStyles.Top | AnchorStyles.Right
+            };
             b.Click += (s, e) => onClick();
             return b;
         }
@@ -311,8 +344,15 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             for (int i = 0; i < clb.Items.Count; i++) clb.SetItemChecked(i, value);
         }
 
-        private void SelectDefaultTemplate(ComboBox cbo, string defaultName)
+        /// <summary>Remembered template wins if still present; else the named default; else "(none)".</summary>
+        private void RestoreOrDefaultTemplate(ComboBox cbo, string memField, string defaultName)
         {
+            string saved = DialogMemory.Get(MemKey, memField, null);
+            if (!string.IsNullOrEmpty(saved))
+            {
+                int idx = cbo.Items.IndexOf(saved);
+                if (idx >= 0) { cbo.SelectedIndex = idx; return; }
+            }
             for (int i = 0; i < cbo.Items.Count; i++)
             {
                 if (cbo.Items[i].ToString().Contains(defaultName)) { cbo.SelectedIndex = i; return; }
@@ -378,6 +418,13 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             else if (rbRefOnly.Checked) ViewNameSuffix = "FOR REFERENCE ONLY";
             else ViewNameSuffix = txtCustom.Text.Trim();
 
+            DialogMemory.SetInt(MemKey, "ViewType",
+                SelectedViewType == ViewTypeOption.FloorOnly ? 1 :
+                SelectedViewType == ViewTypeOption.CeilingOnly ? 2 : 0);
+            DialogMemory.Set(MemKey, "FloorTemplate", cboFloorTemplate.SelectedItem?.ToString() ?? "");
+            DialogMemory.Set(MemKey, "CeilingTemplate", cboCeilingTemplate.SelectedItem?.ToString() ?? "");
+            DialogMemory.SetInt(MemKey, "SuffixMode", rbRefOnly.Checked ? 1 : rbCustom.Checked ? 2 : 0);
+            DialogMemory.Set(MemKey, "SuffixCustom", txtCustom.Text.Trim());
             DialogMemory.Set(MemKey, "SubDiscipline",
                 string.IsNullOrEmpty(SubDiscipline) ? NoSubDiscipline : SubDiscipline);
             DialogMemory.Flush();

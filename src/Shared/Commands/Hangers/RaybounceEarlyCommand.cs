@@ -50,6 +50,9 @@ namespace SgRevitAddin.Commands.Hangers
             public string HitCategoryLabel { get; set; }
             public string HitElementName { get; set; }
             public string HitLinkName { get; set; }
+            public string Source { get; set; }
+            public string Quality { get; set; }
+            public double CorrectionFt { get; set; }
         }
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
@@ -101,16 +104,37 @@ namespace SgRevitAddin.Commands.Hangers
                 var hits = new List<RayHitResult>();
                 var misses = new List<FamilyInstance>();
 
-                var categoryFilter = new ElementMulticategoryFilter(
-                    new List<BuiltInCategory>(TargetCategories));
-
+                // Resolve hanger points up front — they bound the scanner's
+                // DirectShape mesh index spatially.
+                var hangerPoints = new List<(FamilyInstance hanger, XYZ pt)>();
                 foreach (var hanger in hangers)
                 {
-                    XYZ hangerPoint = GetHangerPoint(hanger);
-                    if (hangerPoint == null) { misses.Add(hanger); continue; }
+                    XYZ pt = GetHangerPoint(hanger);
+                    if (pt == null) misses.Add(hanger);
+                    else hangerPoints.Add((hanger, pt));
+                }
 
-                    var hitResult = ShootRayUp(doc, raybounceView, hangerPoint, categoryFilter);
-                    if (hitResult == null)
+                // Early = single straight-up ray, native structural categories
+                // only (no fan, no CAD imports, no generic models). It still
+                // gets the two reliability fixes:
+                //  • every hit is RE-MEASURED against the hit element's real
+                //    triangulated geometry (fixes rods stretching under sloped
+                //    decks in linked files — phantom Proximity), and
+                //  • a DirectShape triangle index (host + links) so linked IFC
+                //    beams the native ray passes through are still found.
+                var scanner = new StructureRayScanner(doc, raybounceView, TargetCategories)
+                {
+                    UseFan = false,
+                    VerifyWithGeometry = true,
+                    IncludeGenericCategories = false
+                };
+                scanner.Build(hangerPoints.Select(hp => hp.pt).ToList());
+
+                foreach (var (hanger, hangerPoint) in hangerPoints)
+                {
+                    StructureRayScanner.ScanHit scan = null;
+                    try { scan = scanner.Scan(hangerPoint); } catch { }
+                    if (scan == null)
                     {
                         misses.Add(hanger);
                         continue;
@@ -120,12 +144,15 @@ namespace SgRevitAddin.Commands.Hangers
                     {
                         Hanger = hanger,
                         HangerPoint = hangerPoint,
-                        HitPoint = hitResult.Value.hitPoint,
-                        Distance = hitResult.Value.distance,
-                        HitCategory = hitResult.Value.category,
-                        HitCategoryLabel = hitResult.Value.categoryLabel,
-                        HitElementName = hitResult.Value.elementName,
-                        HitLinkName = hitResult.Value.linkName
+                        HitPoint = hangerPoint + XYZ.BasisZ * scan.Distance,
+                        Distance = scan.Distance,
+                        HitCategory = scan.Category,
+                        HitCategoryLabel = scan.CategoryLabel,
+                        HitElementName = scan.ElementName,
+                        HitLinkName = scan.LinkName,
+                        Source = scan.Source,
+                        Quality = scan.Quality,
+                        CorrectionFt = scan.CorrectionFt
                     });
                 }
 
@@ -152,9 +179,13 @@ namespace SgRevitAddin.Commands.Hangers
                     rep.AppendLine("hitZ = hangerZ + rodLen (the raycast target).  rodTopZ = actual top of the hanger after setting Rod Length.");
                     rep.AppendLine("If rodTopZ ≈ hitZ but the rod still pokes past the deck → the HIT is above the underside (raycast/wrong face).");
                     rep.AppendLine("If rodTopZ > hitZ → the hanger FAMILY extends beyond Rod Length.  Compare hitZ to the deck underside in a section.");
-                    rep.AppendLine(new string('-', 110));
-                    rep.AppendLine(string.Format("{0,-4}{1,9}{2,9}{3,10}{4,9}{5,10}{6,10}{7,8}  {8}",
-                        "#", "X", "Y", "hangerZ", "rodLen", "hitZ", "rodTopZ", "dTop", "hit (cat / element / link)"));
+                    rep.AppendLine("via = source:quality — native:centered = intersector hit re-measured on the element's real geometry;");
+                    rep.AppendLine("      mesh:centered = DirectShape triangle index (linked IFC); native:proximity = unverifiable, raw intersector value.");
+                    rep.AppendLine("corr = raw Proximity minus verified distance, in inches (how far the raw raycast was off — phantom-face error).");
+                    rep.AppendLine(scanner.DiagnosticsSummary);
+                    rep.AppendLine(new string('-', 130));
+                    rep.AppendLine(string.Format("{0,-4}{1,9}{2,9}{3,10}{4,9}{5,10}{6,10}{7,8}{8,8}  {9}",
+                        "#", "X", "Y", "hangerZ", "rodLen", "hitZ", "rodTopZ", "dTop", "corr\"", "hit (cat / element / link / via)"));
 
                     using (var tw = new TransactionWrapper(doc, "Raybounce Diagnostic (rolled back)"))
                     {
@@ -171,9 +202,10 @@ namespace SgRevitAddin.Commands.Hangers
                             double rodTop = double.NaN;
                             try { var bb = h.Hanger.get_BoundingBox(null); if (bb != null) rodTop = bb.Max.Z; } catch { }
                             double dTop = double.IsNaN(rodTop) ? double.NaN : rodTop - hz;
-                            rep.AppendLine(string.Format("{0,-4}{1,9:F3}{2,9:F3}{3,10:F3}{4,9:F3}{5,10:F3}{6,10:F3}{7,8:F3}  {8}",
+                            rep.AppendLine(string.Format("{0,-4}{1,9:F3}{2,9:F3}{3,10:F3}{4,9:F3}{5,10:F3}{6,10:F3}{7,8:F3}{8,8:F1}  {9}",
                                 i++, h.HangerPoint.X, h.HangerPoint.Y, h.HangerPoint.Z, h.Distance, hz, rodTop, dTop,
-                                $"{h.HitCategoryLabel} / {h.HitElementName} / {h.HitLinkName}"));
+                                h.CorrectionFt * 12.0,
+                                $"{h.HitCategoryLabel} / {h.HitElementName} / {h.HitLinkName} / {h.Source}:{h.Quality}"));
                         }
                         // NOT committed → rolled back. Nothing changes.
                     }
@@ -253,59 +285,13 @@ namespace SgRevitAddin.Commands.Hangers
                 if (failedCount > 0)
                     summaryLines.Add($"{failedCount} hanger{(failedCount != 1 ? "s" : "")} failed.");
 
+                summaryLines.Add("");
+                summaryLines.Add("── Geometry verification ──");
+                summaryLines.Add(scanner.DiagnosticsSummary);
+
                 TaskDialog.Show("Raybounce Early — Summary", string.Join("\n", summaryLines));
 
                 return Result.Succeeded;
-            }
-        }
-
-        private (XYZ hitPoint, double distance, BuiltInCategory category, string categoryLabel, string elementName, string linkName)?
-            ShootRayUp(Document doc, View3D view3D, XYZ origin, ElementFilter categoryFilter)
-        {
-            try
-            {
-                var intersector = new ReferenceIntersector(categoryFilter, FindReferenceTarget.Face, view3D)
-                {
-                    FindReferencesInRevitLinks = true
-                };
-
-                ReferenceWithContext result = intersector.FindNearest(origin, XYZ.BasisZ);
-                if (result == null) return null;
-
-                Reference reference = result.GetReference();
-                if (reference == null) return null;
-
-                double distance = result.Proximity;
-                XYZ hitPoint = origin + XYZ.BasisZ * distance;
-
-                Element hitElement = null;
-                BuiltInCategory hitCat = BuiltInCategory.INVALID;
-                string linkName = "";
-
-                if (reference.LinkedElementId != ElementId.InvalidElementId)
-                {
-                    RevitLinkInstance linkInst = doc.GetElement(reference.ElementId) as RevitLinkInstance;
-                    try { linkName = linkInst?.Name ?? ""; } catch { }
-                    Document linkDoc = linkInst?.GetLinkDocument();
-                    if (linkDoc != null)
-                        hitElement = linkDoc.GetElement(reference.LinkedElementId);
-                }
-                else
-                {
-                    hitElement = doc.GetElement(reference.ElementId);
-                }
-
-                if (hitElement?.Category != null)
-                    hitCat = (BuiltInCategory)hitElement.Category.Id.IntegerValue;
-
-                string label = GetCategoryLabel(hitCat);
-                string elemName = "";
-                try { elemName = $"{hitElement?.Name} #{hitElement?.Id.IntegerValue}"; } catch { }
-                return (hitPoint, distance, hitCat, label, elemName, linkName);
-            }
-            catch
-            {
-                return null;
             }
         }
 
@@ -397,18 +383,6 @@ namespace SgRevitAddin.Commands.Hangers
                 case BuiltInCategory.OST_Roofs: return dlg.TypeCodeRoofs;
                 case BuiltInCategory.OST_StructuralFraming: return dlg.TypeCodeFraming;
                 default: return "";
-            }
-        }
-
-        private string GetCategoryLabel(BuiltInCategory cat)
-        {
-            switch (cat)
-            {
-                case BuiltInCategory.OST_Floors: return "Floors";
-                case BuiltInCategory.OST_Stairs: return "Stairs";
-                case BuiltInCategory.OST_Roofs: return "Roofs";
-                case BuiltInCategory.OST_StructuralFraming: return "Structural Framing";
-                default: return "Other";
             }
         }
 

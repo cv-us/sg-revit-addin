@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Hangers
 {
@@ -17,6 +18,8 @@ namespace SgRevitAddin.Commands.Hangers
     /// </summary>
     public class HangParallelStructuralDialog : DpiAwareForm
     {
+        private const string MemKey = "HangParallelStructural";
+
         // ── Results ──
         public string SelectedFamily { get; private set; }
         public string PipeTypeFilter { get; private set; }
@@ -58,6 +61,45 @@ namespace SgRevitAddin.Commands.Hangers
         {
             InitializeForm(hangerFamilyNames, pipeTypeNames, linkNames,
                 defaultFamily, defaultTypeCode, defaultWidemouthCode);
+            RestoreMemory(defaultTypeCode, defaultWidemouthCode);
+        }
+
+        /// <summary>Last-used values win over the passed-in defaults.</summary>
+        private void RestoreMemory(string defaultTypeCode, string defaultWidemouthCode)
+        {
+            string memFilter = DialogMemory.Get(MemKey, "PipeFilter", "");
+            if (memFilter.Length > 0 && cboPipeFilter.Items.Contains(memFilter))
+                cboPipeFilter.SelectedItem = memFilter;
+
+            string memFamily = DialogMemory.Get(MemKey, "Family", "");
+            if (memFamily.Length > 0 && cboFamily.Items.Contains(memFamily))
+                cboFamily.SelectedItem = memFamily;
+
+            bool evenly = DialogMemory.GetBool(MemKey, "Evenly", true);
+            rbEvenlySpaced.Checked = evenly;
+            rbExactSpacing.Checked = !evenly;
+
+            switch (DialogMemory.GetInt(MemKey, "SpacingChoice", 0))
+            {
+                case 1: rb12_0.Checked = true; break;
+                case 2: rb15_0.Checked = true; break;
+                case 3: rbCustom.Checked = true; break;
+                default: rb10_6.Checked = true; break;
+            }
+            txtCustomSpacing.Text = DialogMemory.Get(MemKey, "CustomSpacing", "");
+
+            txtTypeCode.Text = DialogMemory.Get(MemKey, "TypeCode", defaultTypeCode);
+            txtWidemouthCode.Text = DialogMemory.Get(MemKey, "Widemouth", defaultWidemouthCode);
+            cboAttachTo.SelectedIndex = DialogMemory.GetInt(MemKey, "AttachTo", 0) == 1 ? 1 : 0;
+            cboCClamp.SelectedIndex = DialogMemory.GetInt(MemKey, "CClamp", 0) == 1 ? 1 : 0;
+
+            chkLocalFraming.Checked = DialogMemory.GetBool(MemKey, "UseLocal", false);
+            if (!chkLocalFraming.Checked)
+            {
+                string memLink = DialogMemory.Get(MemKey, "Link", "");
+                if (memLink.Length > 0 && cboLink.Items.Contains(memLink))
+                    cboLink.SelectedItem = memLink;
+            }
         }
 
         private void InitializeForm(
@@ -66,7 +108,7 @@ namespace SgRevitAddin.Commands.Hangers
             string defaultFamily, string defaultTypeCode, string defaultWidemouthCode)
         {
             Text = "Auto Hang — Typical Spacing (Parallel to Structural)";
-            ClientSize = new Size(560, 720);
+            ClientSize = new Size(560, 616);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
@@ -158,6 +200,8 @@ namespace SgRevitAddin.Commands.Hangers
             AddLabel("Widemouth Type (Hydratec):", 15, y);
             txtWidemouthCode = new TextBox { Left = inputX, Top = y - 2, Width = 80, Text = defaultWidemouthCode };
             Controls.Add(txtWidemouthCode);
+            new ToolTip().SetToolTip(txtWidemouthCode,
+                "Type code used where the flange is too thick for a standard C-clamp.");
             y += 32;
 
             // ── Attach To ──
@@ -203,14 +247,14 @@ namespace SgRevitAddin.Commands.Hangers
 
             // ── OK / Cancel (right-aligned) ──
             // Form width 560, margin 15 → Cancel right edge at 545.
-            btnCancel = new Button { Text = "Cancel", Left = 455, Top = y, Width = 90, Height = 32, DialogResult = DialogResult.Cancel };
-            Controls.Add(btnCancel);
-            CancelButton = btnCancel;
-
             btnOK = new Button { Text = "Place Hangers", Left = 335, Top = y, Width = 110, Height = 32, DialogResult = DialogResult.OK };
             btnOK.Click += BtnOK_Click;
             Controls.Add(btnOK);
             AcceptButton = btnOK;
+
+            btnCancel = new Button { Text = "Cancel", Left = 455, Top = y, Width = 90, Height = 32, DialogResult = DialogResult.Cancel };
+            Controls.Add(btnCancel);
+            CancelButton = btnCancel;
         }
 
         private void AddLabel(string text, int x, int y, bool bold = true)
@@ -271,6 +315,21 @@ namespace SgRevitAddin.Commands.Hangers
             ShowCClamp = cboCClamp.SelectedIndex == 1;
             UseLocalFraming = chkLocalFraming.Checked;
             SelectedLinkName = cboLink.SelectedIndex > 0 ? cboLink.SelectedItem.ToString() : null;
+
+            // Remember for next time.
+            DialogMemory.Set(MemKey, "PipeFilter", PipeTypeFilter);
+            DialogMemory.Set(MemKey, "Family", SelectedFamily);
+            DialogMemory.SetBool(MemKey, "Evenly", EvenlyDistributed);
+            DialogMemory.SetInt(MemKey, "SpacingChoice",
+                rb10_6.Checked ? 0 : rb12_0.Checked ? 1 : rb15_0.Checked ? 2 : 3);
+            DialogMemory.Set(MemKey, "CustomSpacing", txtCustomSpacing.Text.Trim());
+            DialogMemory.Set(MemKey, "TypeCode", HangerTypeCode);
+            DialogMemory.Set(MemKey, "Widemouth", WidemouthTypeCode);
+            DialogMemory.SetInt(MemKey, "AttachTo", AttachToBottom ? 0 : 1);
+            DialogMemory.SetInt(MemKey, "CClamp", ShowCClamp ? 1 : 0);
+            DialogMemory.SetBool(MemKey, "UseLocal", UseLocalFraming);
+            DialogMemory.Set(MemKey, "Link", SelectedLinkName ?? "");
+            DialogMemory.Flush();
         }
     }
 }

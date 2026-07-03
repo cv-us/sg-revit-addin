@@ -3,14 +3,18 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Hangers
 {
     /// <summary>
     /// Dialog for the Auto Hang at Structural Framing command.
+    /// All inputs persist between runs via <see cref="DialogMemory"/>.
     /// </summary>
     public class HangAtStructuralDialog : DpiAwareForm
     {
+        private const string MemKey = "HangAtStructural";
+
         // ── Results ──
         public string SelectedFamily { get; private set; }
         public string TypeCode { get; private set; }
@@ -43,6 +47,29 @@ namespace SgRevitAddin.Commands.Hangers
         {
             InitializeForm(hangerFamilyNames, linkNames,
                 defaultFamily, defaultTypeCode, defaultWidemouthType, defaultMaxClash);
+            RestoreMemory(defaultTypeCode, defaultWidemouthType, defaultMaxClash);
+        }
+
+        /// <summary>Last-used values win over the passed-in defaults.</summary>
+        private void RestoreMemory(string defaultTypeCode, string defaultWidemouthType, double defaultMaxClash)
+        {
+            string memFamily = DialogMemory.Get(MemKey, "Family", "");
+            if (memFamily.Length > 0 && cboFamily.Items.Contains(memFamily))
+                cboFamily.SelectedItem = memFamily;
+
+            txtTypeCode.Text = DialogMemory.Get(MemKey, "TypeCode", defaultTypeCode);
+            txtWidemouthType.Text = DialogMemory.Get(MemKey, "Widemouth", defaultWidemouthType);
+            txtMaxClash.Text = DialogMemory.Get(MemKey, "MaxClash", defaultMaxClash.ToString());
+            cboAttachTo.SelectedIndex = DialogMemory.GetInt(MemKey, "AttachTo", 0) == 1 ? 1 : 0;
+            cboCClamp.SelectedIndex = DialogMemory.GetInt(MemKey, "CClamp", 0) == 1 ? 1 : 0;
+
+            chkLocalFraming.Checked = DialogMemory.GetBool(MemKey, "UseLocal", false);
+            if (!chkLocalFraming.Checked)
+            {
+                string memLink = DialogMemory.Get(MemKey, "Link", "");
+                if (memLink.Length > 0 && cboLink.Items.Contains(memLink))
+                    cboLink.SelectedItem = memLink;
+            }
         }
 
         private void InitializeForm(
@@ -50,7 +77,7 @@ namespace SgRevitAddin.Commands.Hangers
             string defaultFamily, string defaultTypeCode, string defaultWidemouthType, double defaultMaxClash)
         {
             Text = "Auto Hang — Structural Framing";
-            ClientSize = new Size(560, 480);
+            ClientSize = new Size(560, 387);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
@@ -85,6 +112,10 @@ namespace SgRevitAddin.Commands.Hangers
             Controls.Add(txtWidemouthType);
             y += 35;
 
+            var tips = new ToolTip();
+            tips.SetToolTip(txtWidemouthType,
+                "Type code used where the flange is too thick for a standard C-clamp.");
+
             // ── Attach To ──
             AddLabel("Attach Hangers To:", 15, y);
             cboAttachTo = new ComboBox { Left = inputX, Top = y - 2, Width = inputW, DropDownStyle = ComboBoxStyle.DropDownList };
@@ -105,6 +136,8 @@ namespace SgRevitAddin.Commands.Hangers
             AddLabel("Max Clash Height (ft):", 15, y);
             txtMaxClash = new TextBox { Left = inputX, Top = y - 2, Width = 80, Text = defaultMaxClash.ToString() };
             Controls.Add(txtMaxClash);
+            tips.SetToolTip(txtMaxClash,
+                "Maximum distance above the pipe to search for structure.");
             y += 40;
 
             // ── Separator ──
@@ -142,14 +175,14 @@ namespace SgRevitAddin.Commands.Hangers
 
             // ── OK / Cancel (right-aligned) ──
             // Form width 560, margin 15 → Cancel right edge at 545.
-            btnCancel = new Button { Text = "Cancel", Left = 455, Top = y, Width = 90, Height = 32, DialogResult = DialogResult.Cancel };
-            Controls.Add(btnCancel);
-            CancelButton = btnCancel;
-
             btnOK = new Button { Text = "Place Hangers", Left = 335, Top = y, Width = 110, Height = 32, DialogResult = DialogResult.OK };
             btnOK.Click += BtnOK_Click;
             Controls.Add(btnOK);
             AcceptButton = btnOK;
+
+            btnCancel = new Button { Text = "Cancel", Left = 455, Top = y, Width = 90, Height = 32, DialogResult = DialogResult.Cancel };
+            Controls.Add(btnCancel);
+            CancelButton = btnCancel;
         }
 
         private void AddLabel(string text, int x, int y, bool bold = true)
@@ -190,6 +223,17 @@ namespace SgRevitAddin.Commands.Hangers
             MaxClashHeightFeet = maxClash;
             UseLocalFraming = chkLocalFraming.Checked;
             SelectedLinkName = cboLink.SelectedIndex > 0 ? cboLink.SelectedItem.ToString() : null;
+
+            // Remember for next time.
+            DialogMemory.Set(MemKey, "Family", SelectedFamily);
+            DialogMemory.Set(MemKey, "TypeCode", TypeCode);
+            DialogMemory.Set(MemKey, "Widemouth", WidemouthTypeCode);
+            DialogMemory.Set(MemKey, "MaxClash", txtMaxClash.Text.Trim());
+            DialogMemory.SetInt(MemKey, "AttachTo", AttachToBottom ? 0 : 1);
+            DialogMemory.SetInt(MemKey, "CClamp", ShowCClamp ? 1 : 0);
+            DialogMemory.SetBool(MemKey, "UseLocal", UseLocalFraming);
+            DialogMemory.Set(MemKey, "Link", SelectedLinkName ?? "");
+            DialogMemory.Flush();
         }
     }
 }

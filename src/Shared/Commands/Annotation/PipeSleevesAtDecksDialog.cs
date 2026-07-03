@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Annotation
 {
@@ -14,6 +15,8 @@ namespace SgRevitAddin.Commands.Annotation
     /// </summary>
     public class PipeSleevesAtDecksDialog : DpiAwareForm
     {
+        private const string MemKey = "SleevesDecks";
+
         // ── Results ──
         public int SelectedLinkIndex { get; private set; } = -1;
         public bool ExtendForWetAreas { get; private set; } = true;
@@ -37,7 +40,7 @@ namespace SgRevitAddin.Commands.Annotation
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(480, 290);
+            ClientSize = new Size(480, 280);
 
             int margin = 15;
             int y = margin;
@@ -82,6 +85,9 @@ namespace SgRevitAddin.Commands.Annotation
             foreach (var name in _linkNames)
                 cboLink.Items.Add(name);
             if (cboLink.Items.Count > 0) cboLink.SelectedIndex = 0;
+            // Restore the remembered link only if it is still loaded.
+            int linkIdx = cboLink.Items.IndexOf(DialogMemory.Get(MemKey, "LinkName", ""));
+            if (linkIdx >= 0) cboLink.SelectedIndex = linkIdx;
             grpLink.Controls.AddRange(new Control[] { lblLink, cboLink });
             Controls.Add(grpLink);
             y += 65;
@@ -93,18 +99,20 @@ namespace SgRevitAddin.Commands.Annotation
                 Location = new Point(margin, y),
                 Size = new Size(450, 75)
             };
+            bool extend = DialogMemory.GetBool(MemKey, "Extend", true);
             rbSame = new RadioButton
             {
                 Text = "Same thickness as floor (non-wet areas)",
                 Location = new Point(15, 22),
-                Size = new Size(400, 20)
+                Size = new Size(400, 20),
+                Checked = !extend
             };
             rbExtend = new RadioButton
             {
                 Text = "Extend 2\" above floor (wet areas)",
                 Location = new Point(15, 46),
                 Size = new Size(400, 20),
-                Checked = true
+                Checked = extend
             };
             grpLength.Controls.AddRange(new Control[] { rbSame, rbExtend });
             Controls.Add(grpLength);
@@ -117,7 +125,8 @@ namespace SgRevitAddin.Commands.Annotation
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
                 Location = new Point(390, y),
-                Size = new Size(75, 30)
+                Size = new Size(75, 30),
+                TabIndex = 101
             };
             CancelButton = btnCancel;
             Controls.Add(btnCancel);
@@ -127,7 +136,8 @@ namespace SgRevitAddin.Commands.Annotation
                 Text = "Select Pipes",
                 DialogResult = DialogResult.OK,
                 Location = new Point(270, y),
-                Size = new Size(110, 30)
+                Size = new Size(110, 30),
+                TabIndex = 100
             };
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
@@ -147,6 +157,11 @@ namespace SgRevitAddin.Commands.Annotation
 
             SelectedLinkIndex = cboLink.SelectedIndex;
             ExtendForWetAreas = rbExtend.Checked;
+
+            // Remember for next time.
+            DialogMemory.Set(MemKey, "LinkName", cboLink.SelectedItem?.ToString() ?? "");
+            DialogMemory.SetBool(MemKey, "Extend", ExtendForWetAreas);
+            DialogMemory.Flush();
         }
     }
 }

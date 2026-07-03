@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Annotation
 {
@@ -14,6 +15,8 @@ namespace SgRevitAddin.Commands.Annotation
     /// </summary>
     public class PipeSleevesAtBeamsDialog : DpiAwareForm
     {
+        private const string MemKey = "SleevesBeams";
+
         // ── Results ──
         public int SelectedLinkIndex { get; private set; } = -1;
         public double SleeveLengthInches { get; private set; } = 6.0;
@@ -37,7 +40,7 @@ namespace SgRevitAddin.Commands.Annotation
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(480, 260);
+            ClientSize = new Size(480, 240);
 
             int margin = 15;
             int y = margin;
@@ -83,6 +86,9 @@ namespace SgRevitAddin.Commands.Annotation
             foreach (var name in _linkNames)
                 cboLink.Items.Add(name);
             if (cboLink.Items.Count > 0) cboLink.SelectedIndex = 0;
+            // Restore the remembered link only if it is still loaded.
+            int linkIdx = cboLink.Items.IndexOf(DialogMemory.Get(MemKey, "LinkName", ""));
+            if (linkIdx >= 0) cboLink.SelectedIndex = linkIdx;
 
             var lblLength = new Label
             {
@@ -94,7 +100,7 @@ namespace SgRevitAddin.Commands.Annotation
             {
                 Location = new Point(180, 59),
                 Size = new Size(80, 24),
-                Text = "6"
+                Text = DialogMemory.Get(MemKey, "LengthIn", "6")
             };
 
             grpSettings.Controls.AddRange(new Control[] { lblLink, cboLink, lblLength, txtSleeveLength });
@@ -108,7 +114,8 @@ namespace SgRevitAddin.Commands.Annotation
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
                 Location = new Point(390, y),
-                Size = new Size(75, 30)
+                Size = new Size(75, 30),
+                TabIndex = 101
             };
             CancelButton = btnCancel;
             Controls.Add(btnCancel);
@@ -118,7 +125,8 @@ namespace SgRevitAddin.Commands.Annotation
                 Text = "Select Pipes",
                 DialogResult = DialogResult.OK,
                 Location = new Point(270, y),
-                Size = new Size(110, 30)
+                Size = new Size(110, 30),
+                TabIndex = 100
             };
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
@@ -136,7 +144,7 @@ namespace SgRevitAddin.Commands.Annotation
                 return;
             }
 
-            if (!double.TryParse(txtSleeveLength.Text, out double length) || length <= 0)
+            if (!double.TryParse(txtSleeveLength.Text.Trim(), out double length) || length <= 0)
             {
                 MessageBox.Show("Enter a valid positive sleeve length in inches.",
                     "Invalid Length", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -146,6 +154,11 @@ namespace SgRevitAddin.Commands.Annotation
 
             SelectedLinkIndex = cboLink.SelectedIndex;
             SleeveLengthInches = length;
+
+            // Remember for next time.
+            DialogMemory.Set(MemKey, "LinkName", cboLink.SelectedItem?.ToString() ?? "");
+            DialogMemory.Set(MemKey, "LengthIn", txtSleeveLength.Text.Trim());
+            DialogMemory.Flush();
         }
     }
 }

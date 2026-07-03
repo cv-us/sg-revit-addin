@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Annotation
 {
@@ -17,6 +18,8 @@ namespace SgRevitAddin.Commands.Annotation
     /// </summary>
     public class RoomTextNotesDialog : DpiAwareForm
     {
+        private const string MemKey = "RoomTextNotes";
+
         // ── Results ──
         public int SelectedLinkIndex { get; private set; } = -1;
         public string SelectedLevelName { get; private set; }
@@ -49,7 +52,7 @@ namespace SgRevitAddin.Commands.Annotation
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(480, 320);
+            ClientSize = new Size(480, 288);
 
             int margin = 15;
             int y = margin;
@@ -88,6 +91,7 @@ namespace SgRevitAddin.Commands.Annotation
             };
             foreach (var n in _linkNames) cboLink.Items.Add(n);
             if (cboLink.Items.Count > 0) cboLink.SelectedIndex = 0;
+            RestoreComboText(cboLink, DialogMemory.Get(MemKey, "LinkName", ""));
             grpSettings.Controls.Add(cboLink);
 
             grpSettings.Controls.Add(new Label { Text = "Level:", Location = new Point(10, 58), Size = new Size(90, 18) });
@@ -99,6 +103,7 @@ namespace SgRevitAddin.Commands.Annotation
             };
             foreach (var n in _levelNames) cboLevel.Items.Add(n);
             if (cboLevel.Items.Count > 0) cboLevel.SelectedIndex = 0;
+            RestoreComboText(cboLevel, DialogMemory.Get(MemKey, "Level", ""));
             grpSettings.Controls.Add(cboLevel);
 
             grpSettings.Controls.Add(new Label { Text = "Text Style:", Location = new Point(10, 91), Size = new Size(90, 18) });
@@ -110,6 +115,7 @@ namespace SgRevitAddin.Commands.Annotation
             };
             foreach (var n in _textNoteTypeNames) cboTextType.Items.Add(n);
             if (cboTextType.Items.Count > 0) cboTextType.SelectedIndex = 0;
+            RestoreComboText(cboTextType, DialogMemory.Get(MemKey, "TextType", ""));
             grpSettings.Controls.Add(cboTextType);
 
             chkDelete = new CheckBox
@@ -117,7 +123,7 @@ namespace SgRevitAddin.Commands.Annotation
                 Text = "Delete existing text notes of selected type in active view first",
                 Location = new Point(10, 122),
                 Size = new Size(420, 20),
-                Checked = true
+                Checked = DialogMemory.GetBool(MemKey, "Delete", true)
             };
             grpSettings.Controls.Add(chkDelete);
 
@@ -131,7 +137,8 @@ namespace SgRevitAddin.Commands.Annotation
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
                 Location = new Point(390, y),
-                Size = new Size(75, 30)
+                Size = new Size(75, 30),
+                TabIndex = 101
             };
             CancelButton = btnCancel;
             Controls.Add(btnCancel);
@@ -141,11 +148,19 @@ namespace SgRevitAddin.Commands.Annotation
                 Text = "Place Text Notes",
                 DialogResult = DialogResult.OK,
                 Location = new Point(260, y),
-                Size = new Size(120, 30)
+                Size = new Size(120, 30),
+                TabIndex = 100
             };
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
             Controls.Add(btnOK);
+        }
+
+        private static void RestoreComboText(ComboBox cbo, string value)
+        {
+            if (string.IsNullOrEmpty(value)) return;
+            int idx = cbo.Items.IndexOf(value);
+            if (idx >= 0) cbo.SelectedIndex = idx;   // only if it still exists
         }
 
         private void BtnOK_Click(object sender, EventArgs e)
@@ -176,6 +191,13 @@ namespace SgRevitAddin.Commands.Annotation
             SelectedLevelName = cboLevel.SelectedItem?.ToString() ?? "";
             SelectedTextNoteTypeIndex = cboTextType.SelectedIndex;
             DeleteExisting = chkDelete.Checked;
+
+            // Remember for next time.
+            DialogMemory.Set(MemKey, "LinkName", cboLink.SelectedItem?.ToString() ?? "");
+            DialogMemory.Set(MemKey, "Level", SelectedLevelName);
+            DialogMemory.Set(MemKey, "TextType", cboTextType.SelectedItem?.ToString() ?? "");
+            DialogMemory.SetBool(MemKey, "Delete", DeleteExisting);
+            DialogMemory.Flush();
         }
     }
 }

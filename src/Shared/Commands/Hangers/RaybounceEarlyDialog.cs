@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Hangers
 {
@@ -12,10 +13,14 @@ namespace SgRevitAddin.Commands.Hangers
     /// "Raybounce Dev" is refined.
     ///
     /// Collects hanger type codes per structural category and a keep-types
-    /// option.
+    /// option. Type codes and the keep-types option are remembered between
+    /// runs via <see cref="DialogMemory"/> (the diagnostic option is
+    /// deliberately NOT remembered — it should never be sticky).
     /// </summary>
     public class RaybounceEarlyDialog : DpiAwareForm
     {
+        private const string MemKey = "RaybounceEarly";
+
         // ── Results ──
         public string TypeCodeFloors { get; private set; } = "05";
         public string TypeCodeStairs { get; private set; } = "02";
@@ -40,11 +45,12 @@ namespace SgRevitAddin.Commands.Hangers
             bool defaultKeepTypes = false)
         {
             _hangerCount = hangerCount;
-            TypeCodeFloors = defaultFloors;
-            TypeCodeStairs = defaultStairs;
-            TypeCodeRoofs = defaultRoofs;
-            TypeCodeFraming = defaultFraming;
-            KeepHangerTypes = defaultKeepTypes;
+            // Last-used values win over the passed-in defaults.
+            TypeCodeFloors = DialogMemory.Get(MemKey, "Floors", defaultFloors);
+            TypeCodeStairs = DialogMemory.Get(MemKey, "Stairs", defaultStairs);
+            TypeCodeRoofs = DialogMemory.Get(MemKey, "Roofs", defaultRoofs);
+            TypeCodeFraming = DialogMemory.Get(MemKey, "Framing", defaultFraming);
+            KeepHangerTypes = DialogMemory.GetBool(MemKey, "KeepTypes", defaultKeepTypes);
             InitializeComponent();
         }
 
@@ -55,7 +61,8 @@ namespace SgRevitAddin.Commands.Hangers
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(480, 412);
+            AllowResize = false;   // fixed stack of options — nothing gains from resizing
+            ClientSize = new Size(480, 390);
 
             int margin = 15;
             int y = margin;
@@ -144,6 +151,15 @@ namespace SgRevitAddin.Commands.Hangers
                 txtFraming.Enabled = !disabled;
             };
             Controls.Add(chkKeepTypes);
+            // Apply the enabled state for the restored value (Checked was set
+            // before the handler above was wired, so it didn't fire).
+            if (chkKeepTypes.Checked)
+            {
+                txtFloors.Enabled = false;
+                txtStairs.Enabled = false;
+                txtRoofs.Enabled = false;
+                txtFraming.Enabled = false;
+            }
             y += 26;
 
             // ── Diagnostic ──
@@ -173,7 +189,7 @@ namespace SgRevitAddin.Commands.Hangers
             {
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
-                Location = new Point(385, y),
+                Location = new Point(390, y),
                 Size = new Size(75, 30)
             };
             CancelButton = btnCancel;
@@ -188,6 +204,14 @@ namespace SgRevitAddin.Commands.Hangers
             TypeCodeFraming = txtFraming.Text.Trim();
             KeepHangerTypes = chkKeepTypes.Checked;
             Diagnostic = chkDiagnostic.Checked;
+
+            // Remember for next time (Diagnostic intentionally not remembered).
+            DialogMemory.Set(MemKey, "Floors", TypeCodeFloors);
+            DialogMemory.Set(MemKey, "Stairs", TypeCodeStairs);
+            DialogMemory.Set(MemKey, "Roofs", TypeCodeRoofs);
+            DialogMemory.Set(MemKey, "Framing", TypeCodeFraming);
+            DialogMemory.SetBool(MemKey, "KeepTypes", KeepHangerTypes);
+            DialogMemory.Flush();
         }
     }
 }

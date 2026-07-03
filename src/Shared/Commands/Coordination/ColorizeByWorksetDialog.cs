@@ -69,7 +69,7 @@ namespace SgRevitAddin.Commands.Coordination
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(740, 770);
+            ClientSize = new Size(740, 722);
 
             const int M = 15, W = 710;
             int y = M;
@@ -106,11 +106,20 @@ namespace SgRevitAddin.Commands.Coordination
             y += 66;
 
             // ── Workset → Status grid ──
-            var grpMap = new GroupBox { Text = "Workset → Status", Location = new Point(M, y), Size = new Size(W, 220) };
+            // The grid is the dialog's vertical-flex element: enlarging the
+            // window grows the grid; everything below is bottom-anchored.
+            var grpMap = new GroupBox
+            {
+                Text = "Workset → Status",
+                Location = new Point(M, y),
+                Size = new Size(W, 220),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom
+            };
             _grid = new DataGridView
             {
                 Location = new Point(10, 22),
                 Size = new Size(W - 20, 158),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
                 AllowUserToAddRows = false,
                 AllowUserToDeleteRows = false,
                 RowHeadersVisible = false,
@@ -159,15 +168,23 @@ namespace SgRevitAddin.Commands.Coordination
             {
                 Text = "Auto-suggest from names",
                 Location = new Point(10, 184),
-                Size = new Size(180, 26)
+                Size = new Size(180, 26),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left
             };
             btnAuto.Click += (s, e) => { AutoSuggest(); UpdatePreview(); };
             grpMap.Controls.Add(btnAuto);
             Controls.Add(grpMap);
             y += 228;
 
+            // Everything below the grid is bottom-anchored so the grid absorbs
+            // any extra height when the dialog is enlarged.
+            var bottomWide = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+
             // ── Status colors ──
-            var grpColors = new GroupBox { Text = "Status Colors", Location = new Point(M, y), Size = new Size(W, 56) };
+            // Bottom|Left only (no Right): keeping the group's width fixed stops
+            // the auto-flex pass from sliding the right-half swatch buttons away
+            // from their labels when the dialog is widened.
+            var grpColors = new GroupBox { Text = "Status Colors", Location = new Point(M, y), Size = new Size(W, 56), Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
             int cx = 10;
             foreach (var st in ColorizeStatusInfo.Buckets)
             {
@@ -201,7 +218,7 @@ namespace SgRevitAddin.Commands.Coordination
             y += 64;
 
             // ── Apply mode ──
-            var grpMode = new GroupBox { Text = "Apply", Location = new Point(M, y), Size = new Size(W, 104) };
+            var grpMode = new GroupBox { Text = "Apply", Location = new Point(M, y), Size = new Size(W, 104), Anchor = bottomWide };
             _chkMaterial = new CheckBox
             {
                 Text = "Assign material — colored pipe-type swap + fitting materials, EXPORTS to NWC (recommended)",
@@ -227,7 +244,7 @@ namespace SgRevitAddin.Commands.Coordination
             y += 112;
 
             // ── Scope + extra categories ──
-            var grpScope = new GroupBox { Text = "Scope", Location = new Point(M, y), Size = new Size(W, 78) };
+            var grpScope = new GroupBox { Text = "Scope", Location = new Point(M, y), Size = new Size(W, 78), Anchor = bottomWide };
             _rbModel = new RadioButton { Text = "Entire model", Location = new Point(12, 22), AutoSize = true, Checked = true };
             _rbView = new RadioButton { Text = "Active view's visible elements", Location = new Point(140, 22), AutoSize = true };
             _rbSel = new RadioButton { Text = "Current selection", Location = new Point(380, 22), AutoSize = true };
@@ -248,29 +265,30 @@ namespace SgRevitAddin.Commands.Coordination
             _lblPreview = new Label
             {
                 Location = new Point(M, y), Size = new Size(W, 20),
-                ForeColor = SystemColors.GrayText
+                ForeColor = SystemColors.GrayText,
+                Anchor = bottomWide
             };
             Controls.Add(_lblPreview);
             y += 26;
             UpdatePreview();
 
-            // ── Buttons ──
-            var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(740 - M - 80, y), Size = new Size(80, 30) };
-            CancelButton = btnCancel;
-            Controls.Add(btnCancel);
+            // ── Buttons (added left→right for tab order) ──
+            var btnClear = new Button { Text = "Clear All Coloring", Location = new Point(M, y), Size = new Size(150, 30), Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+            btnClear.Click += (s, e) => { Action = ColorizeAction.Clear; DialogResult = DialogResult.OK; Close(); };
+            Controls.Add(btnClear);
 
-            var btnApply = new Button { Text = "Apply", Location = new Point(740 - M - 80 - 10 - 90, y), Size = new Size(90, 30) };
+            var btnPreview = new Button { Text = "Preview Count", Location = new Point(M + 160, y), Size = new Size(120, 30), Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+            btnPreview.Click += (s, e) => UpdatePreview(showZero: true);
+            Controls.Add(btnPreview);
+
+            var btnApply = new Button { Text = "Apply", Location = new Point(740 - M - 80 - 10 - 90, y), Size = new Size(90, 30), Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
             btnApply.Click += (s, e) => { Action = ColorizeAction.Apply; CaptureAndClose(); };
             AcceptButton = btnApply;
             Controls.Add(btnApply);
 
-            var btnClear = new Button { Text = "Clear All Coloring", Location = new Point(M, y), Size = new Size(150, 30) };
-            btnClear.Click += (s, e) => { Action = ColorizeAction.Clear; DialogResult = DialogResult.OK; Close(); };
-            Controls.Add(btnClear);
-
-            var btnPreview = new Button { Text = "Preview Count", Location = new Point(M + 160, y), Size = new Size(120, 30) };
-            btnPreview.Click += (s, e) => UpdatePreview(showZero: true);
-            Controls.Add(btnPreview);
+            var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(740 - M - 80, y), Size = new Size(80, 30), Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
+            CancelButton = btnCancel;
+            Controls.Add(btnCancel);
         }
 
         /// <summary>Per-workset memory field key (status remembered by workset name).</summary>

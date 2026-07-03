@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Hangers
 {
@@ -13,9 +14,16 @@ namespace SgRevitAddin.Commands.Hangers
     ///   - Framing offset distance (in inches)
     ///   - Framing sync direction (top or bottom)
     ///   - Whether to keep existing hanger types
+    ///
+    /// NOTE: this dialog deliberately does NOT use DialogMemory. Its values
+    /// round-trip with the project's "Dynamo Setting - AutoSync ..." global
+    /// parameters (read as defaults, written back on OK by the command), so
+    /// the PROJECT is the source of truth — machine-local memory would fight
+    /// it and leak one project's settings into another.
     /// </summary>
     public class SyncHangersSurfaceDialog : DpiAwareForm
     {
+
         // ── Results ──
         public string TypeCodeFloors { get; private set; }
         public string TypeCodeStairs { get; private set; }
@@ -46,6 +54,8 @@ namespace SgRevitAddin.Commands.Hangers
             bool defaultSyncToBottom, bool defaultKeepTypes)
         {
             _hangerCount = hangerCount;
+            // Passed-in defaults come from (and are written back to) the
+            // project's global parameters — they always win. See class note.
             TypeCodeFloors = defaultFloors;
             TypeCodeStairs = defaultStairs;
             TypeCodeRoofs = defaultRoofs;
@@ -54,7 +64,15 @@ namespace SgRevitAddin.Commands.Hangers
             FramingOffsetInches = defaultFramingOffset;
             FramingSyncToBottom = defaultSyncToBottom;
             KeepHangerTypes = defaultKeepTypes;
+            AllowResize = false;   // fixed stack of options — resizing adds nothing
             InitializeComponents();
+        }
+
+        private static decimal Clamp(decimal value, decimal min, decimal max)
+        {
+            if (value < min) return min;
+            if (value > max) return max;
+            return value;
         }
 
         private void InitializeComponents()
@@ -64,7 +82,7 @@ namespace SgRevitAddin.Commands.Hangers
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(500, 560);
+            ClientSize = new Size(500, 490);
 
             int margin = 15;
             int y = margin;
@@ -125,7 +143,7 @@ namespace SgRevitAddin.Commands.Hangers
                 Location = new Point(tx, gy),
                 Size = new Size(80, 22),
                 Minimum = 1, Maximum = 50, DecimalPlaces = 1,
-                Value = (decimal)ClashHeightFeet
+                Value = Clamp((decimal)ClashHeightFeet, 1, 50)
             };
             grpSearch.Controls.Add(nudClashHeight);
 
@@ -141,7 +159,7 @@ namespace SgRevitAddin.Commands.Hangers
                 Location = new Point(tx, gy),
                 Size = new Size(80, 22),
                 Minimum = 0, Maximum = 24, DecimalPlaces = 1,
-                Value = (decimal)FramingOffsetInches
+                Value = Clamp((decimal)FramingOffsetInches, 0, 24)
             };
             grpSearch.Controls.Add(nudFramingOffset);
 
@@ -225,12 +243,13 @@ namespace SgRevitAddin.Commands.Hangers
             Controls.Add(chkKeepTypes);
             y += 35;
 
-            // ── Buttons ──
+            // ── Buttons (right-aligned, 10px gap) ──
+            // Form width 500, margin 15 → Cancel right edge at 485.
             var btnOK = new Button
             {
                 Text = "Sync Rod Lengths",
                 DialogResult = DialogResult.OK,
-                Location = new Point(275, y),
+                Location = new Point(280, y),
                 Size = new Size(120, 30)
             };
             btnOK.Click += BtnOK_Click;
@@ -241,7 +260,7 @@ namespace SgRevitAddin.Commands.Hangers
             {
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
-                Location = new Point(400, y),
+                Location = new Point(410, y),
                 Size = new Size(75, 30)
             };
             CancelButton = btnCancel;
@@ -258,6 +277,9 @@ namespace SgRevitAddin.Commands.Hangers
             FramingOffsetInches = (double)nudFramingOffset.Value;
             FramingSyncToBottom = cboFramingSync.SelectedIndex == 0;
             KeepHangerTypes = chkKeepTypes.Checked;
+            // No DialogMemory here — the command writes these values back to
+            // the project's "Dynamo Setting - AutoSync ..." global parameters,
+            // which seed the next run (project is the source of truth).
         }
     }
 }

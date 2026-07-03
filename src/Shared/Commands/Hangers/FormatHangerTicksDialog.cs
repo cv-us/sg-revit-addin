@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Hangers
 {
@@ -12,6 +13,8 @@ namespace SgRevitAddin.Commands.Hangers
     /// </summary>
     public class FormatHangerTicksDialog : DpiAwareForm
     {
+        private const string MemKey = "FormatHangerTicks";
+
         // ── Result ──
         /// <summary>
         /// "Forward", "Back", or "Default"
@@ -27,7 +30,16 @@ namespace SgRevitAddin.Commands.Hangers
 
         public FormatHangerTicksDialog()
         {
+            AllowResize = false;   // fixed stack of radios — resizing adds nothing
             InitializeComponent();
+
+            // Restore the last-used direction.
+            switch (DialogMemory.Get(MemKey, "Direction", "Forward"))
+            {
+                case "Back": rbBack.Checked = true; break;
+                case "Default": rbDefault.Checked = true; break;
+                default: rbForward.Checked = true; break;
+            }
         }
 
         private void InitializeComponent()
@@ -90,16 +102,6 @@ namespace SgRevitAddin.Commands.Hangers
             y += 105;
 
             // ── Buttons (right-aligned with 10px gap) ──
-            btnCancel = new Button
-            {
-                Text = "Cancel",
-                DialogResult = DialogResult.Cancel,
-                Location = new Point(340 - 15 - 75, y),
-                Size = new Size(75, 30)
-            };
-            CancelButton = btnCancel;
-            Controls.Add(btnCancel);
-
             btnOK = new Button
             {
                 Text = "Format Ticks",
@@ -110,6 +112,16 @@ namespace SgRevitAddin.Commands.Hangers
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
             Controls.Add(btnOK);
+
+            btnCancel = new Button
+            {
+                Text = "Cancel",
+                DialogResult = DialogResult.Cancel,
+                Location = new Point(340 - 15 - 75, y),
+                Size = new Size(75, 30)
+            };
+            CancelButton = btnCancel;
+            Controls.Add(btnCancel);
         }
 
         private void BtnOK_Click(object sender, EventArgs e)
@@ -120,6 +132,9 @@ namespace SgRevitAddin.Commands.Hangers
                 SymbolDirection = "Back";
             else
                 SymbolDirection = "Default";
+
+            DialogMemory.Set(MemKey, "Direction", SymbolDirection);
+            DialogMemory.Flush();
         }
     }
 }

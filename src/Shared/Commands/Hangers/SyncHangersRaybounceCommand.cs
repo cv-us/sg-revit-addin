@@ -52,18 +52,6 @@ namespace SgRevitAddin.Commands.Hangers
         };
 
         /// <summary>
-        /// Extra categories included when "Detect non-structural geometry" is
-        /// checked. Covers IFC imports (which usually land in Generic Models),
-        /// STEP / SAT / Inventor imports (Generic Models or Mass), and other
-        /// simple geometry that isn't categorized as structure.
-        /// </summary>
-        private static readonly BuiltInCategory[] NonStructuralCategories = new[]
-        {
-            BuiltInCategory.OST_GenericModel,
-            BuiltInCategory.OST_Mass
-        };
-
-        /// <summary>
         /// Result from raybounce for a single hanger.
         /// </summary>
         private class RayHitResult
@@ -136,24 +124,12 @@ namespace SgRevitAddin.Commands.Hangers
                 var hits = new List<RayHitResult>();
                 var misses = new List<FamilyInstance>();
 
-                // Build category filter for ReferenceIntersector. When the
-                // user opts in via the "Detect non-structural geometry"
-                // checkbox, the filter also matches Generic Models and
-                // Masses — that's where IFC imports placed directly into
-                // Revit end up (as native FamilyInstances, hit accurately
-                // by ReferenceIntersector).
-                var categories = new List<BuiltInCategory>(TargetCategories);
-                if (includeGeneric) categories.AddRange(NonStructuralCategories);
-                ElementFilter elementFilter = new ElementMulticategoryFilter(categories);
-
                 // Linked CAD geometry (DWG / DGN / SAT — covers STEP and
                 // IFC routed through AutoCAD) is handled by a dedicated
                 // CadMeshRaycaster: ReferenceIntersector returns
                 // element-extent/bbox proximity for ImportInstance, not
                 // triangle proximity, which caused rods to overshoot the
-                // real geometry by feet. The custom raycaster triangulates
-                // each ImportInstance once and runs Möller-Trumbore per
-                // ray. We then take min(native, cad) per hanger.
+                // real geometry by feet.
                 CadMeshRaycaster cadRaycaster = null;
                 if (includeImportedCAD)
                 {
@@ -161,20 +137,44 @@ namespace SgRevitAddin.Commands.Hangers
                     cadRaycaster.Build();
                 }
 
+                // Resolve hanger points up front — they also bound the
+                // scanner's DirectShape/IFC mesh index spatially.
+                var hangerPoints = new List<(FamilyInstance hanger, XYZ pt)>();
+                foreach (var hanger in hangers)
+                {
+                    XYZ pt = GetHangerPoint(hanger);
+                    if (pt == null) misses.Add(hanger);
+                    else hangerPoints.Add((hanger, pt));
+                }
+
+                // The scanner does the heavy lifting: native raybounce with
+                // geometry-VERIFIED distances (fixes rods stretching under
+                // sloped decks in linked files), a center-priority ray fan
+                // (narrow steel a couple inches off in plan), a DirectShape
+                // triangle index (linked IFC beams that native rays pass
+                // through), and the CAD import raycaster. Closest verified
+                // hit wins.
+                var scanner = new StructureRayScanner(doc, raybounceView, TargetCategories)
+                {
+                    UseFan = true,
+                    VerifyWithGeometry = true,
+                    IncludeGenericCategories = includeGeneric,
+                    ImportRaycaster = cadRaycaster
+                };
+                scanner.Build(hangerPoints.Select(hp => hp.pt).ToList());
+
                 // Capture the first few hanger points for the CAD spatial
                 // probe (diagnostics only).
                 var probePoints = new List<XYZ>();
 
-                foreach (var hanger in hangers)
+                foreach (var (hanger, hangerPoint) in hangerPoints)
                 {
-                    XYZ hangerPoint = GetHangerPoint(hanger);
-                    if (hangerPoint == null) { misses.Add(hanger); continue; }
-
                     if (cadRaycaster != null && probePoints.Count < 3)
                         probePoints.Add(hangerPoint);
 
-                    var hitResult = ShootRayFan(doc, raybounceView, hangerPoint, elementFilter, cadRaycaster);
-                    if (hitResult == null)
+                    StructureRayScanner.ScanHit scan = null;
+                    try { scan = scanner.Scan(hangerPoint); } catch { }
+                    if (scan == null)
                     {
                         misses.Add(hanger);
                         continue;
@@ -184,10 +184,10 @@ namespace SgRevitAddin.Commands.Hangers
                     {
                         Hanger = hanger,
                         HangerPoint = hangerPoint,
-                        HitPoint = hitResult.Value.hitPoint,
-                        Distance = hitResult.Value.distance,
-                        HitCategory = hitResult.Value.category,
-                        HitCategoryLabel = hitResult.Value.categoryLabel
+                        HitPoint = hangerPoint + XYZ.BasisZ * scan.Distance,
+                        Distance = scan.Distance,
+                        HitCategory = scan.Category,
+                        HitCategoryLabel = scan.CategoryLabel
                     });
                 }
 
@@ -299,6 +299,11 @@ namespace SgRevitAddin.Commands.Hangers
                 if (failedCount > 0)
                     summaryLines.Add($"{failedCount} hanger{(failedCount != 1 ? "s" : "")} failed.");
 
+                // ── Verification diagnostics ──
+                summaryLines.Add("");
+                summaryLines.Add("── Geometry verification ──");
+                summaryLines.Add(scanner.DiagnosticsSummary);
+
                 // ── CAD diagnostics ── (only when linked-CAD detection is on)
                 if (cadRaycaster != null)
                 {
@@ -338,144 +343,6 @@ namespace SgRevitAddin.Commands.Hangers
 
                 return Result.Succeeded;
             }
-        }
-
-        /// <summary>
-        /// Ray FAN: shoots the center ray plus a ring of slightly-offset rays
-        /// around the hanger and returns the CLOSEST hit among them. A single
-        /// dead-vertical ray misses narrow steel members (beam flanges,
-        /// angles, tube edges) when the hanger is even an inch or two off in
-        /// plan — which is common with imported steel that doesn't perfectly
-        /// align with the Revit pipe. The fan samples a small neighbourhood
-        /// (rings at 2" and 4") so a near-miss still finds the member.
-        /// </summary>
-        private (XYZ hitPoint, double distance, BuiltInCategory category, string categoryLabel)?
-            ShootRayFan(Document doc, View3D view3D, XYZ origin,
-                ElementFilter elementFilter, CadMeshRaycaster cadRaycaster)
-        {
-            // Offsets in feet: center, then 8-spoke rings at 2" and 4".
-            double r1 = 2.0 / 12.0, r2 = 4.0 / 12.0;
-            var offsets = new List<XYZ> { XYZ.Zero };
-            for (int k = 0; k < 8; k++)
-            {
-                double a = k * Math.PI / 4.0;
-                double cx = Math.Cos(a), cy = Math.Sin(a);
-                offsets.Add(new XYZ(cx * r1, cy * r1, 0));
-                offsets.Add(new XYZ(cx * r2, cy * r2, 0));
-            }
-
-            (XYZ hitPoint, double distance, BuiltInCategory category, string categoryLabel)? best = null;
-            foreach (var off in offsets)
-            {
-                var hit = ShootRayUp(doc, view3D, origin + off, elementFilter, cadRaycaster);
-                if (hit == null) continue;
-                if (best == null || hit.Value.distance < best.Value.distance)
-                    best = hit;
-            }
-            return best;
-        }
-
-        /// <summary>
-        /// Shoots a ray straight up from the given point and returns the
-        /// absolute closest hit along the ray.
-        ///
-        /// Two parallel paths, merged by <c>min</c>:
-        ///   • Native Revit elements (Floors / Roofs / Framing / etc.):
-        ///     <see cref="ReferenceIntersector"/> with target=Face. Works
-        ///     fine for native geometry — proximity is the true face hit.
-        ///   • Linked CAD <see cref="ImportInstance"/> (DWG / DGN / SAT,
-        ///     including STEP-via-AutoCAD and IFC-via-AutoCAD): handled by
-        ///     <see cref="CadMeshRaycaster"/>. ReferenceIntersector returns
-        ///     element-extent/bbox proximity (not triangle proximity) for
-        ///     CAD imports, which caused rods to overshoot the real
-        ///     geometry by feet.
-        ///
-        /// We use <c>Find</c> + sort by <c>Proximity</c> on the native side
-        /// because <c>FindNearest</c> has empirically returned a further
-        /// face hit over a closer one in mixed scenes.
-        /// </summary>
-        private (XYZ hitPoint, double distance, BuiltInCategory category, string categoryLabel)?
-            ShootRayUp(Document doc, View3D view3D, XYZ origin,
-                ElementFilter elementFilter, CadMeshRaycaster cadRaycaster)
-        {
-            // ── Native Revit pass ──
-            double nativeDist = double.PositiveInfinity;
-            Reference nativeRef = null;
-            try
-            {
-                var intersector = new ReferenceIntersector(elementFilter, FindReferenceTarget.Face, view3D)
-                {
-                    FindReferencesInRevitLinks = true
-                };
-                IList<ReferenceWithContext> hits = intersector.Find(origin, XYZ.BasisZ);
-                if (hits != null && hits.Count > 0)
-                {
-                    var best = hits
-                        .Where(h => h != null && h.Proximity > 1e-6)
-                        .OrderBy(h => h.Proximity)
-                        .FirstOrDefault();
-                    if (best != null)
-                    {
-                        nativeDist = best.Proximity;
-                        nativeRef = best.GetReference();
-                    }
-                }
-            }
-            catch
-            {
-                // swallow — fall back to CAD-only result if available
-            }
-
-            // ── CAD ImportInstance pass ──
-            double cadDist = double.PositiveInfinity;
-            try
-            {
-                if (cadRaycaster != null)
-                {
-                    double? cad = cadRaycaster.FindClosestHit(origin, XYZ.BasisZ);
-                    if (cad.HasValue) cadDist = cad.Value;
-                }
-            }
-            catch { }
-
-            // ── Take the closer of the two ──
-            if (double.IsPositiveInfinity(nativeDist) && double.IsPositiveInfinity(cadDist))
-                return null;
-
-            double distance;
-            BuiltInCategory hitCat = BuiltInCategory.INVALID;
-            string label;
-
-            if (cadDist < nativeDist)
-            {
-                distance = cadDist;
-                label = "Imported CAD";
-            }
-            else
-            {
-                distance = nativeDist;
-                Element hitElement = null;
-                if (nativeRef != null)
-                {
-                    if (nativeRef.LinkedElementId != ElementId.InvalidElementId)
-                    {
-                        var linkInst = doc.GetElement(nativeRef.ElementId) as RevitLinkInstance;
-                        Document linkDoc = linkInst?.GetLinkDocument();
-                        if (linkDoc != null)
-                            hitElement = linkDoc.GetElement(nativeRef.LinkedElementId);
-                    }
-                    else
-                    {
-                        hitElement = doc.GetElement(nativeRef.ElementId);
-                    }
-                }
-                if (hitElement?.Category != null)
-                    hitCat = (BuiltInCategory)hitElement.Category.Id.IntegerValue;
-                label = GetCategoryLabel(hitCat);
-            }
-
-            XYZ hitPoint = origin + XYZ.BasisZ * distance;
-            return (hitPoint, distance, hitCat, label);
         }
 
         /// <summary>
@@ -547,23 +414,6 @@ namespace SgRevitAddin.Commands.Hangers
                 case BuiltInCategory.OST_Roofs: return dlg.TypeCodeRoofs;
                 case BuiltInCategory.OST_StructuralFraming: return dlg.TypeCodeFraming;
                 default: return "";
-            }
-        }
-
-        /// <summary>
-        /// Gets a display label for a structural category.
-        /// </summary>
-        private string GetCategoryLabel(BuiltInCategory cat)
-        {
-            switch (cat)
-            {
-                case BuiltInCategory.OST_Floors: return "Floors";
-                case BuiltInCategory.OST_Stairs: return "Stairs";
-                case BuiltInCategory.OST_Roofs: return "Roofs";
-                case BuiltInCategory.OST_StructuralFraming: return "Structural Framing";
-                case BuiltInCategory.OST_GenericModel: return "Generic Model";
-                case BuiltInCategory.OST_Mass: return "Mass";
-                default: return "Other";
             }
         }
 

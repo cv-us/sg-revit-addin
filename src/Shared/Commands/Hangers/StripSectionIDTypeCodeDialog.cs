@@ -48,6 +48,7 @@ namespace SgRevitAddin.Commands.Hangers
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
+            AllowResize = false;   // single fixed option — nothing gains from resizing
 
             int y = Margin;
 
@@ -106,16 +107,6 @@ namespace SgRevitAddin.Commands.Hangers
             const int BtnH = 30;
             const int BtnGap = 10;
 
-            btnCancel = new Button
-            {
-                Text = "Cancel",
-                DialogResult = DialogResult.Cancel,
-                Location = new Point(FormWidth - Margin - BtnW, y),
-                Size = new Size(BtnW, BtnH)
-            };
-            CancelButton = btnCancel;
-            Controls.Add(btnCancel);
-
             btnOK = new Button
             {
                 Text = "Strip",
@@ -126,6 +117,16 @@ namespace SgRevitAddin.Commands.Hangers
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
             Controls.Add(btnOK);
+
+            btnCancel = new Button
+            {
+                Text = "Cancel",
+                DialogResult = DialogResult.Cancel,
+                Location = new Point(FormWidth - Margin - BtnW, y),
+                Size = new Size(BtnW, BtnH)
+            };
+            CancelButton = btnCancel;
+            Controls.Add(btnCancel);
 
             y += BtnH + Margin;
             ClientSize = new Size(FormWidth, y);

@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Hangers
 {
@@ -8,10 +9,13 @@ namespace SgRevitAddin.Commands.Hangers
     /// Dialog for the AutoSwap HydraCAD Hangers command.
     ///
     /// Shows info about the swap operation and lets the user choose whether
-    /// to delete the original HydraCAD hangers after replacement.
+    /// to delete the original HydraCAD hangers after replacement. The choice
+    /// is remembered between runs via <see cref="DialogMemory"/>.
     /// </summary>
     public class SwapHydraCADHangersDialog : DpiAwareForm
     {
+        private const string MemKey = "SwapHydraCAD";
+
         // ── Results ──
         public bool DeleteOriginals { get; private set; } = true;
 
@@ -33,7 +37,8 @@ namespace SgRevitAddin.Commands.Hangers
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(480, 326);
+            AllowResize = false;   // info + one option — nothing gains from resizing
+            ClientSize = new Size(480, 312);
 
             int margin = 15;
             int y = margin;
@@ -86,7 +91,7 @@ namespace SgRevitAddin.Commands.Hangers
                 Text = "Delete original HydraCAD hangers after creating replacements",
                 Location = new Point(10, 20),
                 Size = new Size(420, 20),
-                Checked = true
+                Checked = DialogMemory.GetBool(MemKey, "DeleteOriginals", true)
             };
             grpOptions.Controls.Add(chkDelete);
             Controls.Add(grpOptions);
@@ -108,7 +113,7 @@ namespace SgRevitAddin.Commands.Hangers
             {
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
-                Location = new Point(385, y),
+                Location = new Point(390, y),
                 Size = new Size(75, 30)
             };
             CancelButton = btnCancel;
@@ -118,6 +123,9 @@ namespace SgRevitAddin.Commands.Hangers
         private void BtnOK_Click(object sender, EventArgs e)
         {
             DeleteOriginals = chkDelete.Checked;
+
+            DialogMemory.SetBool(MemKey, "DeleteOriginals", DeleteOriginals);
+            DialogMemory.Flush();
         }
     }
 }

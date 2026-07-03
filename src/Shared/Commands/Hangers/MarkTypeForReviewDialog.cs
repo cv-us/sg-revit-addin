@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Hangers
 {
@@ -17,6 +18,8 @@ namespace SgRevitAddin.Commands.Hangers
     /// </summary>
     public class MarkTypeForReviewDialog : DpiAwareForm
     {
+        private const string MemKey = "MarkTypeForReview";
+
         public enum MarkAction { None, Place, DeleteAll, DeleteByType }
 
         // ── Results ──
@@ -62,6 +65,7 @@ namespace SgRevitAddin.Commands.Hangers
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
+            AllowResize = false;   // fixed action dialog — nothing gains from resizing
 
             int y = Margin;
 
@@ -126,7 +130,14 @@ namespace SgRevitAddin.Commands.Hangers
                 Increment = 0.5m,
                 Value = 5.0m
             };
+            double rememberedReach = DialogMemory.GetDouble(MemKey, "ReachFt", 5.0);
+            if (rememberedReach >= 0.5 && rememberedReach <= 50.0)
+                nudReach.Value = (decimal)rememberedReach;
             grpAdd.Controls.Add(nudReach);
+
+            var tips = new ToolTip();
+            tips.SetToolTip(nudReach,
+                "Vertical distance the review marker extends above and below the hanger.");
 
             btnPlace = new Button
             {
@@ -136,6 +147,7 @@ namespace SgRevitAddin.Commands.Hangers
             };
             btnPlace.Click += BtnPlace_Click;
             grpAdd.Controls.Add(btnPlace);
+            AcceptButton = btnPlace;   // Enter = the primary (Place) action
             y += 140;
 
             // ── Delete Markers group ──
@@ -224,6 +236,9 @@ namespace SgRevitAddin.Commands.Hangers
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
+
+            DialogMemory.SetDouble(MemKey, "ReachFt", ReachFeet);
+            DialogMemory.Flush();
 
             Action = MarkAction.Place;
             DialogResult = DialogResult.OK;

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.ViewsAndSheets
 {
@@ -16,6 +17,8 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
     /// </summary>
     public class RotateScopeBoxDialog : DpiAwareForm
     {
+        private const string MemKey = "RotateScopeBox";
+
         // ── Results ──
         public enum AngleSourceOption { LocalGrid, LinkedGrid, ManualAngle }
         public AngleSourceOption AngleSource { get; private set; } = AngleSourceOption.LocalGrid;
@@ -47,7 +50,8 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(420, 340);
+            AllowResize = false;   // plain fixed stack — resizing adds nothing
+            ClientSize = new Size(420, 315);
 
             int margin = 15;
             int y = margin;
@@ -81,7 +85,8 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
                 Text = $"Selected: {_scopeBoxName}",
                 Location = new Point(10, 18),
                 Size = new Size(370, 18),
-                Font = new Font(Font, FontStyle.Bold)
+                Font = new Font(Font, FontStyle.Bold),
+                AutoEllipsis = true   // long scope box names fade to "…"
             });
             Controls.Add(grpScope);
             y += 50;
@@ -155,12 +160,26 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             Controls.Add(grpAngle);
             y += 150;
 
+            // Restore remembered source + angle; no local grids disables that option.
+            numAngle.Value = (decimal)Math.Max(-360.0, Math.Min(360.0,
+                DialogMemory.GetDouble(MemKey, "Angle", 0)));
+            int savedSource = DialogMemory.GetInt(MemKey, "Source", 0);
+            if (cboGrids.Items.Count == 0)
+            {
+                rbLocalGrid.Enabled = false;
+                if (savedSource == 0) savedSource = 1;
+            }
+            if (savedSource == 1) rbLinkedGrid.Checked = true;
+            else if (savedSource == 2) rbManual.Checked = true;
+            else rbLocalGrid.Checked = true;
+            AngleSource_Changed(this, EventArgs.Empty);
+
             // ── Buttons ──
             var btnOK = new Button
             {
                 Text = "Rotate",
                 DialogResult = DialogResult.OK,
-                Location = new Point(240, y),
+                Location = new Point(230, y),
                 Size = new Size(90, 30)
             };
             btnOK.Click += BtnOK_Click;
@@ -171,7 +190,7 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             {
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
-                Location = new Point(335, y),
+                Location = new Point(330, y),
                 Size = new Size(75, 30)
             };
             CancelButton = btnCancel;
@@ -188,8 +207,15 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
         {
             if (rbLocalGrid.Checked)
             {
+                if (cboGrids.SelectedItem == null)
+                {
+                    MessageBox.Show(this, "Pick a local grid to match.", "Rotate Scope Box",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    DialogResult = DialogResult.None;
+                    return;
+                }
                 AngleSource = AngleSourceOption.LocalGrid;
-                SelectedGridName = cboGrids.SelectedItem?.ToString() ?? "";
+                SelectedGridName = cboGrids.SelectedItem.ToString();
             }
             else if (rbLinkedGrid.Checked)
             {
@@ -200,6 +226,13 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
                 AngleSource = AngleSourceOption.ManualAngle;
                 ManualAngleDegrees = (double)numAngle.Value;
             }
+
+            // Remember source + angle (grid name is model-specific — not saved).
+            DialogMemory.SetInt(MemKey, "Source",
+                AngleSource == AngleSourceOption.LinkedGrid ? 1 :
+                AngleSource == AngleSourceOption.ManualAngle ? 2 : 0);
+            DialogMemory.SetDouble(MemKey, "Angle", (double)numAngle.Value);
+            DialogMemory.Flush();
         }
     }
 }

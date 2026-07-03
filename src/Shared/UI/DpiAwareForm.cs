@@ -106,16 +106,20 @@ namespace SgRevitAddin
             MinimumSize = Size;
             if (!AllowResize) MaximumSize = Size;
 
-            // (6) Restore remembered size (logical 96-px -> device px), clamped.
+            // (6) Restore remembered size (logical 96-px -> device px), clamped
+            //     between the natural size and the current screen's work area.
             if (RememberSize && AllowResize)
             {
                 string key = GetType().Name;
                 int w = DialogMemory.GetInt(key, "WinW", 0);
                 int h = DialogMemory.GetInt(key, "WinH", 0);
                 if (w > 0 && h > 0)
+                {
+                    var wa = Screen.FromPoint(Cursor.Position).WorkingArea;
                     Size = new Size(
-                        Math.Max((int)Math.Round(w * factor), MinimumSize.Width),
-                        Math.Max((int)Math.Round(h * factor), MinimumSize.Height));
+                        Math.Min(Math.Max((int)Math.Round(w * factor), MinimumSize.Width), wa.Width),
+                        Math.Min(Math.Max((int)Math.Round(h * factor), MinimumSize.Height), wa.Height));
+                }
             }
             _layoutInit = true;
         }
@@ -133,7 +137,8 @@ namespace SgRevitAddin
                 BackColor = HeaderColor,
                 Font = new Font("Segoe UI", (float)(hh * 0.42), FontStyle.Bold, GraphicsUnit.Pixel),
                 TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(8, 0, 0, 0)
+                Padding = new Padding(8, 0, 0, 0),
+                AutoEllipsis = true   // long titles fade to "…" instead of clipping mid-glyph
             };
             _titleLabel.MouseDown += Header_MouseDown;
 
@@ -210,6 +215,11 @@ namespace SgRevitAddin
         /// (≥55% of parent width) widen with the window, and buttons pin to the
         /// bottom (and nearer horizontal edge). Widen-only keeps stacked sections
         /// from overlapping on resize.
+        ///
+        /// Controls whose Anchor was EXPLICITLY set by the dialog (anything other
+        /// than the Top|Left default) are left untouched — that's how a dialog
+        /// opts its primary list/grid into vertical growth (Top|Left|Right|Bottom)
+        /// without this pass clobbering it.
         /// </summary>
         private void ApplyAutoFlex(Control parent)
         {
@@ -217,6 +227,16 @@ namespace SgRevitAddin
             if (pw <= 0) return;
             foreach (Control c in parent.Controls)
             {
+                bool explicitAnchor = c.Anchor != (AnchorStyles.Top | AnchorStyles.Left);
+                if (explicitAnchor)
+                {
+                    // Deliberate anchor — respect it, but still flex the children
+                    // of container controls.
+                    if (c is GroupBox || c is Panel || c is TableLayoutPanel || c is FlowLayoutPanel)
+                        ApplyAutoFlex(c);
+                    continue;
+                }
+
                 if (c is Button btn)
                 {
                     bool right = (btn.Left + btn.Width / 2) * 2 >= pw;
@@ -265,9 +285,26 @@ namespace SgRevitAddin
         [DllImport("user32.dll")] private static extern bool ReleaseCapture();
         [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
+        private DateTime _lastHeaderClick = DateTime.MinValue;
+
         private void Header_MouseDown(object sender, MouseEventArgs e)
         {
             if (e.Button != MouseButtons.Left) return;
+
+            // Manual double-click detection: the drag loop below swallows the
+            // WinForms DoubleClick event, so time the clicks ourselves.
+            // Double-clicking the header snaps the dialog back to its natural
+            // (design) size — the escape hatch for an awkward remembered size.
+            var now = DateTime.Now;
+            if ((now - _lastHeaderClick).TotalMilliseconds <= SystemInformation.DoubleClickTime)
+            {
+                _lastHeaderClick = DateTime.MinValue;
+                if (AllowResize && MinimumSize.Width > 0)
+                    Size = MinimumSize;
+                return;
+            }
+            _lastHeaderClick = now;
+
             ReleaseCapture();
             SendMessage(Handle, WM_NCLBUTTONDOWN, (IntPtr)HT_CAPTION, IntPtr.Zero);
         }

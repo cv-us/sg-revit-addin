@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.ModelCheck
 {
@@ -15,6 +16,8 @@ namespace SgRevitAddin.Commands.ModelCheck
     /// </summary>
     public class HangerGapCheckDialog : DpiAwareForm
     {
+        private const string MemKey = "HangerGapCheck";
+
         public enum ActionMode { Check, ClearOnly }
 
         // ── Results ──
@@ -43,7 +46,7 @@ namespace SgRevitAddin.Commands.ModelCheck
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(540, 470);
+            ClientSize = new Size(540, 388);
 
             int margin = 15;
             int y = margin;
@@ -60,11 +63,17 @@ namespace SgRevitAddin.Commands.ModelCheck
             y += 28;
 
             // ── Type Code group ──
+            // Both checklist groups are the dialog's vertical-flex elements:
+            // enlarging the window grows the lists.
+            var flexGroup = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom;
+            var flexList = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
+
             var grpTypes = new GroupBox
             {
                 Text = "Type Code (Hydratec) — check these hangers",
                 Location = new Point(margin, y),
-                Size = new Size(245, 200)
+                Size = new Size(245, 200),
+                Anchor = flexGroup
             };
             Controls.Add(grpTypes);
 
@@ -72,7 +81,9 @@ namespace SgRevitAddin.Commands.ModelCheck
             {
                 Location = new Point(10, 22),
                 Size = new Size(225, 135),
-                CheckOnClick = true
+                CheckOnClick = true,
+                IntegralHeight = false,
+                Anchor = flexList
             };
             foreach (var tc in _typeCodes)
                 lstTypeCodes.Items.Add(tc, true); // all checked by default
@@ -82,7 +93,8 @@ namespace SgRevitAddin.Commands.ModelCheck
             {
                 Text = "All",
                 Location = new Point(10, 165),
-                Size = new Size(60, 25)
+                Size = new Size(60, 25),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left
             };
             btnAllTypes.Click += (s, e) => SetAllChecked(lstTypeCodes, true);
             grpTypes.Controls.Add(btnAllTypes);
@@ -91,7 +103,8 @@ namespace SgRevitAddin.Commands.ModelCheck
             {
                 Text = "None",
                 Location = new Point(75, 165),
-                Size = new Size(60, 25)
+                Size = new Size(60, 25),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left
             };
             btnNoneTypes.Click += (s, e) => SetAllChecked(lstTypeCodes, false);
             grpTypes.Controls.Add(btnNoneTypes);
@@ -101,7 +114,8 @@ namespace SgRevitAddin.Commands.ModelCheck
             {
                 Text = "Pipe Sizes — only check hangers on these",
                 Location = new Point(margin + 255, y),
-                Size = new Size(245, 200)
+                Size = new Size(245, 200),
+                Anchor = flexGroup
             };
             Controls.Add(grpSizes);
 
@@ -109,7 +123,9 @@ namespace SgRevitAddin.Commands.ModelCheck
             {
                 Location = new Point(10, 22),
                 Size = new Size(225, 135),
-                CheckOnClick = true
+                CheckOnClick = true,
+                IntegralHeight = false,
+                Anchor = flexList
             };
             foreach (var sz in _sizesFt)
                 lstSizes.Items.Add(new SizeItem(sz), true);
@@ -119,7 +135,8 @@ namespace SgRevitAddin.Commands.ModelCheck
             {
                 Text = "All",
                 Location = new Point(10, 165),
-                Size = new Size(60, 25)
+                Size = new Size(60, 25),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left
             };
             btnAllSizes.Click += (s, e) => SetAllChecked(lstSizes, true);
             grpSizes.Controls.Add(btnAllSizes);
@@ -128,19 +145,21 @@ namespace SgRevitAddin.Commands.ModelCheck
             {
                 Text = "None",
                 Location = new Point(75, 165),
-                Size = new Size(60, 25)
+                Size = new Size(60, 25),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left
             };
             btnNoneSizes.Click += (s, e) => SetAllChecked(lstSizes, false);
             grpSizes.Controls.Add(btnNoneSizes);
 
             y += 210;
 
-            // ── Threshold group ──
+            // ── Threshold group (bottom-anchored below the flexing lists) ──
             var grpThreshold = new GroupBox
             {
                 Text = "Gap threshold",
                 Location = new Point(margin, y),
-                Size = new Size(510, 80)
+                Size = new Size(510, 80),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
             };
             Controls.Add(grpThreshold);
 
@@ -161,6 +180,10 @@ namespace SgRevitAddin.Commands.ModelCheck
                 DecimalPlaces = 1,
                 Increment = 0.5M
             };
+            // Restore the remembered threshold (stored in tenths of an inch).
+            decimal remThreshold = DialogMemory.GetInt(MemKey, "ThresholdTenths", 60) / 10m;
+            if (remThreshold >= nudThreshold.Minimum && remThreshold <= nudThreshold.Maximum)
+                nudThreshold.Value = remThreshold;
             grpThreshold.Controls.Add(nudThreshold);
 
             grpThreshold.Controls.Add(new Label
@@ -181,12 +204,28 @@ namespace SgRevitAddin.Commands.ModelCheck
 
             y += 90;
 
-            // ── Buttons ──
+            // ── Buttons (primary bottom-right next to Cancel; Clear at left) ──
+            var btnClear = new Button
+            {
+                Text = "Clear Markers Only",
+                Location = new Point(margin, y),
+                Size = new Size(160, 30),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left
+            };
+            btnClear.Click += (s, e) =>
+            {
+                Mode = ActionMode.ClearOnly;
+                // No filters needed for clear; we just leave the defaults
+                DialogResult = DialogResult.OK;
+            };
+            Controls.Add(btnClear);
+
             var btnCheck = new Button
             {
                 Text = "Check",
-                Location = new Point(margin, y),
-                Size = new Size(110, 30)
+                Location = new Point(345, y),
+                Size = new Size(90, 30),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right
             };
             btnCheck.Click += (s, e) =>
             {
@@ -197,26 +236,13 @@ namespace SgRevitAddin.Commands.ModelCheck
             AcceptButton = btnCheck;
             Controls.Add(btnCheck);
 
-            var btnClear = new Button
-            {
-                Text = "Clear Markers Only",
-                Location = new Point(margin + 120, y),
-                Size = new Size(160, 30)
-            };
-            btnClear.Click += (s, e) =>
-            {
-                Mode = ActionMode.ClearOnly;
-                // No filters needed for clear; we just leave the defaults
-                DialogResult = DialogResult.OK;
-            };
-            Controls.Add(btnClear);
-
             var btnCancel = new Button
             {
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
                 Location = new Point(445, y),
-                Size = new Size(80, 30)
+                Size = new Size(80, 30),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right
             };
             CancelButton = btnCancel;
             Controls.Add(btnCancel);
@@ -228,6 +254,11 @@ namespace SgRevitAddin.Commands.ModelCheck
             SelectedSizes = lstSizes.CheckedItems.Cast<SizeItem>()
                 .Select(si => si.SizeFt).ToList();
             ThresholdInches = (double)nudThreshold.Value;
+
+            // Remember the threshold for next time (type codes / sizes are
+            // model-specific lists, so those are not persisted).
+            DialogMemory.SetInt(MemKey, "ThresholdTenths", (int)(nudThreshold.Value * 10m));
+            DialogMemory.Flush();
         }
 
         private void SetAllChecked(CheckedListBox list, bool checkedState)

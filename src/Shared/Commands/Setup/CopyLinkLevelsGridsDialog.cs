@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Setup
 {
@@ -18,6 +19,8 @@ namespace SgRevitAddin.Commands.Setup
     /// </summary>
     public class CopyLinkLevelsGridsDialog : DpiAwareForm
     {
+        private const string MemKey = "CopyLinkLevelsGrids";
+
         // ── Results ──
         public enum ImportMode { LevelsAndGrids, LevelsOnly, GridsOnly }
         public enum SelectionMode { CopyAll, SelectSpecific }
@@ -63,7 +66,8 @@ namespace SgRevitAddin.Commands.Setup
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(460, 415);
+            AllowResize = false;   // plain fixed stack — resizing adds nothing
+            ClientSize = new Size(460, 432);
 
             int margin = 15;
             int y = margin;
@@ -117,7 +121,13 @@ namespace SgRevitAddin.Commands.Setup
             };
             grpImport.Controls.AddRange(new Control[] { rbBoth, rbLevelsOnly, rbGridsOnly });
             Controls.Add(grpImport);
-            y += 85;
+            y += 91;
+
+            // Restore remembered import mode.
+            int mode = DialogMemory.GetInt(MemKey, "Mode", 0);
+            rbLevelsOnly.Checked = mode == 1;
+            rbGridsOnly.Checked = mode == 2;
+            rbBoth.Checked = mode != 1 && mode != 2;
 
             // ── Grid Type ──
             var grpGridType = new GroupBox
@@ -134,14 +144,20 @@ namespace SgRevitAddin.Commands.Setup
             };
             foreach (var name in _gridTypeNames)
                 cboGridType.Items.Add(name);
-            // Pre-select default grid type if available
+            // Pre-select: remembered grid type (if still present), else the SS default.
             int defaultIdx = -1;
-            for (int i = 0; i < cboGridType.Items.Count; i++)
+            string savedGridType = DialogMemory.Get(MemKey, "GridType", null);
+            if (!string.IsNullOrEmpty(savedGridType))
+                defaultIdx = cboGridType.Items.IndexOf(savedGridType);
+            if (defaultIdx < 0)
             {
-                if (cboGridType.Items[i].ToString().Contains("SS Grid Head"))
+                for (int i = 0; i < cboGridType.Items.Count; i++)
                 {
-                    defaultIdx = i;
-                    break;
+                    if (cboGridType.Items[i].ToString().Contains("SS Grid Head"))
+                    {
+                        defaultIdx = i;
+                        break;
+                    }
                 }
             }
             cboGridType.SelectedIndex = defaultIdx >= 0 ? defaultIdx :
@@ -195,7 +211,13 @@ namespace SgRevitAddin.Commands.Setup
             };
             grpGrids.Controls.AddRange(new Control[] { rbAllGrids, rbSelectGrids });
             Controls.Add(grpGrids);
-            y += 65;
+            y += 69;
+
+            // Restore remembered selection modes.
+            rbSelectLevels.Checked = DialogMemory.GetBool(MemKey, "SelectLevels", false);
+            rbAllLevels.Checked = !rbSelectLevels.Checked;
+            rbSelectGrids.Checked = DialogMemory.GetBool(MemKey, "SelectGrids", false);
+            rbAllGrids.Checked = !rbSelectGrids.Checked;
 
             // ── Pin ──
             chkPin = new CheckBox
@@ -203,7 +225,7 @@ namespace SgRevitAddin.Commands.Setup
                 Text = "Pin imported levels and grids",
                 Location = new Point(margin + 5, y),
                 Size = new Size(300, 20),
-                Checked = true
+                Checked = DialogMemory.GetBool(MemKey, "Pin", true)
             };
             Controls.Add(chkPin);
             y += 26;
@@ -230,22 +252,23 @@ namespace SgRevitAddin.Commands.Setup
 
             var lblMonitor = new Label
             {
-                Text = "Skips the import above and opens Revit's Copy/Monitor for the chosen link so the\n" +
-                       "copied levels/grids are monitored. You finish picking elements in Revit.",
+                Text = "Skips the import above and opens Revit's Copy/Monitor for the\n" +
+                       "chosen link so the copied levels/grids are monitored. You finish\n" +
+                       "picking elements in Revit.",
                 Location = new Point(margin + 22, y),
-                Size = new Size(420, 32),
+                Size = new Size(408, 48),
                 ForeColor = SystemColors.GrayText
             };
             Controls.Add(lblMonitor);
-            y += 40;
+            y += 56;
 
             // ── Buttons ──
             var btnOK = new Button
             {
                 Text = "Import",
                 DialogResult = DialogResult.OK,
-                Location = new Point(280, y),
-                Size = new Size(90, 30)
+                Location = new Point(255, y),
+                Size = new Size(100, 30)
             };
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
@@ -259,8 +282,8 @@ namespace SgRevitAddin.Commands.Setup
             {
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
-                Location = new Point(375, y),
-                Size = new Size(75, 30)
+                Location = new Point(365, y),
+                Size = new Size(80, 30)
             };
             CancelButton = btnCancel;
             Controls.Add(btnCancel);
@@ -277,6 +300,16 @@ namespace SgRevitAddin.Commands.Setup
             GridSelectionMode = rbAllGrids.Checked ? SelectionMode.CopyAll : SelectionMode.SelectSpecific;
             PinElements = chkPin.Checked;
             LaunchCopyMonitor = chkMonitor.Checked;
+
+            // Remember options (link name is model-specific — intentionally not saved).
+            DialogMemory.SetInt(MemKey, "Mode",
+                Mode == ImportMode.LevelsOnly ? 1 : Mode == ImportMode.GridsOnly ? 2 : 0);
+            if (!string.IsNullOrEmpty(SelectedGridTypeName))
+                DialogMemory.Set(MemKey, "GridType", SelectedGridTypeName);
+            DialogMemory.SetBool(MemKey, "SelectLevels", LevelSelectionMode == SelectionMode.SelectSpecific);
+            DialogMemory.SetBool(MemKey, "SelectGrids", GridSelectionMode == SelectionMode.SelectSpecific);
+            DialogMemory.SetBool(MemKey, "Pin", PinElements);
+            DialogMemory.Flush();
         }
     }
 
@@ -303,7 +336,9 @@ namespace SgRevitAddin.Commands.Setup
             {
                 Location = new Point(15, 15),
                 Size = new Size(370, 260),
-                CheckOnClick = true
+                CheckOnClick = true,
+                // Primary list grows with the dialog; buttons below pin to the bottom.
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom
             };
             foreach (var item in items)
                 checkedList.Items.Add(item, true); // all checked by default
@@ -313,7 +348,8 @@ namespace SgRevitAddin.Commands.Setup
             {
                 Text = "Select All",
                 Location = new Point(15, 285),
-                Size = new Size(80, 25)
+                Size = new Size(80, 28),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left
             };
             btnAll.Click += (s, e) =>
             {
@@ -326,7 +362,8 @@ namespace SgRevitAddin.Commands.Setup
             {
                 Text = "Select None",
                 Location = new Point(100, 285),
-                Size = new Size(80, 25)
+                Size = new Size(80, 28),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left
             };
             btnNone.Click += (s, e) =>
             {
@@ -339,12 +376,19 @@ namespace SgRevitAddin.Commands.Setup
             {
                 Text = "OK",
                 DialogResult = DialogResult.OK,
-                Location = new Point(230, 285),
-                Size = new Size(75, 25)
+                Location = new Point(225, 285),
+                Size = new Size(75, 28),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right
             };
             btnOK.Click += (s, e) =>
             {
                 SelectedItems = checkedList.CheckedItems.Cast<string>().ToList();
+                if (SelectedItems.Count == 0)
+                {
+                    MessageBox.Show(this, "Check at least one item to copy (or Cancel).", Text,
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    DialogResult = DialogResult.None;
+                }
             };
             AcceptButton = btnOK;
             Controls.Add(btnOK);
@@ -354,7 +398,8 @@ namespace SgRevitAddin.Commands.Setup
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
                 Location = new Point(310, 285),
-                Size = new Size(75, 25)
+                Size = new Size(75, 28),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right
             };
             CancelButton = btnCancel;
             Controls.Add(btnCancel);

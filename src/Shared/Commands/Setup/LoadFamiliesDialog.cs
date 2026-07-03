@@ -1,6 +1,8 @@
 using System;
 using System.Drawing;
+using System.IO;
 using System.Windows.Forms;
+using SgRevitAddin.Utils;
 
 namespace SgRevitAddin.Commands.Setup
 {
@@ -9,6 +11,8 @@ namespace SgRevitAddin.Commands.Setup
     /// </summary>
     public class LoadFamiliesDialog : DpiAwareForm
     {
+        private const string MemKey = "LoadFamilies";
+
         public string FolderPath { get; private set; }
         public bool IncludeSubfolders { get; private set; }
 
@@ -20,8 +24,11 @@ namespace SgRevitAddin.Commands.Setup
 
         public LoadFamiliesDialog(string defaultFolder)
         {
-            FolderPath = defaultFolder;
-            IncludeSubfolders = true;
+            // Last-used folder wins over the command default, if it still exists.
+            string remembered = DialogMemory.Get(MemKey, "Folder", null);
+            FolderPath = !string.IsNullOrEmpty(remembered) && Directory.Exists(remembered)
+                ? remembered : defaultFolder;
+            IncludeSubfolders = DialogMemory.GetBool(MemKey, "Subfolders", true);
             InitializeComponents();
         }
 
@@ -49,7 +56,9 @@ namespace SgRevitAddin.Commands.Setup
             {
                 Text = FolderPath,
                 Location = new Point(110, y),
-                Width = 350
+                Width = 350,
+                // Explicit: widen with the dialog (long paths are the point of resizing).
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
             };
             Controls.Add(_txtFolder);
 
@@ -57,7 +66,9 @@ namespace SgRevitAddin.Commands.Setup
             {
                 Text = "...",
                 Location = new Point(468, y - 1),
-                Size = new Size(35, 24)
+                Size = new Size(35, 24),
+                // Explicit: stay glued to the folder row (auto-flex would bottom-pin it).
+                Anchor = AnchorStyles.Top | AnchorStyles.Right
             };
             _btnBrowse.Click += BtnBrowse_Click;
             Controls.Add(_btnBrowse);
@@ -94,7 +105,8 @@ namespace SgRevitAddin.Commands.Setup
                 Text = "Load",
                 DialogResult = DialogResult.OK,
                 Location = new Point(340, y),
-                Size = new Size(75, 28)
+                Size = new Size(75, 28),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right
             };
             _btnOk.Click += BtnOk_Click;
             Controls.Add(_btnOk);
@@ -104,7 +116,8 @@ namespace SgRevitAddin.Commands.Setup
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
                 Location = new Point(425, y),
-                Size = new Size(75, 28)
+                Size = new Size(75, 28),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right
             };
             Controls.Add(_btnCancel);
 
@@ -134,10 +147,22 @@ namespace SgRevitAddin.Commands.Setup
 
             if (string.IsNullOrEmpty(FolderPath))
             {
-                MessageBox.Show("Please select a folder.", "Load Families",
+                MessageBox.Show(this, "Please select a folder.", "Load Families",
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 DialogResult = DialogResult.None;
+                return;
             }
+            if (!Directory.Exists(FolderPath))
+            {
+                MessageBox.Show(this, "Folder does not exist:\n" + FolderPath, "Load Families",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                DialogResult = DialogResult.None;
+                return;
+            }
+
+            DialogMemory.Set(MemKey, "Folder", FolderPath);
+            DialogMemory.SetBool(MemKey, "Subfolders", IncludeSubfolders);
+            DialogMemory.Flush();
         }
     }
 }

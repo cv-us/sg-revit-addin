@@ -101,7 +101,7 @@ namespace SgRevitAddin.Commands.Hangers.PlaceHangers
                 "Downstream ends (threaded lines)",
                 "At structural steel"
             });
-            cboMethod.SelectedIndex = DialogMemory.GetInt(MemRoot, "Method", 0);
+            cboMethod.SelectedIndex = DialogMemory.GetInt(MemRoot, "Method", 0).Clamp(0, cboMethod.Items.Count - 1);
             cboMethod.SelectedIndexChanged += (s, e) => { RestoreForMethod(); Relayout(); };
             grpMethod.Controls.Add(cboMethod);
             Controls.Add(grpMethod);
@@ -134,7 +134,13 @@ namespace SgRevitAddin.Commands.Hangers.PlaceHangers
             txtCustom = new TextBox { Location = new Point(110, 76), Size = new Size(70, 22), Enabled = false };
             rbCustom.CheckedChanged += (s, e) => txtCustom.Enabled = rbCustom.Checked;
             grpSpacing.Controls.AddRange(new Control[] { rb10_6, rb12, rb15, rbCustom, txtCustom });
-            grpSpacing.Controls.Add(new Label { Text = "Max / exact spacing:", Location = new Point(12, 110), Size = new Size(GroupW - 24, 18), ForeColor = SystemColors.GrayText });
+            grpSpacing.Controls.Add(new Label
+            {
+                Text = "\"Evenly spaced\" treats the distance as a maximum; \"Exact spacing\" places hangers at exactly that distance.",
+                Location = new Point(12, 108),
+                Size = new Size(GroupW - 24, 32),
+                ForeColor = SystemColors.GrayText
+            });
             Controls.Add(grpSpacing);
             _optionGroups.Add((grpSpacing, new[] { PlacementMethod.TypicalSpacing, PlacementMethod.ParallelStructural }));
 
@@ -214,55 +220,76 @@ namespace SgRevitAddin.Commands.Hangers.PlaceHangers
             }));
 
             // ── Buttons ──
-            btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Size = new Size(80, 30) };
-            CancelButton = btnCancel;
-            Controls.Add(btnCancel);
             btnOK = new Button { Text = "Place Hangers", DialogResult = DialogResult.OK, Size = new Size(120, 30) };
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
             Controls.Add(btnOK);
+            btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Size = new Size(80, 30) };
+            CancelButton = btnCancel;
+            Controls.Add(btnCancel);
         }
 
         private PlacementMethod CurrentMethod => (PlacementMethod)cboMethod.SelectedIndex;
+
+        /// <summary>
+        /// Scale factor for layout math. Before handle creation the design
+        /// coordinates are logical 96-dpi units (the base scales them once at
+        /// handle creation); after that, all control bounds are in device
+        /// pixels, so re-layout must scale the design constants to match.
+        /// </summary>
+        private float LayoutScale => IsHandleCreated ? DeviceDpi / 96f : 1f;
 
         /// <summary>Show only the groups for the current method, stacked, and size the form.</summary>
         private void Relayout()
         {
             var m = CurrentMethod;
-            int y = Margin;
+            float f = LayoutScale;
+            int S(int v) => (int)Math.Round(v * f);
+            int margin = S(Margin);
+            int gap = S(8);
 
-            grpMethod.Location = new Point(Margin, y); y += grpMethod.Height + 8;
-            grpCommon.Location = new Point(Margin, y);
+            int y = margin;
+            grpMethod.Location = new Point(margin, y); y += grpMethod.Height + gap;
+            grpCommon.Location = new Point(margin, y);
             // Pipe filter row only for spacing methods — hide it (and shrink group) otherwise.
             bool showPipe = m == PlacementMethod.TypicalSpacing || m == PlacementMethod.ParallelStructural;
             cboPipeFilter.Visible = showPipe;
             lblPipeFilter.Visible = showPipe;
-            grpCommon.Height = showPipe ? 80 : 52;
-            y += grpCommon.Height + 8;
+            grpCommon.Height = S(showPipe ? 80 : 52);
+            y += grpCommon.Height + gap;
 
             // Type-code rows per method.
-            LayoutTypeRows(m);
+            LayoutTypeRows(m, f);
 
             foreach (var (grp, methods) in _optionGroups)
             {
                 bool show = methods.Contains(m);
                 grp.Visible = show;
                 if (!show) continue;
-                grp.Location = new Point(Margin, y);
-                y += grp.Height + 8;
+                grp.Location = new Point(margin, y);
+                y += grp.Height + gap;
             }
 
-            // Buttons
-            btnCancel.Location = new Point(FormW - Margin - 80, y);
-            btnOK.Location = new Point(FormW - Margin - 80 - 10 - 120, y);
-            y += 30 + Margin;
+            // Size the form for the stack + buttons. After the chrome is
+            // built, ClientSize includes the blue header band ABOVE the
+            // content panel, so add its height back — otherwise switching to
+            // a taller method would clip the bottom by the header height.
+            int header = IsHandleCreated ? (int)Math.Round(HeaderHeight * f) : 0;
+            int clientW = IsHandleCreated ? ClientSize.Width : S(FormW);   // keep any user widening
+            ClientSize = new Size(clientW, y + btnOK.Height + margin + header);
 
-            ClientSize = new Size(FormW, y);
+            // Pin the buttons to the actual bottom-right of the content area
+            // (ClientSize may have been floored at MinimumSize by the base).
+            int btnY = ClientSize.Height - header - margin - btnOK.Height;
+            btnCancel.Location = new Point(ClientSize.Width - margin - btnCancel.Width, btnY);
+            btnOK.Location = new Point(btnCancel.Left - S(10) - btnOK.Width, btnY);
         }
 
         /// <summary>Show/position only the type-code rows relevant to the method, and size grpTypeCodes.</summary>
-        private void LayoutTypeRows(PlacementMethod m)
+        private void LayoutTypeRows(PlacementMethod m, float f)
         {
+            int S(int v) => (int)Math.Round(v * f);
+
             var rows = new List<(Label l, TextBox t)>();
             switch (m)
             {
@@ -287,15 +314,15 @@ namespace SgRevitAddin.Commands.Hangers.PlaceHangers
             foreach (var c in new Control[] { lblType, txtType, lblWide, txtWide, lblRoof, txtRoof, lblFloor, txtFloor, lblFraming, txtFraming, lblStairs, txtStairs })
                 c.Visible = false;
 
-            int ry = 22, rh = 28;
+            int ry = S(22), rh = S(28);
             foreach (var (l, t) in rows)
             {
                 l.Visible = true; t.Visible = true;
-                l.Location = new Point(12, ry + 3);
-                t.Location = new Point(190, ry);
+                l.Location = new Point(S(12), ry + S(3));
+                t.Location = new Point(S(190), ry);
                 ry += rh;
             }
-            grpTypeCodes.Height = ry + 10;
+            grpTypeCodes.Height = ry + S(10);
         }
 
         // ── Memory: per-method dialog key ──
@@ -346,6 +373,34 @@ namespace SgRevitAddin.Commands.Hangers.PlaceHangers
                 return;
             }
 
+            // Validate the numeric inputs that are visible for this method.
+            var m = CurrentMethod;
+            bool spacingMethod = m == PlacementMethod.TypicalSpacing || m == PlacementMethod.ParallelStructural;
+            if (spacingMethod && rbCustom.Checked && !IsPositive(txtCustom))
+            {
+                Warn("Enter a custom spacing in feet greater than zero.");
+                return;
+            }
+            bool raybounceMethod = m == PlacementMethod.TypicalSpacing || m == PlacementMethod.AtStructural;
+            if (raybounceMethod && !IsPositive(txtMaxClash))
+            {
+                Warn("Enter a max clash height in feet greater than zero.");
+                return;
+            }
+            if (m == PlacementMethod.Downstream)
+            {
+                if (!IsPositive(txtDistEnd))
+                {
+                    Warn("Enter a distance from end in inches greater than zero.");
+                    return;
+                }
+                if (!IsPositive(txtMinLen))
+                {
+                    Warn("Enter a minimum pipe length in inches greater than zero.");
+                    return;
+                }
+            }
+
             // Persist everything for this method.
             string k = MethodKey;
             DialogMemory.SetInt(MemRoot, "Method", cboMethod.SelectedIndex);
@@ -367,6 +422,15 @@ namespace SgRevitAddin.Commands.Hangers.PlaceHangers
             DialogMemory.SetInt(k, "SpacingPreset", rb10_6.Checked ? 0 : rb12.Checked ? 1 : rb15.Checked ? 2 : 3);
             DialogMemory.Set(k, "CustomSpacing", txtCustom.Text);
             DialogMemory.Flush();
+        }
+
+        private static bool IsPositive(TextBox t)
+            => double.TryParse(t.Text.Trim(), out double v) && v > 0;
+
+        private void Warn(string message)
+        {
+            MessageBox.Show(this, message, "Place Hangers", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            DialogResult = DialogResult.None;
         }
 
         // ── Config builders (called by the command after OK) ──
