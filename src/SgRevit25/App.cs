@@ -343,8 +343,7 @@ namespace SgRevitAddin
                     Tooltip = "Tag pipes with length / stocklist tags (HydraCAD-style). Blue dialog: pick tag type + family, User vs System-Walker selection, drops, and options.",
                     LargeImage = IconHelper.LoadIcon("tag-pipes-32.png"),
                     SmallImage = IconHelper.LoadIcon("tag-pipes-16.png"),
-                    OnClick = () => DeferredActionHandler.Run(TagPipesCommand.Run),
-                    ShowText = false   // icon-only (label crowds the large icon)
+                    OnClick = () => DeferredActionHandler.Run(TagPipesCommand.Run)
                 },
                 new ModifyButton
                 {
@@ -353,8 +352,7 @@ namespace SgRevitAddin
                     Tooltip = "Place opaque head-symbol overlays above selected sprinklers (matched to each type's head symbol). Run with nothing selected to remove them.",
                     LargeImage = IconHelper.LoadIcon("pretty-sprinklers-32.png"),
                     SmallImage = IconHelper.LoadIcon("pretty-sprinklers-16.png"),
-                    OnClick = () => DeferredActionHandler.Run(PrettySprinklersCommand.Run),
-                    ShowText = false   // icon-only (label crowds the large icon)
+                    OnClick = () => DeferredActionHandler.Run(PrettySprinklersCommand.Run)
                 },
                 new ModifyButton
                 {
