@@ -335,8 +335,18 @@ namespace SgRevitAddin
 
                 if (c is Button btn)
                 {
-                    bool right = (btn.Left + btn.Width / 2) * 2 >= pw;
-                    btn.Anchor = AnchorStyles.Bottom | (right ? AnchorStyles.Right : AnchorStyles.Left);
+                    if (HasLeftInputNeighbour(btn, kids))
+                    {
+                        // Trailing action button (Browse / Add / … beside a field):
+                        // ride the right edge next to its field, not down to the
+                        // bottom corner — and the field to its left is freed to widen.
+                        btn.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+                    }
+                    else
+                    {
+                        bool right = (btn.Left + btn.Width / 2) * 2 >= pw;
+                        btn.Anchor = AnchorStyles.Bottom | (right ? AnchorStyles.Right : AnchorStyles.Left);
+                    }
                     continue;
                 }
 
@@ -376,14 +386,41 @@ namespace SgRevitAddin
         /// True when another sibling sits to the right of <paramref name="c"/> in
         /// the same horizontal band — i.e. widening <paramref name="c"/> would run
         /// it into that neighbour. Used to keep two-column rows from overlapping.
+        /// A trailing <see cref="Button"/> is NOT counted: it gets a Top|Right
+        /// anchor and rides the right edge, so the field to its left can safely
+        /// widen into the space between them (constant gap preserved).
         /// </summary>
         private static bool HasRightNeighbour(Control c, System.Collections.Generic.List<Control> siblings)
         {
             foreach (Control s in siblings)
             {
                 if (ReferenceEquals(s, c)) continue;
+                if (s is Button) continue;
                 bool verticalOverlap = s.Top < c.Bottom && s.Bottom > c.Top;
                 if (verticalOverlap && s.Left >= c.Right - 4) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// True when an input control (combo / text / numeric / list) ends just to
+        /// the left of <paramref name="btn"/> on the same horizontal band — marking
+        /// <paramref name="btn"/> as a trailing action button (Browse / Add / …)
+        /// rather than a bottom-row action button. Requires proximity so a bottom
+        /// OK/Cancel button that merely shares a Y band with a far-left field isn't
+        /// misread as trailing.
+        /// </summary>
+        private static bool HasLeftInputNeighbour(Control btn, System.Collections.Generic.List<Control> siblings)
+        {
+            foreach (Control s in siblings)
+            {
+                if (ReferenceEquals(s, btn)) continue;
+                bool isInput = s is ComboBox || s is TextBox || s is NumericUpDown ||
+                               s is ListBox || s is ListView || s is DataGridView || s is TreeView;
+                if (!isInput) continue;
+                bool verticalOverlap = s.Top < btn.Bottom && s.Bottom > btn.Top;
+                if (verticalOverlap && s.Right <= btn.Left + 4 && s.Right >= btn.Left - 48)
+                    return true;
             }
             return false;
         }
