@@ -132,10 +132,15 @@ namespace SgRevitAddin
 
             FormBorderStyle = FormBorderStyle.None;   // override any FixedDialog a derived ctor set
             _content.Dock = DockStyle.None;
-            _content.Location = new Point(gutter, hh);
-            _content.Size = new Size(cw, ch);
-            _content.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            _content.Anchor = AnchorStyles.Top | AnchorStyles.Left;   // no stretch while the form grows
+            // ORDER MATTERS: grow the form FIRST, then place the content panel at its
+            // exact inset bounds, then set the all-sides anchor LAST so those bounds
+            // become the anchor baseline. Anchoring before the ClientSize change made
+            // the panel stretch by the delta — eating the resize gutters (no corner
+            // resize) and pushing the bottom-right buttons off the clipped edge.
             ClientSize = new Size(cw + 2 * gutter, hh + ch + gutter);
+            _content.Bounds = new Rectangle(gutter, hh, cw, ch);
+            _content.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
 
             // (4) Flex content on resize (widen inputs + bottom-pinned buttons).
             if (AllowResize) ApplyAutoFlex(_content);
