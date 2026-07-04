@@ -63,7 +63,29 @@ namespace SgRevitAddin
         {
             AutoScaleMode = AutoScaleMode.Dpi;
             FormBorderStyle = FormBorderStyle.None;   // custom SG chrome replaces the OS caption
+            SetStyle(ControlStyles.ResizeRedraw, true);   // repaint the edge shadow while dragging
             // AutoScaleDimensions is set in OnHandleCreated, NOT here.
+        }
+
+        /// <summary>
+        /// Soft inner-edge shadow painted in the resize gutter (the strip of form
+        /// background around the content panel). Gives the flat borderless window a
+        /// sense of depth and — with the resize cursor — signals the draggable edge.
+        /// The top is capped by the blue header, so the shadow reads on the sides and
+        /// bottom.
+        /// </summary>
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            int w = ClientSize.Width, h = ClientSize.Height;
+            if (w <= 2 || h <= 2) return;
+            for (int i = 0; i < 4; i++)
+            {
+                int alpha = 26 - i * 6;                 // fade inward
+                if (alpha <= 0) break;
+                using (var pen = new Pen(Color.FromArgb(alpha, 0, 0, 0)))
+                    e.Graphics.DrawRectangle(pen, i, i, w - 1 - 2 * i, h - 1 - 2 * i);
+            }
         }
 
         protected override void CreateHandle()
@@ -95,52 +117,47 @@ namespace SgRevitAddin
             // enough to grab comfortably.
             _resizeBorder = Math.Max(6, (int)Math.Round(8 * factor));
 
-            // (2) The derived dialog's content is currently direct children of the
-            //     form at their design (now scaled) positions. Capture that content
-            //     size, build the header, and reparent the content into a panel below
-            //     the header (temporarily Dock=Fill for the reparent + measurement).
+            // (2) Measure the dialog's own controls at their design (now scaled)
+            //     positions — the furthest right/bottom edge — so the window opens
+            //     large enough to show everything even when the ctor ClientSize was
+            //     trimmed tighter than the content (AutoScroll would otherwise hide
+            //     the overflow behind a scrollbar). Only the dialog's controls exist
+            //     on the form at this point (no header/content panel yet).
             Size natural = ClientSize;
-
-            _content = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
-            Controls.Add(_content);
-            BuildHeader(hh);
-
-            foreach (var c in Controls.Cast<Control>().Where(c => c != _content && c != _header).ToList())
-                c.Parent = _content;      // preserves bounds + anchors, now relative to _content
-
-            // (2b) Size to the MEASURED content, not the ctor's ClientSize. After the
-            //      DPI autoscale in (1), scaled control positions can exceed a tightly
-            //      trimmed ClientSize; AutoScroll would then hide the overflow behind a
-            //      scrollbar (the "have to scroll to reach Continue" bug). Measure the
-            //      furthest control on each axis so nothing is ever clipped on first
-            //      open, at any DPI.
             int contentR = natural.Width, contentB = natural.Height;
-            foreach (Control c in _content.Controls)
+            foreach (Control c in Controls)
             {
                 if (c.Right > contentR) contentR = c.Right;
                 if (c.Bottom > contentB) contentB = c.Bottom;
             }
 
-            // (3) Final layout: full-width blue header on top; the content panel INSET
-            //     by the resize gutter on left/right/bottom (the header owns the top),
-            //     so those edge strips belong to the form and can receive resize
-            //     hit-tests. Breathing pad keeps controls off the panel's own edge.
             int pad = (int)Math.Round(BreathingRoom * factor);
             int gutter = _resizeBorder;
             int cw = contentR + pad;
             int ch = contentB + pad;
 
+            // (3) Build the chrome: full-width blue header on top; a content panel
+            //     INSET by the resize gutter on left/right/bottom (the header owns the
+            //     top), so those edge strips belong to the form for resize hit-tests.
+            //     Grow the form, create the content panel ALREADY at its final size,
+            //     THEN reparent the controls into it — so their Bottom/Right anchor
+            //     baselines are computed against the correct size. (Reparenting into a
+            //     temporarily short panel was giving bottom buttons a wrong baseline
+            //     and clipping them under the bottom edge.)
             FormBorderStyle = FormBorderStyle.None;   // override any FixedDialog a derived ctor set
-            _content.Dock = DockStyle.None;
-            _content.Anchor = AnchorStyles.Top | AnchorStyles.Left;   // no stretch while the form grows
-            // ORDER MATTERS: grow the form FIRST, then place the content panel at its
-            // exact inset bounds, then set the all-sides anchor LAST so those bounds
-            // become the anchor baseline. Anchoring before the ClientSize change made
-            // the panel stretch by the delta — eating the resize gutters (no corner
-            // resize) and pushing the bottom-right buttons off the clipped edge.
+            BuildHeader(hh);
             ClientSize = new Size(cw + 2 * gutter, hh + ch + gutter);
-            _content.Bounds = new Rectangle(gutter, hh, cw, ch);
-            _content.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+
+            _content = new Panel
+            {
+                AutoScroll = true,
+                Bounds = new Rectangle(gutter, hh, cw, ch),
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
+            };
+            Controls.Add(_content);
+
+            foreach (var c in Controls.Cast<Control>().Where(c => c != _content && c != _header).ToList())
+                c.Parent = _content;      // final-size panel → correct anchor baselines
 
             // (4) Flex content on resize (widen inputs + bottom-pinned buttons).
             if (AllowResize) ApplyAutoFlex(_content);

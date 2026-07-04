@@ -49,6 +49,11 @@ namespace SgRevitAddin.Commands.Modify
         private GroupBox _grpType, _grpSel, _grpOpt, _grpDrops;
         private float _sf = 1f;
 
+        // Draggable divider between the family and type dropdown columns.
+        private Panel _typeSplitter;
+        private double _typeSplitRatio = 0.60;   // fraction of the row span given to family
+        private bool _splitDragging;
+
         private static readonly string[] TypeLabels =
         { "Center to Center Length", "Cut Length", "Dynamic Length", "Stocklisting Tags" };
         private static readonly string[] TypeKeys = { "CC", "Cut", "Dyn", "StockLine" };
@@ -74,35 +79,55 @@ namespace SgRevitAddin.Commands.Modify
             int margin = 12;
             int colW = 372;
             int leftX = margin, rightX = margin + colW + margin;
-            // Anchor helpers: family combos widen with their group; the short type
-            // combos ride the right edge at a fixed width (type codes are tiny).
-            const AnchorStyles famAnchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            const AnchorStyles typeAnchor = AnchorStyles.Top | AnchorStyles.Right;
+            _typeSplitRatio = Math.Max(0.30, Math.Min(0.82, DialogMemory.GetDouble(MemKey, "TypeSplit", 0.60)));
 
             // ── Pipe Tag Type (left) ──
+            // Family + type combos are laid out by LayoutTypeColumns (a draggable
+            // divider between the two columns reapportions their widths). Radios are
+            // AutoSize so their row doesn't run under the divider.
             _grpType = new GroupBox { Text = "Pipe Tag Type", Location = new Point(leftX, margin), Size = new Size(colW, 244) };
             int gy = 20;
             for (int i = 0; i < 3; i++)   // C-C, Cut, Dynamic
             {
-                _rbType[i] = new RadioButton { Text = TypeLabels[i], Location = new Point(10, gy), Size = new Size(colW - 24, 18), Checked = i == 0 };
-                _fam[i] = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(26, gy + 20), Size = new Size(colW - 148, 22), Anchor = famAnchor };
-                _type[i] = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(colW - 116, gy + 20), Size = new Size(104, 22), Anchor = typeAnchor };
+                _rbType[i] = new RadioButton { Text = TypeLabels[i], Location = new Point(10, gy), AutoSize = true, Checked = i == 0 };
+                _fam[i] = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(26, gy + 20), Size = new Size(colW - 148, 22) };
+                _type[i] = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(colW - 116, gy + 20), Size = new Size(104, 22) };
                 WireFamilyType(_fam[i], _type[i], DialogMemory.Get(MemKey, "Fam_" + TypeKeys[i], ""), DialogMemory.Get(MemKey, "Type_" + TypeKeys[i], ""));
                 _grpType.Controls.AddRange(new Control[] { _rbType[i], _fam[i], _type[i] });
                 gy += 48;
             }
             // Stocklisting (line + main)
-            _rbType[3] = new RadioButton { Text = TypeLabels[3], Location = new Point(10, gy), Size = new Size(colW - 24, 18) };
+            _rbType[3] = new RadioButton { Text = TypeLabels[3], Location = new Point(10, gy), AutoSize = true };
             _grpType.Controls.Add(_rbType[3]);
             _grpType.Controls.Add(new Label { Text = "Line:", Location = new Point(26, gy + 22), Size = new Size(34, 18) });
-            _fam[3] = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(62, gy + 20), Size = new Size(colW - 184, 22), Anchor = famAnchor };
-            _type[3] = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(colW - 118, gy + 20), Size = new Size(98, 22), Anchor = typeAnchor };
+            _fam[3] = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(62, gy + 20), Size = new Size(colW - 184, 22) };
+            _type[3] = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(colW - 118, gy + 20), Size = new Size(98, 22) };
             WireFamilyType(_fam[3], _type[3], DialogMemory.Get(MemKey, "Fam_StockLine", ""), DialogMemory.Get(MemKey, "Type_StockLine", ""));
             _grpType.Controls.Add(new Label { Text = "Main:", Location = new Point(26, gy + 46), Size = new Size(34, 18) });
-            _stockMainFam = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(62, gy + 44), Size = new Size(colW - 184, 22), Anchor = famAnchor };
-            _stockMainType = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(colW - 118, gy + 44), Size = new Size(98, 22), Anchor = typeAnchor };
+            _stockMainFam = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(62, gy + 44), Size = new Size(colW - 184, 22) };
+            _stockMainType = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(colW - 118, gy + 44), Size = new Size(98, 22) };
             WireFamilyType(_stockMainFam, _stockMainType, DialogMemory.Get(MemKey, "Fam_StockMain", ""), DialogMemory.Get(MemKey, "Type_StockMain", ""));
             _grpType.Controls.AddRange(new Control[] { _fam[3], _type[3], _stockMainFam, _stockMainType });
+
+            // Draggable divider between the family and type columns.
+            _typeSplitter = new Panel { Cursor = Cursors.SizeWE, BackColor = _grpType.BackColor };
+            _typeSplitter.Paint += TypeSplitter_Paint;
+            _typeSplitter.MouseDown += (s, e) =>
+            {
+                if (e.Button != MouseButtons.Left) return;
+                _splitDragging = true;
+                _typeSplitter.Capture = true;   // keep events while the splitter moves under the drag
+            };
+            _typeSplitter.MouseMove += TypeSplitter_MouseMove;
+            _typeSplitter.MouseUp += (s, e) =>
+            {
+                if (!_splitDragging) return;
+                _splitDragging = false;
+                _typeSplitter.Capture = false;
+                DialogMemory.SetDouble(MemKey, "TypeSplit", _typeSplitRatio);
+                DialogMemory.Flush();
+            };
+            _grpType.Controls.Add(_typeSplitter);
             Controls.Add(_grpType);
 
             // ── Selection Method (left) ──
@@ -127,9 +152,9 @@ namespace SgRevitAddin.Commands.Modify
             _chkDropsOnly = MakeCheck("Tag Drops Only", 10, 22, colW);
             _chkIncludeDrops = MakeCheck("Include Drops with Selection", 10, 44, colW);
             _grpDrops.Controls.Add(new Label { Text = "Family:", Location = new Point(10, 72), Size = new Size(50, 18) });
-            _dropFam = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(64, 70), Size = new Size(colW - 78, 22), Anchor = famAnchor };
+            _dropFam = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(64, 70), Size = new Size(colW - 78, 22), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
             _grpDrops.Controls.Add(new Label { Text = "Type:", Location = new Point(10, 100), Size = new Size(50, 18) });
-            _dropType = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(64, 98), Size = new Size(colW - 78, 22), Anchor = famAnchor };
+            _dropType = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(64, 98), Size = new Size(colW - 78, 22), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
             WireFamilyType(_dropFam, _dropType, DialogMemory.Get(MemKey, "DropFam", ""), DialogMemory.Get(MemKey, "DropType", ""));
             _grpDrops.Controls.AddRange(new Control[] { _chkDropsOnly, _chkIncludeDrops, _dropFam, _dropType });
             Controls.Add(_grpDrops);
@@ -199,6 +224,75 @@ namespace SgRevitAddin.Commands.Modify
             int rx = m + colW + m;
             _grpOpt.Left = rx; _grpOpt.Width = colW;
             _grpDrops.Left = rx; _grpDrops.Width = colW;
+
+            LayoutTypeColumns();   // reflow family/type columns to the new group width
+        }
+
+        /// <summary>
+        /// Positions every family/type combo pair in the Pipe Tag Type group around a
+        /// single vertical divider at <see cref="_typeSplitRatio"/> of the row span,
+        /// and places the draggable splitter over it. Family combos fill from their
+        /// left up to the divider; type combos fill from the divider to the right
+        /// margin — so one drag reapportions all rows at once, within the current
+        /// group width.
+        /// </summary>
+        private void LayoutTypeColumns()
+        {
+            if (_grpType == null || _fam[0] == null || _typeSplitter == null) return;
+
+            int rightMargin = (int)Math.Round(12 * _sf);
+            int gap = (int)Math.Round(8 * _sf);
+            int minFam = (int)Math.Round(70 * _sf);
+            int minType = (int)Math.Round(60 * _sf);
+
+            int spanStart = _fam[0].Left;                               // top family left
+            int spanEnd = _grpType.ClientSize.Width - rightMargin;
+            if (spanEnd - spanStart < minFam + minType + gap) return;   // group too narrow
+
+            int splitX = spanStart + (int)Math.Round((spanEnd - spanStart) * _typeSplitRatio);
+            splitX = Math.Max(spanStart + minFam, Math.Min(spanEnd - minType, splitX));
+
+            var pairs = new[]
+            {
+                new[] { _fam[0], _type[0] }, new[] { _fam[1], _type[1] }, new[] { _fam[2], _type[2] },
+                new[] { _fam[3], _type[3] }, new[] { _stockMainFam, _stockMainType }
+            };
+            foreach (var p in pairs)
+            {
+                ComboBox fam = p[0], type = p[1];
+                if (fam == null || type == null) continue;
+                fam.Width = Math.Max(minFam, (splitX - gap) - fam.Left);
+                type.Left = splitX;
+                type.Width = Math.Max(minType, spanEnd - splitX);
+            }
+
+            int top = _fam[0].Top;
+            int bottom = _stockMainType.Bottom;
+            _typeSplitter.SetBounds(splitX - gap, top, gap, bottom - top);
+            _typeSplitter.BringToFront();
+        }
+
+        private void TypeSplitter_Paint(object sender, PaintEventArgs e)
+        {
+            int cx = _typeSplitter.Width / 2;
+            using (var pen = new Pen(Color.FromArgb(140, 140, 140)))
+                e.Graphics.DrawLine(pen, cx, 2, cx, _typeSplitter.Height - 3);
+            // three grip dots at the vertical centre so it reads as draggable
+            int cy = _typeSplitter.Height / 2;
+            using (var b = new SolidBrush(Color.FromArgb(110, 110, 110)))
+                for (int k = -1; k <= 1; k++)
+                    e.Graphics.FillRectangle(b, cx - 1, cy + k * 5 - 1, 2, 2);
+        }
+
+        private void TypeSplitter_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_splitDragging || _grpType == null) return;
+            int gx = _grpType.PointToClient(Control.MousePosition).X;
+            int rightMargin = (int)Math.Round(12 * _sf);
+            int spanStart = _fam[0].Left, spanEnd = _grpType.ClientSize.Width - rightMargin;
+            if (spanEnd <= spanStart) return;
+            _typeSplitRatio = Math.Max(0.30, Math.Min(0.82, (double)(gx - spanStart) / (spanEnd - spanStart)));
+            LayoutTypeColumns();
         }
 
         private CheckBox MakeCheck(string text, int x, int y, int w)
