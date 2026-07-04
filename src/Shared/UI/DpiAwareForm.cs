@@ -523,6 +523,11 @@ namespace SgRevitAddin
         }
 
         private const int WM_NCCALCSIZE = 0x0083;
+        private const int WM_NCPAINT = 0x0085;
+        private const int WM_NCACTIVATE = 0x0086;
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr DefWindowProc(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
         protected override void WndProc(ref Message m)
         {
@@ -532,6 +537,23 @@ namespace SgRevitAddin
             // frame — the client area covers the whole window and our own
             // WM_NCHITTEST gutters below define the resize handles.
             if (m.Msg == WM_NCCALCSIZE && m.WParam != IntPtr.Zero && AllowResize)
+            {
+                m.Result = IntPtr.Zero;
+                return;
+            }
+
+            // WS_THICKFRAME makes DefWindowProc want to draw a caption/frame in the
+            // non-client area — which flashed a phantom title bar on focus change and
+            // left stale, un-repainted pixels. Suppress all non-client painting:
+            //  • WM_NCACTIVATE with lParam = -1 processes activation WITHOUT
+            //    repainting the (non-existent) caption.
+            //  • WM_NCPAINT is dropped entirely — there is no frame to draw.
+            if (AllowResize && m.Msg == WM_NCACTIVATE)
+            {
+                m.Result = DefWindowProc(m.HWnd, m.Msg, m.WParam, new IntPtr(-1));
+                return;
+            }
+            if (AllowResize && m.Msg == WM_NCPAINT)
             {
                 m.Result = IntPtr.Zero;
                 return;
