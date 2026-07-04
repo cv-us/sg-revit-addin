@@ -44,8 +44,9 @@ namespace SgRevitAddin
         /// </summary>
         protected const int BreathingRoom = 14;
 
-        /// <summary>Corner-radius fraction of the header height (~25%) for the rounded window.</summary>
-        protected const double CornerRadiusFraction = 0.25;
+        /// <summary>Corner-radius fraction of the header height. Kept small so the
+        /// region-clipped corners don't show visible aliasing/pixelation.</summary>
+        protected const double CornerRadiusFraction = 0.11;
 
         /// <summary>Sentinel for "no remembered window position".</summary>
         private const int UnsetPos = int.MinValue;
@@ -67,29 +68,41 @@ namespace SgRevitAddin
         {
             AutoScaleMode = AutoScaleMode.Dpi;
             FormBorderStyle = FormBorderStyle.None;   // custom SG chrome replaces the OS caption
-            SetStyle(ControlStyles.ResizeRedraw, true);   // repaint the edge shadow while dragging
+            SetStyle(ControlStyles.ResizeRedraw, true);   // repaint the border while dragging
             // AutoScaleDimensions is set in OnHandleCreated, NOT here.
         }
 
         /// <summary>
-        /// Soft inner-edge shadow painted in the resize gutter (the strip of form
-        /// background around the content panel). Gives the flat borderless window a
-        /// sense of depth and — with the resize cursor — signals the draggable edge.
-        /// The top is capped by the blue header, so the shadow reads on the sides and
-        /// bottom.
+        /// Thin black border traced around the whole window (following the rounded
+        /// corners). Replaces the old inner shadow.
         /// </summary>
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
-            int w = ClientSize.Width, h = ClientSize.Height;
+            int w = ClientSize.Width, h = ClientSize.Height, r = _cornerRadius;
             if (w <= 2 || h <= 2) return;
-            for (int i = 0; i < 4; i++)
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using (var path = RoundedRectPath(0, 0, w - 1, h - 1, r))
+            using (var pen = new Pen(Color.Black, 1f))
+                e.Graphics.DrawPath(pen, path);
+        }
+
+        /// <summary>Builds a rounded-rectangle path; a plain rectangle when r &lt;= 1.</summary>
+        private static System.Drawing.Drawing2D.GraphicsPath RoundedRectPath(int x, int y, int w, int h, int r)
+        {
+            var path = new System.Drawing.Drawing2D.GraphicsPath();
+            if (r <= 1 || w <= r * 2 || h <= r * 2)
             {
-                int alpha = 26 - i * 6;                 // fade inward
-                if (alpha <= 0) break;
-                using (var pen = new Pen(Color.FromArgb(alpha, 0, 0, 0)))
-                    e.Graphics.DrawRectangle(pen, i, i, w - 1 - 2 * i, h - 1 - 2 * i);
+                path.AddRectangle(new Rectangle(x, y, w, h));
+                return path;
             }
+            int d = r * 2;
+            path.AddArc(x, y, d, d, 180, 90);
+            path.AddArc(x + w - d, y, d, d, 270, 90);
+            path.AddArc(x + w - d, y + h - d, d, d, 0, 90);
+            path.AddArc(x, y + h - d, d, d, 90, 90);
+            path.CloseFigure();
+            return path;
         }
 
         protected override void CreateHandle()
@@ -210,17 +223,8 @@ namespace SgRevitAddin
             int r = _cornerRadius;
             int w = ClientSize.Width, h = ClientSize.Height;
             if (r <= 1 || w <= r * 2 || h <= r * 2) { Region = null; return; }
-
-            int d = r * 2;
-            using (var path = new System.Drawing.Drawing2D.GraphicsPath())
-            {
-                path.AddArc(0, 0, d, d, 180, 90);
-                path.AddArc(w - d - 1, 0, d, d, 270, 90);
-                path.AddArc(w - d - 1, h - d - 1, d, d, 0, 90);
-                path.AddArc(0, h - d - 1, d, d, 90, 90);
-                path.CloseFigure();
+            using (var path = RoundedRectPath(0, 0, w, h, r))
                 Region = new Region(path);
-            }
         }
 
         protected override void OnSizeChanged(EventArgs e)
@@ -308,19 +312,36 @@ namespace SgRevitAddin
         {
             StartPosition = FormStartPosition.Manual;
 
+            Rectangle wa;
+            try { wa = Screen.FromPoint(Cursor.Position).WorkingArea; }
+            catch { wa = Screen.PrimaryScreen.WorkingArea; }
+
+            Point loc;
             if (RememberSize)
             {
                 int sx = DialogMemory.GetInt(key, "WinX", UnsetPos);
                 int sy = DialogMemory.GetInt(key, "WinY", UnsetPos);
-                if (sx != UnsetPos && sy != UnsetPos &&
-                    IsTitleBandReachable(new Rectangle(sx, sy, Width, Height)))
-                {
-                    Location = new Point(sx, sy);
-                    return;
-                }
+                loc = (sx != UnsetPos && sy != UnsetPos &&
+                       IsTitleBandReachable(new Rectangle(sx, sy, Width, Height)))
+                    ? new Point(sx, sy)
+                    : new Point(wa.X + Math.Max(0, (wa.Width - Width) / 2),
+                                wa.Y + Math.Max(0, (wa.Height - Height) / 2));
+            }
+            else
+            {
+                loc = new Point(wa.X + Math.Max(0, (wa.Width - Width) / 2),
+                                wa.Y + Math.Max(0, (wa.Height - Height) / 2));
             }
 
-            CenterOnCursorScreen();
+            // Clamp so the WHOLE window fits on the work area — otherwise a large
+            // remembered size + position pushed the bottom buttons / right column
+            // off-screen (they were "missing"). Left/top win if the window is
+            // bigger than the work area, keeping the header reachable.
+            loc.X = Math.Min(loc.X, wa.Right - Width);
+            loc.Y = Math.Min(loc.Y, wa.Bottom - Height);
+            loc.X = Math.Max(loc.X, wa.Left);
+            loc.Y = Math.Max(loc.Y, wa.Top);
+            Location = loc;
         }
 
         /// <summary>
@@ -338,16 +359,6 @@ namespace SgRevitAddin
                 if (inter.Width >= 80 && inter.Height >= 20) return true;
             }
             return false;
-        }
-
-        private void CenterOnCursorScreen()
-        {
-            Rectangle wa;
-            try { wa = Screen.FromPoint(Cursor.Position).WorkingArea; }
-            catch { wa = Screen.PrimaryScreen.WorkingArea; }
-            Location = new Point(
-                wa.X + Math.Max(0, (wa.Width - Width) / 2),
-                wa.Y + Math.Max(0, (wa.Height - Height) / 2));
         }
 
         private static Image LoadLogo()
@@ -625,9 +636,11 @@ namespace SgRevitAddin
             get
             {
                 const int CS_DROPSHADOW = 0x20000;
-                const int WS_THICKFRAME = 0x00040000;   // sizing border — without it HTLEFT/etc. can't resize
+                const int WS_THICKFRAME = 0x00040000;    // sizing border — without it HTLEFT/etc. can't resize
+                const int WS_EX_COMPOSITED = 0x02000000; // paint the whole window to a back buffer in one pass
                 var cp = base.CreateParams;
                 cp.ClassStyle |= CS_DROPSHADOW;
+                cp.ExStyle |= WS_EX_COMPOSITED;   // fixes the splotchy "paints in pieces" first render
                 if (AllowResize) cp.Style |= WS_THICKFRAME;
                 return cp;
             }

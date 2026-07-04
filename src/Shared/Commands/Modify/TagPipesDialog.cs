@@ -260,16 +260,17 @@ namespace SgRevitAddin.Commands.Modify
             if (_grpType == null || _fam[0] == null || _typeSplitter == null) return;
 
             int rightMargin = (int)Math.Round(12 * _sf);
-            int gap = (int)Math.Round(8 * _sf);
+            int gap = (int)Math.Round(8 * _sf);    // splitter width
+            int inner = (int)Math.Round(7 * _sf);  // padding between each combo and the splitter
             int minFam = (int)Math.Round(70 * _sf);
             int minType = (int)Math.Round(60 * _sf);
 
             int spanStart = _fam[0].Left;                               // top family left
             int spanEnd = _grpType.ClientSize.Width - rightMargin;
-            if (spanEnd - spanStart < minFam + minType + gap) return;   // group too narrow
+            if (spanEnd - spanStart < minFam + minType + gap + inner * 2) return;   // group too narrow
 
             int splitX = spanStart + (int)Math.Round((spanEnd - spanStart) * _typeSplitRatio);
-            splitX = Math.Max(spanStart + minFam, Math.Min(spanEnd - minType, splitX));
+            splitX = Math.Max(spanStart + minFam + inner, Math.Min(spanEnd - minType - inner, splitX));
 
             var pairs = new[]
             {
@@ -280,9 +281,9 @@ namespace SgRevitAddin.Commands.Modify
             {
                 ComboBox fam = p[0], type = p[1];
                 if (fam == null || type == null) continue;
-                fam.Width = Math.Max(minFam, (splitX - gap) - fam.Left);
-                type.Left = splitX;
-                type.Width = Math.Max(minType, spanEnd - splitX);
+                fam.Width = Math.Max(minFam, (splitX - gap - inner) - fam.Left);   // ends before the splitter
+                type.Left = splitX + inner;                                        // starts after the splitter
+                type.Width = Math.Max(minType, spanEnd - type.Left);
             }
 
             int top = _fam[0].Top;
