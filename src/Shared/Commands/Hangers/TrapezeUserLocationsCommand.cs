@@ -50,32 +50,47 @@ namespace SgRevitAddin.Commands.Hangers
             try
             {
                 // ── Step 1: Select pipes AND detail lines ──
-                IList<Reference> selRefs;
-                try
-                {
-                    selRefs = uidoc.Selection.PickObjects(
-                        ObjectType.Element,
-                        new PipesAndLinesFilter(),
-                        "Select PIPES and DETAIL LINES for trapeze hangers, then press Finish");
-                }
-                catch (Autodesk.Revit.Exceptions.OperationCanceledException)
-                {
-                    return Result.Cancelled;
-                }
+                // Use the pipes and detail lines already selected before the command
+                // was run; only prompt to pick when nothing valid is pre-selected.
+                var selElems = uidoc.Selection.GetElementIds()
+                    .Select(id => doc.GetElement(id))
+                    .Where(e => e != null &&
+                        (e.Category?.Id.IntegerValue == (int)BuiltInCategory.OST_PipeCurves ||
+                         e.Category?.Id.IntegerValue == (int)BuiltInCategory.OST_Lines))
+                    .ToList();
 
-                if (selRefs == null || selRefs.Count == 0)
+                if (selElems.Count == 0)
                 {
-                    TaskDialog.Show("Auto Trapeze", "No elements selected.");
-                    return Result.Cancelled;
+                    IList<Reference> selRefs;
+                    try
+                    {
+                        selRefs = uidoc.Selection.PickObjects(
+                            ObjectType.Element,
+                            new PipesAndLinesFilter(),
+                            "Select PIPES and DETAIL LINES for trapeze hangers, then press Finish");
+                    }
+                    catch (Autodesk.Revit.Exceptions.OperationCanceledException)
+                    {
+                        return Result.Cancelled;
+                    }
+
+                    if (selRefs == null || selRefs.Count == 0)
+                    {
+                        TaskDialog.Show("Auto Trapeze", "No elements selected.");
+                        return Result.Cancelled;
+                    }
+
+                    selElems = selRefs.Select(r => doc.GetElement(r))
+                        .Where(e => e != null)
+                        .ToList();
                 }
 
                 // Separate pipes from detail lines
                 var pipes = new List<Element>();
                 var detailLines = new List<Element>();
 
-                foreach (Reference r in selRefs)
+                foreach (Element elem in selElems)
                 {
-                    Element elem = doc.GetElement(r);
                     if (elem == null) continue;
 
                     if (elem.Category?.Id.IntegerValue == (int)BuiltInCategory.OST_PipeCurves)

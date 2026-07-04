@@ -51,26 +51,37 @@ namespace SgRevitAddin.Commands.Hangers
             try
             {
                 // ── Step 1: Select pipes ──
-                IList<Reference> pipeRefs;
-                try
-                {
-                    pipeRefs = uidoc.Selection.PickObjects(
-                        ObjectType.Element,
-                        new CategorySelectionFilter(BuiltInCategory.OST_PipeCurves),
-                        "Select pipe runs for unistrut trapeze hangers, then press Finish");
-                }
-                catch (Autodesk.Revit.Exceptions.OperationCanceledException)
-                {
-                    return Result.Cancelled;
-                }
+                // Use pipes already selected before the command was run; only prompt
+                // to pick when nothing valid is pre-selected.
+                var allPipes = uidoc.Selection.GetElementIds()
+                    .Select(id => doc.GetElement(id))
+                    .Where(e => e != null &&
+                        e.Category?.Id.IntegerValue == (int)BuiltInCategory.OST_PipeCurves)
+                    .ToList();
 
-                if (pipeRefs == null || pipeRefs.Count == 0)
+                if (allPipes.Count == 0)
                 {
-                    TaskDialog.Show("Auto Trapeze Unistrut", "No pipes selected.");
-                    return Result.Cancelled;
-                }
+                    IList<Reference> pipeRefs;
+                    try
+                    {
+                        pipeRefs = uidoc.Selection.PickObjects(
+                            ObjectType.Element,
+                            new CategorySelectionFilter(BuiltInCategory.OST_PipeCurves),
+                            "Select pipe runs for unistrut trapeze hangers, then press Finish");
+                    }
+                    catch (Autodesk.Revit.Exceptions.OperationCanceledException)
+                    {
+                        return Result.Cancelled;
+                    }
 
-                var allPipes = pipeRefs.Select(r => doc.GetElement(r)).Where(e => e != null).ToList();
+                    if (pipeRefs == null || pipeRefs.Count == 0)
+                    {
+                        TaskDialog.Show("Auto Trapeze Unistrut", "No pipes selected.");
+                        return Result.Cancelled;
+                    }
+
+                    allPipes = pipeRefs.Select(r => doc.GetElement(r)).Where(e => e != null).ToList();
+                }
 
                 // ── Step 2: Gather info for dialog ──
                 IList<string> trapezeFamilies = GetUnistrutFamilyNames(doc);
