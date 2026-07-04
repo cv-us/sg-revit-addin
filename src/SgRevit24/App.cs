@@ -25,7 +25,7 @@ namespace SgRevitAddin
                 "Replace selected flex pipes with shortest-length connections between the same endpoints.");
             AddLargeButton(pipingPanel, "SprinklerDrops", "Sprinkler\nDrops", asmPath,
                 "SgRevitAddin.Commands.PipeRouting.SprinklerDropCommand",
-                "shorten-flex-32.png", "shorten-flex-16.png",
+                "sprinkler-drop-32.png", "sprinkler-drop-16.png",
                 "Place hard-pipe up-over-down drops to pendent heads, ending in a REAL elbow at the drop base (a stub forces the turn so the BOM lists an elbow, not a union), with a flex hose from the elbow to the head. Select heads + a branch line. (Under development — needs field testing.)");
             // DISABLED (temporarily) — Re-Level Sprinklers under rework; button hidden.
             // AddLargeButton(pipingPanel, "RelevelSprinklers", "Re-Level\nSprinklers", asmPath,

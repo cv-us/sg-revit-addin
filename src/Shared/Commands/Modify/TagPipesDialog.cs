@@ -54,6 +54,9 @@ namespace SgRevitAddin.Commands.Modify
         private double _typeSplitRatio = 0.60;   // fraction of the row span given to family
         private bool _splitDragging;
 
+        // Action buttons — positioned explicitly by LayoutColumns (always visible).
+        private Button _btnOK, _btnCancel;
+
         private static readonly string[] TypeLabels =
         { "Center to Center Length", "Cut Length", "Dynamic Length", "Stocklisting Tags" };
         private static readonly string[] TypeKeys = { "CC", "Cut", "Dyn", "StockLine" };
@@ -159,15 +162,15 @@ namespace SgRevitAddin.Commands.Modify
             _grpDrops.Controls.AddRange(new Control[] { _chkDropsOnly, _chkIncludeDrops, _dropFam, _dropType });
             Controls.Add(_grpDrops);
 
-            // ── Buttons (added left→right for tab order) ──
+            // ── Buttons (added left→right for tab order) ── positioned by LayoutColumns.
             int by = 354;
-            var btnOK = new Button { Text = "Continue", DialogResult = DialogResult.OK, Location = new Point(700 - margin - 85 - 10 - 110, by), Size = new Size(110, 30), Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
-            btnOK.Click += BtnOK_Click;
-            AcceptButton = btnOK;
-            Controls.Add(btnOK);
-            var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(700 - margin - 85, by), Size = new Size(85, 30), Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
-            CancelButton = btnCancel;
-            Controls.Add(btnCancel);
+            _btnOK = new Button { Text = "Continue", DialogResult = DialogResult.OK, Location = new Point(565, by), Size = new Size(110, 30) };
+            _btnOK.Click += BtnOK_Click;
+            AcceptButton = _btnOK;
+            Controls.Add(_btnOK);
+            _btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(685, by), Size = new Size(85, 30) };
+            CancelButton = _btnCancel;
+            Controls.Add(_btnCancel);
 
             // ── Restore remembered radios / checkboxes ──
             int t = DialogMemory.GetInt(MemKey, "TagType", 0);
@@ -196,6 +199,10 @@ namespace SgRevitAddin.Commands.Modify
             if (_grpSel != null) _grpSel.Anchor = pin;
             if (_grpOpt != null) _grpOpt.Anchor = pin;
             if (_grpDrops != null) _grpDrops.Anchor = pin;
+            // Buttons are placed manually by LayoutColumns too — keep them Top|Left so
+            // WinForms anchoring doesn't fight that (and never hides them).
+            if (_btnOK != null) _btnOK.Anchor = pin;
+            if (_btnCancel != null) _btnCancel.Anchor = pin;
 
             LayoutColumns();
             var host = _grpType != null ? _grpType.Parent : null;
@@ -224,6 +231,18 @@ namespace SgRevitAddin.Commands.Modify
             int rx = m + colW + m;
             _grpOpt.Left = rx; _grpOpt.Width = colW;
             _grpDrops.Left = rx; _grpDrops.Width = colW;
+
+            // Buttons: pinned to the bottom-right of the content, always on-screen.
+            if (_btnOK != null && _btnCancel != null)
+            {
+                int bm = (int)Math.Round(14 * _sf);
+                int gap = (int)Math.Round(10 * _sf);
+                int hostH = host.ClientSize.Height, hostW = host.ClientSize.Width;
+                _btnCancel.Location = new Point(hostW - m - _btnCancel.Width, hostH - bm - _btnCancel.Height);
+                _btnOK.Location = new Point(_btnCancel.Left - gap - _btnOK.Width, _btnCancel.Top);
+                _btnOK.BringToFront();
+                _btnCancel.BringToFront();
+            }
 
             LayoutTypeColumns();   // reflow family/type columns to the new group width
         }
