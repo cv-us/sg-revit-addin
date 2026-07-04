@@ -70,10 +70,33 @@ namespace SgRevitAddin.Utils
                 image.BeginInit();
                 image.StreamSource = stream;
                 image.CacheOption = BitmapCacheOption.OnLoad;
+                // Decode to the icon's intended pixel size (parsed from the
+                // "…-32.png" / "…-16.png" suffix). This forces WPF to treat the
+                // image as 96-DPI native pixels, so an icon accidentally authored
+                // at 72 DPI doesn't report an inflated device-independent size and
+                // get cropped on the right/bottom in the ribbon's fixed slot.
+                int px = ParseTrailingSize(filename);
+                if (px > 0)
+                {
+                    image.DecodePixelWidth = px;
+                    image.DecodePixelHeight = px;
+                }
                 image.EndInit();
                 image.Freeze();
                 return image;
             }
+        }
+
+        /// <summary>Parses the trailing pixel size from an icon file name, e.g.
+        /// "tag-pipes-32.png" → 32. Returns 0 when there's no "-NN" suffix.</summary>
+        private static int ParseTrailingSize(string filename)
+        {
+            int dot = filename.LastIndexOf('.');
+            if (dot <= 0) return 0;
+            int dash = filename.LastIndexOf('-', dot - 1);
+            if (dash < 0 || dash + 1 >= dot) return 0;
+            string num = filename.Substring(dash + 1, dot - dash - 1);
+            return int.TryParse(num, out int n) && n > 0 && n <= 512 ? n : 0;
         }
     }
 }

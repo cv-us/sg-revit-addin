@@ -505,8 +505,21 @@ namespace SgRevitAddin
             SendMessage(Handle, WM_NCLBUTTONDOWN, (IntPtr)HT_CAPTION, IntPtr.Zero);
         }
 
+        private const int WM_NCCALCSIZE = 0x0083;
+
         protected override void WndProc(ref Message m)
         {
+            // WS_THICKFRAME (added in CreateParams) is what actually lets the
+            // borderless window be sized and shows the resize cursor. Zero the
+            // non-client calc so that sizing border isn't drawn as a visible OS
+            // frame — the client area covers the whole window and our own
+            // WM_NCHITTEST gutters below define the resize handles.
+            if (m.Msg == WM_NCCALCSIZE && m.WParam != IntPtr.Zero && AllowResize)
+            {
+                m.Result = IntPtr.Zero;
+                return;
+            }
+
             if (m.Msg == WM_NCHITTEST && AllowResize)
             {
                 base.WndProc(ref m);
@@ -533,8 +546,10 @@ namespace SgRevitAddin
             get
             {
                 const int CS_DROPSHADOW = 0x20000;
+                const int WS_THICKFRAME = 0x00040000;   // sizing border — without it HTLEFT/etc. can't resize
                 var cp = base.CreateParams;
                 cp.ClassStyle |= CS_DROPSHADOW;
+                if (AllowResize) cp.Style |= WS_THICKFRAME;
                 return cp;
             }
         }
