@@ -44,6 +44,9 @@ namespace SgRevitAddin
         /// </summary>
         protected const int BreathingRoom = 14;
 
+        /// <summary>Corner-radius fraction of the header height (~25%) for the rounded window.</summary>
+        protected const double CornerRadiusFraction = 0.25;
+
         /// <summary>Sentinel for "no remembered window position".</summary>
         private const int UnsetPos = int.MinValue;
 
@@ -58,6 +61,7 @@ namespace SgRevitAddin
         private Button _closeBtn;
         private PictureBox _logo;
         private int _resizeBorder = 6;
+        private int _cornerRadius;
 
         public DpiAwareForm()
         {
@@ -144,6 +148,7 @@ namespace SgRevitAddin
             //     baselines are computed against the correct size. (Reparenting into a
             //     temporarily short panel was giving bottom buttons a wrong baseline
             //     and clipping them under the bottom edge.)
+            _cornerRadius = (int)Math.Round(hh * CornerRadiusFraction);   // ~25% of the header height
             FormBorderStyle = FormBorderStyle.None;   // override any FixedDialog a derived ctor set
             BuildHeader(hh);
             ClientSize = new Size(cw + 2 * gutter, hh + ch + gutter);
@@ -189,12 +194,47 @@ namespace SgRevitAddin
             //     screen under the cursor. Done AFTER the final size is known.
             ApplyStartupPosition(key);
 
+            // (8) Round the window corners (matched by the drop shadow + edge shadow).
+            ApplyRoundedRegion();
+
             _layoutInit = true;
+        }
+
+        /// <summary>
+        /// Clips the window to a rounded rectangle so all four corners are radiused.
+        /// Re-applied on resize. Kept in sync with the header's left/right padding so
+        /// the logo and close button clear the curve.
+        /// </summary>
+        private void ApplyRoundedRegion()
+        {
+            int r = _cornerRadius;
+            int w = ClientSize.Width, h = ClientSize.Height;
+            if (r <= 1 || w <= r * 2 || h <= r * 2) { Region = null; return; }
+
+            int d = r * 2;
+            using (var path = new System.Drawing.Drawing2D.GraphicsPath())
+            {
+                path.AddArc(0, 0, d, d, 180, 90);
+                path.AddArc(w - d - 1, 0, d, d, 270, 90);
+                path.AddArc(w - d - 1, h - d - 1, d, d, 0, 90);
+                path.AddArc(0, h - d - 1, d, d, 90, 90);
+                path.CloseFigure();
+                Region = new Region(path);
+            }
+        }
+
+        protected override void OnSizeChanged(EventArgs e)
+        {
+            base.OnSizeChanged(e);
+            if (_layoutInit) ApplyRoundedRegion();
         }
 
         private void BuildHeader(int hh)
         {
             _header = new Panel { Dock = DockStyle.Top, Height = hh, BackColor = HeaderColor };
+            // Inset the docked logo (Left) and close button (Right) by the corner
+            // radius so they clear the rounded top corners instead of being clipped.
+            _header.Padding = new Padding(_cornerRadius, 0, _cornerRadius, 0);
             _header.MouseDown += Header_MouseDown;
 
             _titleLabel = new Label

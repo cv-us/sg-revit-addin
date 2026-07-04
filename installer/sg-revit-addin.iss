@@ -12,7 +12,7 @@
 ; Output: installer\Output\SgRevitAddin-{version}-Setup.exe
 
 #define MyAppName "SG Revit Addin"
-#define MyAppVersion "0.3.12"
+#define MyAppVersion "0.3.13"
 #define MyAppPublisher "SG Fire Protection"
 #define MyAppURL "https://github.com/cv-us/sg-revit-addin"
 
@@ -38,6 +38,11 @@ Compression=lzma2/ultra64
 SolidCompression=yes
 PrivilegesRequired=admin
 WizardStyle=modern
+; SG branding: blue banner + white company logo on the wizard pages
+WizardImageFile=wizard-large.bmp
+WizardSmallImageFile=wizard-small.bmp
+WizardImageStretch=no
+WizardImageAlphaFormat=none
 SetupIconFile=icon.ico
 UninstallDisplayIcon={app}\icon.ico
 UninstallDisplayName={#MyAppName}
@@ -97,6 +102,20 @@ Type: files; Name: "{userappdata}\Autodesk\Revit\Addins\2026\SgRevit25.dll"; Che
 var
   RevitPage: TWizardPage;
   chk2023, chk2024, chk2025, chk2026: TCheckBox;
+
+// ── Rounded installer window (best-effort; Win11 already rounds windows) ──
+function CreateRoundRectRgn(X1, Y1, X2, Y2, W, H: Integer): LongInt;
+  external 'CreateRoundRectRgn@gdi32.dll stdcall';
+function SetWindowRgn(hWnd: HWND; hRgn: LongInt; bRedraw: Boolean): Integer;
+  external 'SetWindowRgn@user32.dll stdcall';
+
+procedure RoundWindow(H: HWND; W, Ht, R: Integer);
+var
+  rgn: LongInt;
+begin
+  rgn := CreateRoundRectRgn(0, 0, W + 1, Ht + 1, R, R);
+  SetWindowRgn(H, rgn, True);
+end;
 
 function RevitAddinPath(Year: String): String;
 begin
@@ -188,6 +207,9 @@ begin
   lbl.Caption := 'Detected versions are pre-checked. You can install for versions not yet installed.';
   lbl.Font.Color := clGray;
   lbl.AutoSize := True;
+
+  // Round the wizard window corners (~25%), matching the add-in dialogs.
+  RoundWindow(WizardForm.Handle, WizardForm.Width, WizardForm.Height, ScaleX(22));
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
