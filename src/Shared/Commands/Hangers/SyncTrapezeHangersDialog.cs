@@ -34,7 +34,6 @@ namespace SgRevitAddin.Commands.Hangers
             _hangerCount = hangerCount;
             MinClearanceInches = DialogMemory.GetDouble(MemKey, "MinClearanceInches", 7.0);
             UseClosestSide = DialogMemory.GetBool(MemKey, "UseClosestSide", true);
-            AllowResize = false;   // fixed stack of options — resizing adds nothing
             InitializeComponent();
         }
 

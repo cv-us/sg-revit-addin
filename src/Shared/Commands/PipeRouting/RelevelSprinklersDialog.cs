@@ -34,7 +34,6 @@ namespace SgRevitAddin.Commands.PipeRouting
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            AllowResize = false;   // plain fixed stack — resizing adds nothing
             ClientSize = new Size(600, 196);
 
             const int M = 16, W = 568;

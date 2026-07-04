@@ -65,7 +65,6 @@ namespace SgRevitAddin.Commands.Hangers
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            AllowResize = false;   // fixed action dialog — nothing gains from resizing
 
             int y = Margin;
 

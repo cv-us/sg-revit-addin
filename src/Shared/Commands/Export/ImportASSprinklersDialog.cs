@@ -28,7 +28,6 @@ namespace SgRevitAddin.Commands.Export
             IList<string> familyTypeNames)
         {
             Text = "Import AutoSPRINK Sprinklers from CSV";
-            AllowResize = false;   // fixed option stack — resizing adds nothing
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;

@@ -45,6 +45,10 @@ namespace SgRevitAddin.Commands.Modify
         private ComboBox _dropFam, _dropType;
         private CheckBox _chkResetTakeOut, _chkResetCut, _chkCleanup, _chkTransparent, _chkHomogenize;
 
+        // Two-column groups + scale factor, for proportional resize.
+        private GroupBox _grpType, _grpSel, _grpOpt, _grpDrops;
+        private float _sf = 1f;
+
         private static readonly string[] TypeLabels =
         { "Center to Center Length", "Cut Length", "Dynamic Length", "Stocklisting Tags" };
         private static readonly string[] TypeKeys = { "CC", "Cut", "Dyn", "StockLine" };
@@ -62,75 +66,81 @@ namespace SgRevitAddin.Commands.Modify
         private void InitializeComponent()
         {
             Text = "Tag Pipes";
-            AllowResize = false;   // dense fixed two-column layout — resizing adds nothing
-            ClientSize = new Size(636, 396);
+            // Resizable: drag wider and both columns (and the family dropdowns
+            // inside them) grow — see LayoutColumns. Wider default so the family
+            // names aren't cramped out of the box.
+            ClientSize = new Size(700, 396);
 
             int margin = 12;
-            const int colW = 300;
+            int colW = 336;
             int leftX = margin, rightX = margin + colW + margin;
+            // Anchor helpers: family combos widen with their group; the short type
+            // combos ride the right edge at a fixed width (type codes are tiny).
+            const AnchorStyles famAnchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            const AnchorStyles typeAnchor = AnchorStyles.Top | AnchorStyles.Right;
 
             // ── Pipe Tag Type (left) ──
-            var grpType = new GroupBox { Text = "Pipe Tag Type", Location = new Point(leftX, margin), Size = new Size(colW, 244) };
+            _grpType = new GroupBox { Text = "Pipe Tag Type", Location = new Point(leftX, margin), Size = new Size(colW, 244) };
             int gy = 20;
             for (int i = 0; i < 3; i++)   // C-C, Cut, Dynamic
             {
                 _rbType[i] = new RadioButton { Text = TypeLabels[i], Location = new Point(10, gy), Size = new Size(colW - 24, 18), Checked = i == 0 };
-                _fam[i] = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(26, gy + 20), Size = new Size(150, 22) };
-                _type[i] = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(180, gy + 20), Size = new Size(104, 22) };
+                _fam[i] = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(26, gy + 20), Size = new Size(colW - 148, 22), Anchor = famAnchor };
+                _type[i] = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(colW - 116, gy + 20), Size = new Size(104, 22), Anchor = typeAnchor };
                 WireFamilyType(_fam[i], _type[i], DialogMemory.Get(MemKey, "Fam_" + TypeKeys[i], ""), DialogMemory.Get(MemKey, "Type_" + TypeKeys[i], ""));
-                grpType.Controls.AddRange(new Control[] { _rbType[i], _fam[i], _type[i] });
+                _grpType.Controls.AddRange(new Control[] { _rbType[i], _fam[i], _type[i] });
                 gy += 48;
             }
             // Stocklisting (line + main)
             _rbType[3] = new RadioButton { Text = TypeLabels[3], Location = new Point(10, gy), Size = new Size(colW - 24, 18) };
-            grpType.Controls.Add(_rbType[3]);
-            grpType.Controls.Add(new Label { Text = "Line:", Location = new Point(26, gy + 22), Size = new Size(34, 18) });
-            _fam[3] = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(62, gy + 20), Size = new Size(120, 22) };
-            _type[3] = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(186, gy + 20), Size = new Size(98, 22) };
+            _grpType.Controls.Add(_rbType[3]);
+            _grpType.Controls.Add(new Label { Text = "Line:", Location = new Point(26, gy + 22), Size = new Size(34, 18) });
+            _fam[3] = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(62, gy + 20), Size = new Size(colW - 184, 22), Anchor = famAnchor };
+            _type[3] = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(colW - 118, gy + 20), Size = new Size(98, 22), Anchor = typeAnchor };
             WireFamilyType(_fam[3], _type[3], DialogMemory.Get(MemKey, "Fam_StockLine", ""), DialogMemory.Get(MemKey, "Type_StockLine", ""));
-            grpType.Controls.Add(new Label { Text = "Main:", Location = new Point(26, gy + 46), Size = new Size(34, 18) });
-            _stockMainFam = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(62, gy + 44), Size = new Size(120, 22) };
-            _stockMainType = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(186, gy + 44), Size = new Size(98, 22) };
+            _grpType.Controls.Add(new Label { Text = "Main:", Location = new Point(26, gy + 46), Size = new Size(34, 18) });
+            _stockMainFam = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(62, gy + 44), Size = new Size(colW - 184, 22), Anchor = famAnchor };
+            _stockMainType = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(colW - 118, gy + 44), Size = new Size(98, 22), Anchor = typeAnchor };
             WireFamilyType(_stockMainFam, _stockMainType, DialogMemory.Get(MemKey, "Fam_StockMain", ""), DialogMemory.Get(MemKey, "Type_StockMain", ""));
-            grpType.Controls.AddRange(new Control[] { _fam[3], _type[3], _stockMainFam, _stockMainType });
-            Controls.Add(grpType);
+            _grpType.Controls.AddRange(new Control[] { _fam[3], _type[3], _stockMainFam, _stockMainType });
+            Controls.Add(_grpType);
 
             // ── Selection Method (left) ──
-            var grpSel = new GroupBox { Text = "Selection Method", Location = new Point(leftX, margin + 244 + margin), Size = new Size(colW, 74) };
+            _grpSel = new GroupBox { Text = "Selection Method", Location = new Point(leftX, margin + 244 + margin), Size = new Size(colW, 74) };
             _rbUser = new RadioButton { Text = "User Selection", Location = new Point(10, 22), Size = new Size(colW - 24, 20), Checked = true };
             _rbWalker = new RadioButton { Text = "System Walker Selection", Location = new Point(10, 44), Size = new Size(colW - 24, 20) };
-            grpSel.Controls.AddRange(new Control[] { _rbUser, _rbWalker });
-            Controls.Add(grpSel);
+            _grpSel.Controls.AddRange(new Control[] { _rbUser, _rbWalker });
+            Controls.Add(_grpSel);
 
             // ── Options (right) ──
-            var grpOpt = new GroupBox { Text = "Options", Location = new Point(rightX, margin), Size = new Size(colW, 160) };
+            _grpOpt = new GroupBox { Text = "Options", Location = new Point(rightX, margin), Size = new Size(colW, 160) };
             _chkResetTakeOut = MakeCheck("Reset Length Adjustment (Take Out)", 10, 22, colW);
             _chkResetCut = MakeCheck("Reset Cut Lengths", 10, 44, colW);
             _chkCleanup = MakeCheck("Run Cleanup on Selected Tags", 10, 66, colW);
             _chkTransparent = MakeCheck("Transparent Tag Backgrounds", 10, 96, colW);
             _chkHomogenize = MakeCheck("Homogenize Tags", 10, 118, colW);
-            grpOpt.Controls.AddRange(new Control[] { _chkResetTakeOut, _chkResetCut, _chkCleanup, _chkTransparent, _chkHomogenize });
-            Controls.Add(grpOpt);
+            _grpOpt.Controls.AddRange(new Control[] { _chkResetTakeOut, _chkResetCut, _chkCleanup, _chkTransparent, _chkHomogenize });
+            Controls.Add(_grpOpt);
 
             // ── Drops (right) ──
-            var grpDrops = new GroupBox { Text = "Drops", Location = new Point(rightX, margin + 160 + margin), Size = new Size(colW, 132) };
+            _grpDrops = new GroupBox { Text = "Drops", Location = new Point(rightX, margin + 160 + margin), Size = new Size(colW, 132) };
             _chkDropsOnly = MakeCheck("Tag Drops Only", 10, 22, colW);
             _chkIncludeDrops = MakeCheck("Include Drops with Selection", 10, 44, colW);
-            grpDrops.Controls.Add(new Label { Text = "Family:", Location = new Point(10, 72), Size = new Size(50, 18) });
-            _dropFam = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(64, 70), Size = new Size(colW - 78, 22) };
-            grpDrops.Controls.Add(new Label { Text = "Type:", Location = new Point(10, 100), Size = new Size(50, 18) });
-            _dropType = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(64, 98), Size = new Size(colW - 78, 22) };
+            _grpDrops.Controls.Add(new Label { Text = "Family:", Location = new Point(10, 72), Size = new Size(50, 18) });
+            _dropFam = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(64, 70), Size = new Size(colW - 78, 22), Anchor = famAnchor };
+            _grpDrops.Controls.Add(new Label { Text = "Type:", Location = new Point(10, 100), Size = new Size(50, 18) });
+            _dropType = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(64, 98), Size = new Size(colW - 78, 22), Anchor = famAnchor };
             WireFamilyType(_dropFam, _dropType, DialogMemory.Get(MemKey, "DropFam", ""), DialogMemory.Get(MemKey, "DropType", ""));
-            grpDrops.Controls.AddRange(new Control[] { _chkDropsOnly, _chkIncludeDrops, _dropFam, _dropType });
-            Controls.Add(grpDrops);
+            _grpDrops.Controls.AddRange(new Control[] { _chkDropsOnly, _chkIncludeDrops, _dropFam, _dropType });
+            Controls.Add(_grpDrops);
 
             // ── Buttons (added left→right for tab order) ──
             int by = 354;
-            var btnOK = new Button { Text = "Continue", DialogResult = DialogResult.OK, Location = new Point(636 - margin - 85 - 10 - 110, by), Size = new Size(110, 30) };
+            var btnOK = new Button { Text = "Continue", DialogResult = DialogResult.OK, Location = new Point(700 - margin - 85 - 10 - 110, by), Size = new Size(110, 30), Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
             Controls.Add(btnOK);
-            var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(636 - margin - 85, by), Size = new Size(85, 30) };
+            var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(700 - margin - 85, by), Size = new Size(85, 30), Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
             CancelButton = btnCancel;
             Controls.Add(btnCancel);
 
@@ -148,8 +158,51 @@ namespace SgRevitAddin.Commands.Modify
             _chkHomogenize.Checked = DialogMemory.GetBool(MemKey, "Homogenize", false);
         }
 
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);   // base reparents the groups into its content panel
+            _sf = DeviceDpi / 96f;
+
+            // The two columns are positioned manually by LayoutColumns, so keep the
+            // groups Top|Left-anchored (the base auto-flex may have stretched the
+            // right column) — otherwise WinForms anchoring and LayoutColumns fight.
+            const AnchorStyles pin = AnchorStyles.Top | AnchorStyles.Left;
+            if (_grpType != null) _grpType.Anchor = pin;
+            if (_grpSel != null) _grpSel.Anchor = pin;
+            if (_grpOpt != null) _grpOpt.Anchor = pin;
+            if (_grpDrops != null) _grpDrops.Anchor = pin;
+
+            LayoutColumns();
+            var host = _grpType != null ? _grpType.Parent : null;
+            if (host != null) host.SizeChanged += (s, ev) => LayoutColumns();
+        }
+
+        /// <summary>
+        /// Splits the content width into two equal columns and repositions the four
+        /// groups, so dragging the dialog wider grows both columns evenly. The
+        /// family combos inside (Left|Right anchored) then widen with their group,
+        /// while the short type combos ride the right edge at a fixed width.
+        /// </summary>
+        private void LayoutColumns()
+        {
+            var host = _grpType != null ? _grpType.Parent : null;
+            if (host == null || _grpSel == null || _grpOpt == null || _grpDrops == null) return;
+
+            int m = (int)Math.Round(12 * _sf);
+            int colW = (host.ClientSize.Width - 3 * m) / 2;
+            int minCol = (int)Math.Round(300 * _sf);
+            if (colW < minCol) colW = minCol;
+
+            _grpType.Left = m; _grpType.Width = colW;
+            _grpSel.Left = m; _grpSel.Width = colW;
+
+            int rx = m + colW + m;
+            _grpOpt.Left = rx; _grpOpt.Width = colW;
+            _grpDrops.Left = rx; _grpDrops.Width = colW;
+        }
+
         private CheckBox MakeCheck(string text, int x, int y, int w)
-            => new CheckBox { Text = text, Location = new Point(x, y), Size = new Size(w - 24, 20) };
+            => new CheckBox { Text = text, Location = new Point(x, y), Size = new Size(w - 24, 20), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
 
         /// <summary>Fill a family combo, wire it so its paired type combo repopulates on change.</summary>
         private void WireFamilyType(ComboBox fam, ComboBox type, string remFam, string remType)

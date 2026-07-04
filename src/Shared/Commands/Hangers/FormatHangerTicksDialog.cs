@@ -30,7 +30,6 @@ namespace SgRevitAddin.Commands.Hangers
 
         public FormatHangerTicksDialog()
         {
-            AllowResize = false;   // fixed stack of radios — resizing adds nothing
             InitializeComponent();
 
             // Restore the last-used direction.

@@ -36,7 +36,6 @@ namespace SgRevitAddin.Commands.Hangers
 
         public ChangeTypeCodeDialog(int hangerCount, int hangersWithNoCode, List<string> availableCodes)
         {
-            AllowResize = false;   // fixed stack of two inputs — resizing adds nothing
             InitializeComponent(hangerCount, hangersWithNoCode, availableCodes);
         }
 

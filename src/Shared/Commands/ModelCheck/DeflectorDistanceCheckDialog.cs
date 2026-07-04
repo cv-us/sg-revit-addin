@@ -34,7 +34,6 @@ namespace SgRevitAddin.Commands.ModelCheck
         public DeflectorDistanceCheckDialog(int sprinklerCount)
         {
             Text = "Deflector Distance Check";
-            AllowResize = false;   // fixed option stack — resizing adds nothing
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;

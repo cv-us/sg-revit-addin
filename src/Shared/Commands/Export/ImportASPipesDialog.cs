@@ -29,7 +29,6 @@ namespace SgRevitAddin.Commands.Export
             IList<string> systemTypeNames)
         {
             Text = "Import AutoSPRINK Pipes from CSV";
-            AllowResize = false;   // fixed option stack — resizing adds nothing
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;

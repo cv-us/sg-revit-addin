@@ -27,7 +27,6 @@ namespace SgRevitAddin.Commands.Export
         private void InitializeComponent()
         {
             Text = "Trimble Markers";
-            AllowResize = false;   // fixed action stack — resizing adds nothing
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;

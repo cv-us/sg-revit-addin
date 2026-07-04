@@ -21,7 +21,6 @@ namespace SgRevitAddin.Commands.Coordination
         public ColorCodePipesDialog(int pipeCount)
         {
             Text = "Color Code Pipes";
-            AllowResize = false;   // fixed option stack — resizing adds nothing
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;

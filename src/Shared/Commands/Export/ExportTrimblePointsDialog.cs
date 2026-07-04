@@ -62,7 +62,6 @@ namespace SgRevitAddin.Commands.Export
         private void InitializeComponent()
         {
             Text = "Export Trimble Layout Points";
-            AllowResize = false;   // fixed option stack — resizing adds nothing
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;

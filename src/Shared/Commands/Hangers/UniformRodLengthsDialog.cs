@@ -39,7 +39,6 @@ namespace SgRevitAddin.Commands.Hangers
 
         public UniformRodLengthsDialog(int hangerCount, List<string> availableCodes)
         {
-            AllowResize = false;   // fixed stack of options — resizing adds nothing
             InitializeComponent(hangerCount, availableCodes);
         }
 

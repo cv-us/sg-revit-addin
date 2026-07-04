@@ -50,7 +50,6 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            AllowResize = false;   // plain fixed stack — resizing adds nothing
             ClientSize = new Size(420, 315);
 
             int margin = 15;

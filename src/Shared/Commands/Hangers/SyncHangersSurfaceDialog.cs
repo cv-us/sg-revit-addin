@@ -64,7 +64,6 @@ namespace SgRevitAddin.Commands.Hangers
             FramingOffsetInches = defaultFramingOffset;
             FramingSyncToBottom = defaultSyncToBottom;
             KeepHangerTypes = defaultKeepTypes;
-            AllowResize = false;   // fixed stack of options — resizing adds nothing
             InitializeComponents();
         }
 

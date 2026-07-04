@@ -299,29 +299,37 @@ namespace SgRevitAddin
         }
 
         /// <summary>
-        /// Recursively set Anchors so resizing flexes the content: wide controls
-        /// (≥55% of parent width) widen with the window, and buttons pin to the
-        /// bottom (and nearer horizontal edge). Widen-only keeps stacked sections
-        /// from overlapping on resize.
+        /// Recursively set Anchors so resizing genuinely flexes the content:
+        ///   • Buttons pin to the bottom (and their nearer horizontal edge).
+        ///   • Any input (ComboBox / TextBox / list / grid / tree / numeric) or
+        ///     wide container that has NOTHING to its right widens with the window
+        ///     (Left|Right) — it stretches into the empty space, so dropdowns and
+        ///     text fields actually get wider when the user enlarges the dialog.
+        ///   • A control with a right-hand neighbour (the second column of a
+        ///     two-column row) is left fixed so the columns never overlap.
+        /// Widen-only (MinimumSize floors the shrink) keeps stacked sections from
+        /// overlapping on resize.
         ///
         /// Controls whose Anchor was EXPLICITLY set by the dialog (anything other
         /// than the Top|Left default) are left untouched — that's how a dialog
-        /// opts its primary list/grid into vertical growth (Top|Left|Right|Bottom)
-        /// without this pass clobbering it.
+        /// opts its primary list/grid into vertical growth (Top|Left|Right|Bottom),
+        /// or a two-column layout into proportional widening, without this pass
+        /// clobbering it.
         /// </summary>
         private void ApplyAutoFlex(Control parent)
         {
             int pw = parent.ClientSize.Width;
             if (pw <= 0) return;
-            foreach (Control c in parent.Controls)
+
+            var kids = parent.Controls.Cast<Control>().ToList();
+            foreach (Control c in kids)
             {
                 bool explicitAnchor = c.Anchor != (AnchorStyles.Top | AnchorStyles.Left);
                 if (explicitAnchor)
                 {
                     // Deliberate anchor — respect it, but still flex the children
                     // of container controls.
-                    if (c is GroupBox || c is Panel || c is TableLayoutPanel || c is FlowLayoutPanel)
-                        ApplyAutoFlex(c);
+                    if (IsContainer(c)) ApplyAutoFlex(c);
                     continue;
                 }
 
@@ -332,18 +340,52 @@ namespace SgRevitAddin
                     continue;
                 }
 
-                bool wide = c.Width >= pw * 0.55;
-                if (wide && (c is GroupBox || c is Panel || c is ComboBox || c is TextBox ||
-                             c is DataGridView || c is ListBox || c is ListView || c is TreeView ||
-                             c is Label || c is CheckBox || c is RadioButton ||
-                             c is FlowLayoutPanel || c is TableLayoutPanel))
+                bool roomToRight = !HasRightNeighbour(c, kids);
+                bool flexHoriz = false;
+
+                if (IsContainer(c))
                 {
-                    c.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+                    // Widen a container that spans most of the row, or that simply
+                    // has open space to its right (single-column group).
+                    flexHoriz = roomToRight && c.Width >= pw * 0.45;
+                }
+                else if (c is ComboBox || c is TextBox || c is DataGridView ||
+                         c is ListBox || c is ListView || c is TreeView || c is NumericUpDown)
+                {
+                    // Inputs stretch into empty space to their right, but only when
+                    // they're already a substantial field (never balloon a tiny
+                    // 2-char type-code box across the whole dialog).
+                    flexHoriz = roomToRight && c.Width >= pw * 0.33;
+                }
+                else if (c is Label || c is CheckBox || c is RadioButton)
+                {
+                    flexHoriz = roomToRight && c.Width >= pw * 0.55;
                 }
 
-                if (c is GroupBox || c is Panel || c is TableLayoutPanel || c is FlowLayoutPanel)
-                    ApplyAutoFlex(c);
+                if (flexHoriz)
+                    c.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+
+                if (IsContainer(c)) ApplyAutoFlex(c);
             }
+        }
+
+        private static bool IsContainer(Control c) =>
+            c is GroupBox || c is Panel || c is TableLayoutPanel || c is FlowLayoutPanel;
+
+        /// <summary>
+        /// True when another sibling sits to the right of <paramref name="c"/> in
+        /// the same horizontal band — i.e. widening <paramref name="c"/> would run
+        /// it into that neighbour. Used to keep two-column rows from overlapping.
+        /// </summary>
+        private static bool HasRightNeighbour(Control c, System.Collections.Generic.List<Control> siblings)
+        {
+            foreach (Control s in siblings)
+            {
+                if (ReferenceEquals(s, c)) continue;
+                bool verticalOverlap = s.Top < c.Bottom && s.Bottom > c.Top;
+                if (verticalOverlap && s.Left >= c.Right - 4) return true;
+            }
+            return false;
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
