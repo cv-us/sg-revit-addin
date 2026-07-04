@@ -37,6 +37,16 @@ namespace SgRevitAddin
         /// <summary>Logical (96-dpi) height of the blue title band.</summary>
         protected const int HeaderHeight = 38;
 
+        /// <summary>
+        /// Logical (96-dpi) breathing room added at the right + bottom of every
+        /// dialog on top of its designed content size, so controls (especially the
+        /// action buttons) never hug the window edge. Applied once at layout.
+        /// </summary>
+        protected const int BreathingRoom = 14;
+
+        /// <summary>Sentinel for "no remembered window position".</summary>
+        private const int UnsetPos = int.MinValue;
+
         private static readonly Color HeaderColor = Color.FromArgb(0x08, 0x59, 0x90);  // SG blue #085990
         private static readonly Color HeaderHover = Color.FromArgb(0x2A, 0x74, 0xAD);
         private static Image _logoImage;
@@ -94,9 +104,12 @@ namespace SgRevitAddin
             foreach (var c in Controls.Cast<Control>().Where(c => c != _content && c != _header).ToList())
                 c.Parent = _content;      // preserves bounds + anchors, now relative to _content
 
-            // (3) Grow the form by the header so the content panel keeps its size.
+            // (3) Grow the form by the header, plus a uniform right/bottom breathing
+            //     margin so nothing hugs the edge (the content panel keeps its
+            //     design size; the extra shows as margin since children are top-left).
+            int pad = (int)Math.Round(BreathingRoom * factor);
             FormBorderStyle = FormBorderStyle.None;   // override any FixedDialog a derived ctor set
-            ClientSize = new Size(natural.Width, natural.Height + hh);
+            ClientSize = new Size(natural.Width + pad, natural.Height + hh + pad);
 
             // (4) Flex content on resize (widen-only + bottom-pinned buttons).
             if (AllowResize) ApplyAutoFlex(_content);
@@ -106,11 +119,12 @@ namespace SgRevitAddin
             MinimumSize = Size;
             if (!AllowResize) MaximumSize = Size;
 
+            string key = GetType().Name;
+
             // (6) Restore remembered size (logical 96-px -> device px), clamped
             //     between the natural size and the current screen's work area.
             if (RememberSize && AllowResize)
             {
-                string key = GetType().Name;
                 int w = DialogMemory.GetInt(key, "WinW", 0);
                 int h = DialogMemory.GetInt(key, "WinH", 0);
                 if (w > 0 && h > 0)
@@ -121,6 +135,12 @@ namespace SgRevitAddin
                         Math.Min(Math.Max((int)Math.Round(h * factor), MinimumSize.Height), wa.Height));
                 }
             }
+
+            // (7) Position: reopen where the user last left it (if that spot is
+            //     still reachable on a connected monitor), else center on the
+            //     screen under the cursor. Done AFTER the final size is known.
+            ApplyStartupPosition(key);
+
             _layoutInit = true;
         }
 
@@ -187,6 +207,60 @@ namespace SgRevitAddin
         }
 
         private static PictureBoxSizeMode PictureBoxImageMode() => PictureBoxSizeMode.Zoom;
+
+        /// <summary>
+        /// Places the dialog at its remembered last position when that position is
+        /// still usable (its title band lands on a connected monitor's work area),
+        /// otherwise centers it on the screen under the cursor. Window position is
+        /// remembered for every dialog (resizable or not); only the size floor
+        /// differs. Runs with StartPosition forced to Manual so it wins over any
+        /// CenterScreen/CenterParent a derived ctor set.
+        /// </summary>
+        private void ApplyStartupPosition(string key)
+        {
+            StartPosition = FormStartPosition.Manual;
+
+            if (RememberSize)
+            {
+                int sx = DialogMemory.GetInt(key, "WinX", UnsetPos);
+                int sy = DialogMemory.GetInt(key, "WinY", UnsetPos);
+                if (sx != UnsetPos && sy != UnsetPos &&
+                    IsTitleBandReachable(new Rectangle(sx, sy, Width, Height)))
+                {
+                    Location = new Point(sx, sy);
+                    return;
+                }
+            }
+
+            CenterOnCursorScreen();
+        }
+
+        /// <summary>
+        /// True when a usable chunk of the window's title band (top ~40px, the drag
+        /// + close zone) overlaps some monitor's work area — so the user can always
+        /// grab and move it. Guards against a saved position on a now-disconnected
+        /// monitor.
+        /// </summary>
+        private static bool IsTitleBandReachable(Rectangle r)
+        {
+            Rectangle band = new Rectangle(r.X, r.Y, r.Width, Math.Min(40, r.Height));
+            foreach (Screen s in Screen.AllScreens)
+            {
+                Rectangle inter = Rectangle.Intersect(s.WorkingArea, band);
+                if (inter.Width >= 80 && inter.Height >= 20) return true;
+            }
+            return false;
+        }
+
+        private void CenterOnCursorScreen()
+        {
+            Rectangle wa;
+            try { wa = Screen.FromPoint(Cursor.Position).WorkingArea; }
+            catch { wa = Screen.PrimaryScreen.WorkingArea; }
+            Location = new Point(
+                wa.X + Math.Max(0, (wa.Width - Width) / 2),
+                wa.Y + Math.Max(0, (wa.Height - Height) / 2));
+        }
 
         private static Image LoadLogo()
         {
@@ -260,14 +334,26 @@ namespace SgRevitAddin
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            if (_layoutInit && RememberSize && AllowResize && WindowState == FormWindowState.Normal)
+            if (_layoutInit && RememberSize && WindowState == FormWindowState.Normal)
             {
                 try
                 {
-                    float factor = DeviceDpi / 96f;
                     string key = GetType().Name;
-                    DialogMemory.SetInt(key, "WinW", (int)Math.Round(Width / factor));
-                    DialogMemory.SetInt(key, "WinH", (int)Math.Round(Height / factor));
+
+                    // Position is remembered for every dialog (physical px — a
+                    // screen coordinate, validated for reachability on restore).
+                    DialogMemory.SetInt(key, "WinX", Location.X);
+                    DialogMemory.SetInt(key, "WinY", Location.Y);
+
+                    // Size only for resizable dialogs (logical px, since size
+                    // scales with DPI; fixed dialogs always reopen at design size).
+                    if (AllowResize)
+                    {
+                        float factor = DeviceDpi / 96f;
+                        DialogMemory.SetInt(key, "WinW", (int)Math.Round(Width / factor));
+                        DialogMemory.SetInt(key, "WinH", (int)Math.Round(Height / factor));
+                    }
+
                     DialogMemory.Flush();
                 }
                 catch { }
