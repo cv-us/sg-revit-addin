@@ -44,9 +44,10 @@ namespace SgRevitAddin
         /// </summary>
         protected const int BreathingRoom = 14;
 
-        /// <summary>Corner-radius fraction of the header height. Kept small so the
-        /// region-clipped corners don't show visible aliasing/pixelation.</summary>
-        protected const double CornerRadiusFraction = 0.11;
+        /// <summary>Corner-radius fraction of the header height — used for the header
+        /// logo/close inset and the Win10 region fallback. On Windows 11 the actual
+        /// rounding is the OS's own (smooth, anti-aliased) radius.</summary>
+        protected const double CornerRadiusFraction = 0.21;
 
         /// <summary>Sentinel for "no remembered window position".</summary>
         private const int UnsetPos = int.MinValue;
@@ -73,8 +74,8 @@ namespace SgRevitAddin
         }
 
         /// <summary>
-        /// Thin black border traced around the whole window (following the rounded
-        /// corners). Replaces the old inner shadow.
+        /// Thin anti-aliased black border traced around the whole window, following the
+        /// rounded corners (whether DWM- or region-rounded).
         /// </summary>
         protected override void OnPaint(PaintEventArgs e)
         {
@@ -207,17 +208,44 @@ namespace SgRevitAddin
             //     screen under the cursor. Done AFTER the final size is known.
             ApplyStartupPosition(key);
 
-            // (8) Round the window corners (matched by the drop shadow + edge shadow).
-            ApplyRoundedRegion();
+            // (8) Round the window corners.
+            ApplyRoundedCorners();
 
             _layoutInit = true;
         }
 
-        /// <summary>
-        /// Clips the window to a rounded rectangle so all four corners are radiused.
-        /// Re-applied on resize. Kept in sync with the header's left/right padding so
-        /// the logo and close button clear the curve.
-        /// </summary>
+        // ── Rounded corners ──
+        // Windows 11: the OS compositor rounds + anti-aliases the corners and draws a
+        // matching border (DwmSetWindowAttribute) — smooth, and the drop shadow follows
+        // the rounded shape. GPU-composited, so it's cheaper than region clipping and
+        // needs no per-resize work. Windows 10: fall back to an aliased clip region.
+        private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+        private const int DWMWCP_ROUND = 2;
+
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+
+        private bool _dwmRounded;
+
+        private void ApplyRoundedCorners()
+        {
+            _dwmRounded = false;
+            try
+            {
+                int pref = DWMWCP_ROUND;
+                if (DwmSetWindowAttribute(Handle, DWMWA_WINDOW_CORNER_PREFERENCE, ref pref, sizeof(int)) == 0)
+                {
+                    _dwmRounded = true;
+                    Region = null;   // let the DWM shape + drop shadow stay smooth
+                }
+            }
+            catch { _dwmRounded = false; }
+
+            if (!_dwmRounded) ApplyRoundedRegion();
+            Invalidate();   // repaint the border for the (now-known) corner style
+        }
+
+        /// <summary>Win10 fallback: clip the window to a rounded rectangle (aliased).</summary>
         private void ApplyRoundedRegion()
         {
             int r = _cornerRadius;
@@ -230,7 +258,7 @@ namespace SgRevitAddin
         protected override void OnSizeChanged(EventArgs e)
         {
             base.OnSizeChanged(e);
-            if (_layoutInit) ApplyRoundedRegion();
+            if (_layoutInit && !_dwmRounded) ApplyRoundedRegion();   // DWM handles resize itself
         }
 
         private void BuildHeader(int hh)
