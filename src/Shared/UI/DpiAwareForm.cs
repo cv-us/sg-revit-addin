@@ -264,9 +264,6 @@ namespace SgRevitAddin
         private void BuildHeader(int hh)
         {
             _header = new Panel { Dock = DockStyle.Top, Height = hh, BackColor = HeaderColor };
-            // Inset the docked logo (Left) and close button (Right) by the corner
-            // radius so they clear the rounded top corners instead of being clipped.
-            _header.Padding = new Padding(_cornerRadius, 0, _cornerRadius, 0);
             _header.MouseDown += Header_MouseDown;
 
             _titleLabel = new Label
@@ -307,14 +304,20 @@ namespace SgRevitAddin
             Image logo = LoadLogo();
             if (logo != null)
             {
+                // Equal margin on the left, top and bottom of the logo image. The
+                // control is sized to the logo's aspect so Zoom fills it exactly
+                // (no extra centring gap), keeping those three margins identical.
+                int g = Math.Max(3, _cornerRadius);
+                int imgH = Math.Max(1, hh - 2 * g);
+                int imgW = Math.Max(1, (int)Math.Round(imgH * (double)logo.Width / logo.Height));
                 _logo = new PictureBox
                 {
                     Dock = DockStyle.Left,
-                    Width = hh,
+                    Width = imgW + 2 * g,
                     Image = logo,
-                    SizeMode = PictureBoxImageMode(),
+                    SizeMode = PictureBoxSizeMode.Zoom,
                     BackColor = HeaderColor,
-                    Padding = new Padding((int)(hh * 0.12))
+                    Padding = new Padding(g)
                 };
                 _logo.MouseDown += Header_MouseDown;
                 _header.Controls.Add(_logo);
@@ -326,7 +329,6 @@ namespace SgRevitAddin
             TextChanged += (s, e) => { if (_titleLabel != null) _titleLabel.Text = Text; };
         }
 
-        private static PictureBoxSizeMode PictureBoxImageMode() => PictureBoxSizeMode.Zoom;
 
         /// <summary>
         /// Places the dialog at its remembered last position when that position is

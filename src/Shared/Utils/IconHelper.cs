@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
 namespace SgRevitAddin.Utils
@@ -46,7 +47,7 @@ namespace SgRevitAddin.Utils
         /// Returns null if the icon is not found (button will show without an icon).
         /// </summary>
         /// <param name="filename">Just the filename, e.g. "hang-cad-32.png"</param>
-        public static BitmapImage LoadIcon(string filename)
+        public static BitmapSource LoadIcon(string filename)
         {
             if (string.IsNullOrEmpty(filename)) return null;
 
@@ -71,10 +72,8 @@ namespace SgRevitAddin.Utils
                 image.StreamSource = stream;
                 image.CacheOption = BitmapCacheOption.OnLoad;
                 // Decode to the icon's intended pixel size (parsed from the
-                // "…-32.png" / "…-16.png" suffix). This forces WPF to treat the
-                // image as 96-DPI native pixels, so an icon accidentally authored
-                // at 72 DPI doesn't report an inflated device-independent size and
-                // get cropped on the right/bottom in the ribbon's fixed slot.
+                // "…-32.png" / "…-16.png" suffix) so an oversized source (e.g. a
+                // 1024px PNG) is scaled down instead of shown as a cropped corner.
                 int px = ParseTrailingSize(filename);
                 if (px > 0)
                 {
@@ -83,6 +82,25 @@ namespace SgRevitAddin.Utils
                 }
                 image.EndInit();
                 image.Freeze();
+
+                // Normalize DPI to 96. An icon authored at 72 DPI otherwise reports
+                // an inflated device-independent size (32px @72 = 42.67 DIP) and
+                // gets cropped on the right/bottom in the ribbon's fixed slot.
+                // Rebuild the bitmap at 96 DPI from its pixels — reliable regardless
+                // of the PNG's stored resolution.
+                if (Math.Abs(image.DpiX - 96.0) > 0.5 || Math.Abs(image.DpiY - 96.0) > 0.5)
+                {
+                    var bgra = new FormatConvertedBitmap(image, PixelFormats.Bgra32, null, 0);
+                    int stride = bgra.PixelWidth * 4;
+                    var pixels = new byte[stride * bgra.PixelHeight];
+                    bgra.CopyPixels(pixels, stride, 0);
+                    var fixedBmp = BitmapSource.Create(
+                        bgra.PixelWidth, bgra.PixelHeight, 96, 96,
+                        PixelFormats.Bgra32, null, pixels, stride);
+                    fixedBmp.Freeze();
+                    return fixedBmp;
+                }
+
                 return image;
             }
         }
