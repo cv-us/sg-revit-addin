@@ -140,61 +140,61 @@ namespace SgRevitAddin.Commands.Hangers
             Controls.Add(cboFamily);
             y += 35;
 
-            // ── Rod Position Mode ──
+            // ── Rod Position Mode ── (each radio section lives in its OWN panel so
+            //    it forms an independent radio group — otherwise every radio on the
+            //    form is one group and only one can ever be checked.)
             AddSectionLabel("Trapeze Rod Positioning:", 15, y);
             y += 22;
+            var pnlRod = MakeRadioPanel(y, 44);
             rbClosestSide = new RadioButton
             {
                 Text = "Closest Side of Structural Elements",
-                Left = 30, Top = y, AutoSize = true, Checked = true
+                Left = 15, Top = 0, AutoSize = true, Checked = true
             };
-            Controls.Add(rbClosestSide);
-            y += 22;
+            pnlRod.Controls.Add(rbClosestSide);
             rbMiddle = new RadioButton
             {
                 Text = "Middle of Structural Elements",
-                Left = 30, Top = y, AutoSize = true
+                Left = 15, Top = 22, AutoSize = true
             };
-            Controls.Add(rbMiddle);
-            y += 30;
+            pnlRod.Controls.Add(rbMiddle);
+            y += 52;
 
             // ── Spacing Mode ──
             AddSectionLabel("Spacing Mode:", 15, y);
             y += 22;
+            var pnlSpacingMode = MakeRadioPanel(y, 44);
             rbEvenlyDistributed = new RadioButton
             {
                 Text = "Evenly distributed based on pipe run length",
-                Left = 30, Top = y, AutoSize = true, Checked = true
+                Left = 15, Top = 0, AutoSize = true, Checked = true
             };
-            Controls.Add(rbEvenlyDistributed);
-            y += 22;
+            pnlSpacingMode.Controls.Add(rbEvenlyDistributed);
             rbExactSpacing = new RadioButton
             {
                 Text = "Use exact spacing distance",
-                Left = 30, Top = y, AutoSize = true
+                Left = 15, Top = 22, AutoSize = true
             };
-            Controls.Add(rbExactSpacing);
-            y += 30;
+            pnlSpacingMode.Controls.Add(rbExactSpacing);
+            y += 52;
 
             // ── Max Spacing ──
             AddSectionLabel("Max Hanger Spacing:", 15, y);
             y += 22;
-            rbSpacing10_6 = new RadioButton { Text = "10'-6\" (Default)", Left = 30, Top = y, AutoSize = true, Checked = true };
-            Controls.Add(rbSpacing10_6);
-            y += 22;
-            rbSpacing12 = new RadioButton { Text = "12'-0\"", Left = 30, Top = y, AutoSize = true };
-            Controls.Add(rbSpacing12);
-            y += 22;
-            rbSpacing15 = new RadioButton { Text = "15'-0\"", Left = 30, Top = y, AutoSize = true };
-            Controls.Add(rbSpacing15);
-            y += 22;
-            rbCustomSpacing = new RadioButton { Text = "Custom Spacing (FT):", Left = 30, Top = y, AutoSize = true };
-            Controls.Add(rbCustomSpacing);
-            txtCustomSpacing = new TextBox { Left = 260, Top = y - 2, Width = 60, Enabled = false };
-            Controls.Add(txtCustomSpacing);
+            var pnlMaxSpacing = MakeRadioPanel(y, 92);
+            rbSpacing10_6 = new RadioButton { Text = "10'-6\" (Default)", Left = 15, Top = 0, AutoSize = true, Checked = true };
+            pnlMaxSpacing.Controls.Add(rbSpacing10_6);
+            rbSpacing12 = new RadioButton { Text = "12'-0\"", Left = 15, Top = 22, AutoSize = true };
+            pnlMaxSpacing.Controls.Add(rbSpacing12);
+            rbSpacing15 = new RadioButton { Text = "15'-0\"", Left = 15, Top = 44, AutoSize = true };
+            pnlMaxSpacing.Controls.Add(rbSpacing15);
+            rbCustomSpacing = new RadioButton { Text = "Custom Spacing (FT):", Left = 15, Top = 66, AutoSize = true };
+            pnlMaxSpacing.Controls.Add(rbCustomSpacing);
+            txtCustomSpacing = new TextBox { Left = 245, Top = 64, Width = 60, Enabled = false };
+            pnlMaxSpacing.Controls.Add(txtCustomSpacing);
 
             rbCustomSpacing.CheckedChanged += (s, e) => txtCustomSpacing.Enabled = rbCustomSpacing.Checked;
-            y += 32;
+            y += 100;
 
             // ── Type Codes ──
             AddLabel("Pipe Hanger Type (Hydratec):", 15, y);
@@ -221,27 +221,27 @@ namespace SgRevitAddin.Commands.Hangers
                 "How far above the pipe to search for structural elements (feet).");
             y += 35;
 
-            // ── Structural Source ──
+            // ── Structural Source ── (own panel = own radio group)
             AddSectionLabel("Structural Source:", 15, y);
             y += 22;
+            var pnlSource = MakeRadioPanel(y, 46);
             rbLocalFraming = new RadioButton
             {
                 Text = "Local Structural Framing",
-                Left = 30, Top = y, AutoSize = true, Checked = true
+                Left = 15, Top = 0, AutoSize = true, Checked = true
             };
-            Controls.Add(rbLocalFraming);
-            y += 22;
+            pnlSource.Controls.Add(rbLocalFraming);
             rbLinkedModel = new RadioButton
             {
                 Text = "Linked Model:",
-                Left = 30, Top = y, AutoSize = true,
+                Left = 15, Top = 24, AutoSize = true,
                 Enabled = linkNames.Count > 0
             };
-            Controls.Add(rbLinkedModel);
+            pnlSource.Controls.Add(rbLinkedModel);
 
             cboStructuralLink = new ComboBox
             {
-                Left = 180, Top = y - 2, Width = 380,
+                Left = 165, Top = 22, Width = 385,
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 Enabled = false,
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
@@ -250,7 +250,7 @@ namespace SgRevitAddin.Commands.Hangers
                 cboStructuralLink.Items.Add(name);
             if (cboStructuralLink.Items.Count > 0)
                 cboStructuralLink.SelectedIndex = 0;
-            Controls.Add(cboStructuralLink);
+            pnlSource.Controls.Add(cboStructuralLink);
 
             rbLinkedModel.CheckedChanged += (s, e) => cboStructuralLink.Enabled = rbLinkedModel.Checked;
 
@@ -259,7 +259,7 @@ namespace SgRevitAddin.Commands.Hangers
                 rbLocalFraming.Checked = true;
                 rbLinkedModel.Enabled = false;
             }
-            y += 35;
+            y += 54;
 
             // ── OK / Cancel (right-aligned) ──
             // Form width 600, margin 15 → Cancel right edge at 585.
@@ -350,6 +350,18 @@ namespace SgRevitAddin.Commands.Hangers
             };
             lbl.Font = new Font(lbl.Font.FontFamily, lbl.Font.Size + 1, FontStyle.Bold);
             Controls.Add(lbl);
+        }
+
+        /// <summary>Borderless container that gives its radios their own group.</summary>
+        private Panel MakeRadioPanel(int top, int height)
+        {
+            var p = new Panel
+            {
+                Left = 15, Top = top, Width = 570, Height = height,
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+            };
+            Controls.Add(p);
+            return p;
         }
 
         private void BtnOK_Click(object sender, EventArgs e)
