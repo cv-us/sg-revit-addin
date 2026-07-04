@@ -193,7 +193,7 @@ namespace SgRevitAddin.Utils
                         ToolTip = bd.Tooltip,
                         Description = bd.Tooltip,
                         Size = Adn.RibbonItemSize.Large,
-                        ShowText = true,
+                        ShowText = bd.ShowText,
                         ShowImage = true,
                         Orientation = Orientation.Vertical,
                         LargeImage = bd.LargeImage,
@@ -508,5 +508,8 @@ namespace SgRevitAddin.Utils
         public ImageSource LargeImage;
         public ImageSource SmallImage;
         public Action OnClick;
+        /// <summary>When false, the button shows its icon only (no caption) —
+        /// useful when the label crowds the icon on the large button.</summary>
+        public bool ShowText = true;
     }
 }

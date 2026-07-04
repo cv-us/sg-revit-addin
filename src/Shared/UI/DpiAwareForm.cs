@@ -89,12 +89,16 @@ namespace SgRevitAddin
             }
 
             int hh = (int)Math.Round(HeaderHeight * factor);
-            _resizeBorder = Math.Max(4, (int)Math.Round(6 * factor));
+            // Resize gutter: the strip of FORM-owned pixels left around the content
+            // panel so the borderless window can hit-test its own edges (a Dock=Fill
+            // child eats every edge pixel, which is why resize did nothing). Wide
+            // enough to grab comfortably.
+            _resizeBorder = Math.Max(6, (int)Math.Round(8 * factor));
 
             // (2) The derived dialog's content is currently direct children of the
             //     form at their design (now scaled) positions. Capture that content
-            //     size, build the header, and reparent the content into a fill panel
-            //     below the header.
+            //     size, build the header, and reparent the content into a panel below
+            //     the header (temporarily Dock=Fill for the reparent + measurement).
             Size natural = ClientSize;
 
             _content = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
@@ -107,25 +111,33 @@ namespace SgRevitAddin
             // (2b) Size to the MEASURED content, not the ctor's ClientSize. After the
             //      DPI autoscale in (1), scaled control positions can exceed a tightly
             //      trimmed ClientSize; AutoScroll would then hide the overflow behind a
-            //      scrollbar (the "have to scroll to reach Continue" bug). Grow the
-            //      natural size to contain the furthest control on each axis so nothing
-            //      is ever clipped on first open, at any DPI.
+            //      scrollbar (the "have to scroll to reach Continue" bug). Measure the
+            //      furthest control on each axis so nothing is ever clipped on first
+            //      open, at any DPI.
             int contentR = natural.Width, contentB = natural.Height;
             foreach (Control c in _content.Controls)
             {
                 if (c.Right > contentR) contentR = c.Right;
                 if (c.Bottom > contentB) contentB = c.Bottom;
             }
-            natural = new Size(contentR, contentB);
 
-            // (3) Grow the form by the header, plus a uniform right/bottom breathing
-            //     margin so nothing hugs the edge (the content panel keeps the measured
-            //     size; the extra shows as margin since children are top-left).
+            // (3) Final layout: full-width blue header on top; the content panel INSET
+            //     by the resize gutter on left/right/bottom (the header owns the top),
+            //     so those edge strips belong to the form and can receive resize
+            //     hit-tests. Breathing pad keeps controls off the panel's own edge.
             int pad = (int)Math.Round(BreathingRoom * factor);
-            FormBorderStyle = FormBorderStyle.None;   // override any FixedDialog a derived ctor set
-            ClientSize = new Size(natural.Width + pad, natural.Height + hh + pad);
+            int gutter = _resizeBorder;
+            int cw = contentR + pad;
+            int ch = contentB + pad;
 
-            // (4) Flex content on resize (widen-only + bottom-pinned buttons).
+            FormBorderStyle = FormBorderStyle.None;   // override any FixedDialog a derived ctor set
+            _content.Dock = DockStyle.None;
+            _content.Location = new Point(gutter, hh);
+            _content.Size = new Size(cw, ch);
+            _content.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            ClientSize = new Size(cw + 2 * gutter, hh + ch + gutter);
+
+            // (4) Flex content on resize (widen inputs + bottom-pinned buttons).
             if (AllowResize) ApplyAutoFlex(_content);
 
             // (5) Floor at the natural size so it can only be ENLARGED — never shrunk

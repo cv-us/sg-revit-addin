@@ -69,10 +69,10 @@ namespace SgRevitAddin.Commands.Modify
             // Resizable: drag wider and both columns (and the family dropdowns
             // inside them) grow — see LayoutColumns. Wider default so the family
             // names aren't cramped out of the box.
-            ClientSize = new Size(700, 396);
+            ClientSize = new Size(772, 396);
 
             int margin = 12;
-            int colW = 336;
+            int colW = 372;
             int leftX = margin, rightX = margin + colW + margin;
             // Anchor helpers: family combos widen with their group; the short type
             // combos ride the right edge at a fixed width (type codes are tiny).
@@ -209,6 +209,10 @@ namespace SgRevitAddin.Commands.Modify
         {
             foreach (var f in _familyNames) fam.Items.Add(f);
             fam.SelectedIndexChanged += (s, e) => PopulateTypes(fam, type, null);
+            // The open dropdown list auto-widens to the longest entry, so full
+            // family/type names are readable even when the combo box is narrow.
+            fam.DropDown += (s, e) => FitDropWidth(fam);
+            type.DropDown += (s, e) => FitDropWidth(type);
             int fi = string.IsNullOrEmpty(remFam) ? -1 : fam.Items.IndexOf(remFam);
             if (fam.Items.Count > 0) fam.SelectedIndex = fi >= 0 ? fi : 0;   // fires PopulateTypes
             if (!string.IsNullOrEmpty(remType))
@@ -216,6 +220,26 @@ namespace SgRevitAddin.Commands.Modify
                 int ti = type.Items.IndexOf(remType);
                 if (ti >= 0) type.SelectedIndex = ti;
             }
+        }
+
+        /// <summary>Widen a combo's drop-down list to fit its longest item (so long
+        /// family/type names are fully readable), clamped to a sane maximum.</summary>
+        private static void FitDropWidth(ComboBox cb)
+        {
+            int max = cb.Width;
+            try
+            {
+                using (var g = cb.CreateGraphics())
+                {
+                    foreach (var it in cb.Items)
+                    {
+                        int w = (int)Math.Ceiling(g.MeasureString(it == null ? "" : it.ToString(), cb.Font).Width) + 26;
+                        if (w > max) max = w;
+                    }
+                }
+            }
+            catch { }
+            cb.DropDownWidth = Math.Min(max, 640);
         }
 
         private void PopulateTypes(ComboBox fam, ComboBox type, string preferType)
