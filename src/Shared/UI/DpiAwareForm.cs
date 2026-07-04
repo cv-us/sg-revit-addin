@@ -104,9 +104,23 @@ namespace SgRevitAddin
             foreach (var c in Controls.Cast<Control>().Where(c => c != _content && c != _header).ToList())
                 c.Parent = _content;      // preserves bounds + anchors, now relative to _content
 
+            // (2b) Size to the MEASURED content, not the ctor's ClientSize. After the
+            //      DPI autoscale in (1), scaled control positions can exceed a tightly
+            //      trimmed ClientSize; AutoScroll would then hide the overflow behind a
+            //      scrollbar (the "have to scroll to reach Continue" bug). Grow the
+            //      natural size to contain the furthest control on each axis so nothing
+            //      is ever clipped on first open, at any DPI.
+            int contentR = natural.Width, contentB = natural.Height;
+            foreach (Control c in _content.Controls)
+            {
+                if (c.Right > contentR) contentR = c.Right;
+                if (c.Bottom > contentB) contentB = c.Bottom;
+            }
+            natural = new Size(contentR, contentB);
+
             // (3) Grow the form by the header, plus a uniform right/bottom breathing
-            //     margin so nothing hugs the edge (the content panel keeps its
-            //     design size; the extra shows as margin since children are top-left).
+            //     margin so nothing hugs the edge (the content panel keeps the measured
+            //     size; the extra shows as margin since children are top-left).
             int pad = (int)Math.Round(BreathingRoom * factor);
             FormBorderStyle = FormBorderStyle.None;   // override any FixedDialog a derived ctor set
             ClientSize = new Size(natural.Width + pad, natural.Height + hh + pad);
