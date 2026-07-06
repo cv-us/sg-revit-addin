@@ -1,5 +1,6 @@
 using Autodesk.Revit.UI;
 using SgRevitAddin.Commands.Modify;
+using SgRevitAddin.Commands.Modify.Games;
 using SgRevitAddin.Utils;
 using System;
 using System.Collections.Generic;
@@ -356,27 +357,27 @@ namespace SgRevitAddin
                 },
                 new ModifyButton
                 {
-                    Id = "SgPlaceholderOne",
-                    Label = "Placeholder\nOne",
-                    Tooltip = "Placeholder — opens a scratch text dialog.",
-                    LargeImage = IconHelper.LoadIcon("modelcheck-32.png"),
-                    SmallImage = IconHelper.LoadIcon("modelcheck-16.png"),
+                    Id = "SgSprinklerSnake",
+                    Label = "Sprinkler\nSnake",
+                    Tooltip = "Coffee break — Sprinkler Snake. Steer a growing branch line to connect sprinkler heads.",
+                    LargeImage = IconHelper.LoadIcon("pipe-routing-32.png"),
+                    SmallImage = IconHelper.LoadIcon("pipe-routing-16.png"),
                     OnClick = () =>
                     {
-                        using (var dlg = new PlaceholderDialog("SG — Placeholder One"))
+                        using (var dlg = new SnakeGameDialog())
                             dlg.ShowDialog();
                     }
                 },
                 new ModifyButton
                 {
-                    Id = "SgPlaceholderTwo",
-                    Label = "Placeholder\nTwo",
-                    Tooltip = "Placeholder — opens a scratch text dialog.",
-                    LargeImage = IconHelper.LoadIcon("inspect-params-32.png"),
-                    SmallImage = IconHelper.LoadIcon("inspect-params-16.png"),
+                    Id = "SgLeakPatrol",
+                    Label = "Leak\nPatrol",
+                    Tooltip = "Coffee break — Leak Patrol. Click the leaks before they flood the ceiling.",
+                    LargeImage = IconHelper.LoadIcon("sprinkler-drop-32.png"),
+                    SmallImage = IconHelper.LoadIcon("sprinkler-drop-16.png"),
                     OnClick = () =>
                     {
-                        using (var dlg = new PlaceholderDialog("SG — Placeholder Two"))
+                        using (var dlg = new LeakPatrolDialog())
                             dlg.ShowDialog();
                     }
                 }

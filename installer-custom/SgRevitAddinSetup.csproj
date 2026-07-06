@@ -11,7 +11,7 @@
     <Product>SG Revit Addin</Product>
     <Company>SG Fire Protection</Company>
     <AssemblyTitle>SG Revit Addin Setup</AssemblyTitle>
-    <Version>0.3.14</Version>
+    <Version>0.3.15</Version>
     <Deterministic>true</Deterministic>
     <!-- App icon (regenerated from the company logo). -->
     <ApplicationIcon>Resources\app.ico</ApplicationIcon>
