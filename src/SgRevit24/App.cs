@@ -357,11 +357,11 @@ namespace SgRevitAddin
                 },
                 new ModifyButton
                 {
-                    Id = "SgSprinklerSnake",
-                    Label = "Sprinkler\nSnake",
-                    Tooltip = "Coffee break — Sprinkler Snake. Steer a growing branch line to connect sprinkler heads.",
-                    LargeImage = IconHelper.LoadIcon("pipe-routing-32.png"),
-                    SmallImage = IconHelper.LoadIcon("pipe-routing-16.png"),
+                    Id = "SgPlaceholderOne",
+                    Label = "Placeholder\nOne",
+                    Tooltip = "Placeholder — reserved for a future tool.",
+                    LargeImage = IconHelper.LoadIcon("placeholder-32.png"),
+                    SmallImage = IconHelper.LoadIcon("placeholder-16.png"),
                     OnClick = () =>
                     {
                         using (var dlg = new SnakeGameDialog())
@@ -370,11 +370,11 @@ namespace SgRevitAddin
                 },
                 new ModifyButton
                 {
-                    Id = "SgLeakPatrol",
-                    Label = "Leak\nPatrol",
-                    Tooltip = "Coffee break — Leak Patrol. Click the leaks before they flood the ceiling.",
-                    LargeImage = IconHelper.LoadIcon("sprinkler-drop-32.png"),
-                    SmallImage = IconHelper.LoadIcon("sprinkler-drop-16.png"),
+                    Id = "SgPlaceholderTwo",
+                    Label = "Placeholder\nTwo",
+                    Tooltip = "Placeholder — reserved for a future tool.",
+                    LargeImage = IconHelper.LoadIcon("placeholder-32.png"),
+                    SmallImage = IconHelper.LoadIcon("placeholder-16.png"),
                     OnClick = () =>
                     {
                         using (var dlg = new LeakPatrolDialog())
@@ -383,11 +383,11 @@ namespace SgRevitAddin
                 },
                 new ModifyButton
                 {
-                    Id = "SgPipeMania",
-                    Label = "Pipe\nMania",
-                    Tooltip = "Coffee break — Pipe Mania. Rotate the tiles to route water from the riser to the sprinkler.",
-                    LargeImage = IconHelper.LoadIcon("import-pipes-32.png"),
-                    SmallImage = IconHelper.LoadIcon("import-pipes-16.png"),
+                    Id = "SgPlaceholderThree",
+                    Label = "Placeholder\nThree",
+                    Tooltip = "Placeholder — reserved for a future tool.",
+                    LargeImage = IconHelper.LoadIcon("placeholder-32.png"),
+                    SmallImage = IconHelper.LoadIcon("placeholder-16.png"),
                     OnClick = () =>
                     {
                         using (var dlg = new PipeManiaDialog())
