@@ -51,7 +51,7 @@ namespace SgSetup.Ui
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
-            float f = DeviceDpi / 96f;
+            float f = WindowDpi() / 96f;
 
             // Scale the whole window to the monitor DPI. The header/footer/content and
             // every page lay out in DPI-scaled units, so without this the fixed 640x470
@@ -285,6 +285,23 @@ namespace SgSetup.Ui
         private const int HT_CAPTION = 0x2;
         [DllImport("user32.dll")] private static extern bool ReleaseCapture();
         [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+        [DllImport("user32.dll")] private static extern int GetDpiForWindow(IntPtr hwnd);
+
+        /// <summary>
+        /// DPI of the monitor this window is on. Uses GetDpiForWindow — reliable for a
+        /// PerMonitorV2 process — rather than Control.DeviceDpi, which .NET Framework
+        /// 4.8 WinForms leaves at 96 without an app.config high-DPI opt-in (and a
+        /// single-file exe can't ship one). The fonts still render at the true DPI via
+        /// the OS-level manifest, so scaling everything by THIS keeps them in step.
+        /// </summary>
+        protected int WindowDpi()
+        {
+            // Support/debug override to preview the wizard at a given DPI.
+            var forced = Environment.GetEnvironmentVariable("SG_SETUP_FORCE_DPI");
+            if (int.TryParse(forced, out int fd) && fd >= 48 && fd <= 1000) return fd;
+            try { int d = GetDpiForWindow(Handle); if (d >= 48 && d <= 1000) return d; } catch { }
+            return DeviceDpi > 0 ? DeviceDpi : 96;
+        }
 
         private void DragMove(object sender, MouseEventArgs e)
         {

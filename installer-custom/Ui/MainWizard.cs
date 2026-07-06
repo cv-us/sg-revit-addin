@@ -48,7 +48,30 @@ namespace SgSetup.Ui
             NextButton.Click += (s, ev) => OnNext();
             CancelButton2.Click += (s, ev) => Close();
 
+            FitToContent();
             GoTo(0);
+        }
+
+        /// <summary>
+        /// Grow the window if any page's actually-laid-out content is taller than the
+        /// default content area — a safety net so nothing is ever clipped, whatever the
+        /// DPI / font scale turns out to be at runtime.
+        /// </summary>
+        private void FitToContent()
+        {
+            int need = 0;
+            foreach (var pg in _pages)
+                foreach (Control c in pg.Controls)
+                    if (c.Bottom > need) need = c.Bottom;
+            need += Dpi(16);
+
+            int have = ContentHost.Height;
+            if (need > have)
+            {
+                MaximumSize = Size.Empty;       // unclamp (base fixed Min=Max)
+                Height += need - have;
+                MinimumSize = MaximumSize = Size;
+            }
         }
 
         // ── Page construction ──
@@ -57,7 +80,7 @@ namespace SgSetup.Ui
             return new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(Dpi(28), Dpi(22), Dpi(28), Dpi(16)) };
         }
 
-        private int Dpi(int v) => (int)Math.Round(v * DeviceDpi / 96f);
+        private int Dpi(int v) => (int)Math.Round(v * WindowDpi() / 96f);
 
         private Label Heading(string text)
             => new Label { Text = text, AutoSize = true, UseMnemonic = false, ForeColor = SgBlue,
