@@ -29,17 +29,19 @@ namespace SgSetup
 
         private static int RunInstall()
         {
-            string payload = ResolvePayload();
-            if (payload == null)
+            // A released exe carries the payload embedded; a dev build ships it as a
+            // sibling "payload" folder. Prefer the sibling (no extraction needed).
+            string sibling = Payload.FindSibling();
+            if (sibling == null && !Payload.HasEmbedded())
             {
                 MessageBox.Show(
-                    "Installer payload not found.\n\nExpected a \"payload\" folder next to the setup, or a " +
-                    "self-contained package. This build looks incomplete.",
+                    "Installer payload not found.\n\nExpected the payload embedded in this exe, or a " +
+                    "\"payload\" folder next to it. This build looks incomplete.",
                     "SG Revit Addin Setup", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return 1;
             }
 
-            using (var wiz = new MainWizard(payload))
+            using (var wiz = new MainWizard(sibling))   // null → extract the embedded payload at install time
                 Application.Run(wiz);
             return 0;
         }
@@ -83,19 +85,5 @@ namespace SgSetup
             return 0;
         }
 
-        /// <summary>Find the payload folder (next to the exe, or one level up during dev).</summary>
-        private static string ResolvePayload()
-        {
-            string exeDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".";
-            foreach (var candidate in new[]
-                     {
-                         Path.Combine(exeDir, "payload"),
-                         Path.Combine(exeDir, "..", "payload"),
-                     })
-            {
-                if (Directory.Exists(candidate)) return Path.GetFullPath(candidate);
-            }
-            return null;
-        }
     }
 }

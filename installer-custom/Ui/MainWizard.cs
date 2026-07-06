@@ -266,26 +266,43 @@ namespace SgSetup.Ui
             var years = _versionChecks.Where(kv => kv.Value.Checked).Select(kv => kv.Key).ToList();
             bool families = _chkFamilies.Checked;
 
-            var engine = new InstallEngine(_payloadRoot)
-            {
-                Progress = (pct, msg) =>
-                {
-                    if (IsDisposed) return;
-                    try { BeginInvoke(new Action(() => { _bar.Value = Math.Max(0, Math.Min(100, pct)); _progressStatus.Text = msg; })); }
-                    catch { }
-                }
-            };
-
             var t = new Thread(() =>
             {
-                try { engine.Install(years, families); }
+                string payloadRoot = _payloadRoot;
+                bool tempPayload = false;
+                try
+                {
+                    // Self-contained exe: no sibling folder, so unpack the embedded
+                    // payload to a temp dir first. Extraction gets the first 45% of
+                    // the bar, the install the rest; a dev build skips straight to 0.
+                    if (payloadRoot == null)
+                    {
+                        payloadRoot = Payload.ExtractEmbedded((p, msg) => Report(p * 45 / 100, msg));
+                        tempPayload = true;
+                    }
+
+                    int floor = tempPayload ? 45 : 0;
+                    var engine = new InstallEngine(payloadRoot)
+                    {
+                        Progress = (pct, msg) => Report(floor + pct * (100 - floor) / 100, msg)
+                    };
+                    engine.Install(years, families);
+                }
                 catch (Exception ex) { _installFailed = true; _installError = ex.Message; }
                 finally
                 {
+                    if (tempPayload) Payload.TryDelete(payloadRoot);
                     try { if (!IsDisposed) BeginInvoke(new Action(FinishInstall)); } catch { }
                 }
             }) { IsBackground = true };
             t.Start();
+        }
+
+        private void Report(int pct, string msg)
+        {
+            if (IsDisposed) return;
+            try { BeginInvoke(new Action(() => { _bar.Value = Math.Max(0, Math.Min(100, pct)); _progressStatus.Text = msg; })); }
+            catch { }
         }
 
         private void FinishInstall()

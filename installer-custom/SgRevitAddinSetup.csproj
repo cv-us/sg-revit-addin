@@ -13,9 +13,18 @@
     <AssemblyTitle>SG Revit Addin Setup</AssemblyTitle>
     <Version>0.3.15</Version>
     <Deterministic>true</Deterministic>
+    <!-- 64-bit so the large embedded payload maps comfortably. -->
+    <PlatformTarget>x64</PlatformTarget>
     <!-- App icon (regenerated from the company logo). -->
     <ApplicationIcon>Resources\app.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ZipArchive + ExtractToFile for the self-extracting payload (net48 SDK
+         projects don't reference these framework assemblies by default). -->
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- Branding assets embedded in the exe. -->
@@ -24,6 +33,17 @@
     <EmbeddedResource Include="Resources\feat-sprinkler-drop-32.png" LogicalName="SgSetup.feat-routing.png" />
     <EmbeddedResource Include="Resources\feat-tag-pipes-32.png" LogicalName="SgSetup.feat-annotation.png" />
     <EmbeddedResource Include="Resources\feat-color-pipes-32.png" LogicalName="SgSetup.feat-coordination.png" />
+  </ItemGroup>
+
+  <!-- Self-contained build: the release payload (add-in DLLs, manifests and the
+       family library) is packed into payload.zip by build.ps1 and embedded here,
+       so the exe carries everything. A dev (-SkipFamilies) build omits the zip and
+       reads a sibling "payload" folder instead. -->
+  <ItemGroup>
+    <None Remove="payload.zip" />
+  </ItemGroup>
+  <ItemGroup Condition="Exists('payload.zip')">
+    <EmbeddedResource Include="payload.zip" LogicalName="SgSetup.payload.zip" />
   </ItemGroup>
 
 </Project>

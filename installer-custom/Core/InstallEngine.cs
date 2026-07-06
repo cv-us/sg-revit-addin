@@ -22,8 +22,19 @@ namespace SgSetup.Core
     public class InstallEngine
     {
         public const string AppName = "SG Revit Addin";
-        public const string AppVersion = "0.3.13";
+        public static readonly string AppVersion = ReadVersion();
         public const string Publisher = "SG Fire Protection";
+
+        private static string ReadVersion()
+        {
+            try
+            {
+                string loc = System.Reflection.Assembly.GetExecutingAssembly().Location;
+                string v = System.Diagnostics.FileVersionInfo.GetVersionInfo(loc).ProductVersion;
+                return string.IsNullOrWhiteSpace(v) ? "0.0.0" : v.Trim();
+            }
+            catch { return "0.0.0"; }
+        }
         public const string SubFolder = "SgRevitAddin";
         public const string FamiliesDir = @"C:\SG\Revit Families";
         private const string UninstallKey =
