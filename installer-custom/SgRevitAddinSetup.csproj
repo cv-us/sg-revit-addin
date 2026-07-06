@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>SgRevitAddinSetup</AssemblyName>
+    <RootNamespace>SgSetup</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Product>SG Revit Addin</Product>
+    <Company>SG Fire Protection</Company>
+    <AssemblyTitle>SG Revit Addin Setup</AssemblyTitle>
+    <Version>0.3.13</Version>
+    <Deterministic>true</Deterministic>
+    <!-- App icon (regenerated from the company logo). -->
+    <ApplicationIcon>Resources\app.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Branding assets embedded in the exe. -->
+    <EmbeddedResource Include="Resources\logo.png" LogicalName="SgSetup.logo.png" />
+  </ItemGroup>
+
+</Project>
