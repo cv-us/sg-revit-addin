@@ -20,6 +20,10 @@
   <ItemGroup>
     <!-- Branding assets embedded in the exe. -->
     <EmbeddedResource Include="Resources\logo.png" LogicalName="SgSetup.logo.png" />
+    <EmbeddedResource Include="Resources\feat-hang-spacing-32.png" LogicalName="SgSetup.feat-hangers.png" />
+    <EmbeddedResource Include="Resources\feat-sprinkler-drop-32.png" LogicalName="SgSetup.feat-routing.png" />
+    <EmbeddedResource Include="Resources\feat-tag-pipes-32.png" LogicalName="SgSetup.feat-annotation.png" />
+    <EmbeddedResource Include="Resources\feat-color-pipes-32.png" LogicalName="SgSetup.feat-coordination.png" />
   </ItemGroup>
 
 </Project>

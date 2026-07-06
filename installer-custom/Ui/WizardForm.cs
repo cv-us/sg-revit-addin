@@ -130,10 +130,10 @@ namespace SgSetup.Ui
         private void BuildFooter(int footerH, float f)
         {
             _footer = new Panel { Dock = DockStyle.Bottom, Height = footerH, BackColor = FooterBack };
-            _btnW = (int)Math.Round(96 * f);
-            _btnH = (int)Math.Round(30 * f);
+            _btnW = (int)Math.Round(100 * f);
+            _btnH = (int)Math.Round(36 * f);
             _btnMargin = (int)Math.Round(14 * f);
-            _btnGap = (int)Math.Round(8 * f);
+            _btnGap = (int)Math.Round(9 * f);
 
             CancelButton2 = MakeFooterButton("Cancel");
             NextButton = MakeFooterButton("Next");
@@ -166,41 +166,35 @@ namespace SgSetup.Ui
             BackButton.SetBounds(NextButton.Left - _btnGap - _btnW, by, _btnW, _btnH);
         }
 
-        private static Button MakeFooterButton(string text)
+        private Button MakeFooterButton(string text)
         {
-            var b = new Button
-            {
-                Text = text,
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Color.White,
-                UseVisualStyleBackColor = false
-            };
-            b.FlatAppearance.BorderColor = Color.FromArgb(0xC4, 0xCB, 0xD2);
-            b.FlatAppearance.MouseOverBackColor = Color.FromArgb(0xEC, 0xF1, 0xF5);
-            return b;
+            return new PillButton { Text = text, Radius = (int)Math.Round(12 * DeviceDpi / 96f) };
         }
 
         private static void AccentButton(Button b)
         {
-            b.BackColor = SgBlue;
-            b.ForeColor = Color.White;
-            b.FlatAppearance.BorderColor = SgBlue;
-            b.FlatAppearance.MouseOverBackColor = SgBlueHover;
-            b.Font = new Font(b.Font, FontStyle.Bold);
+            if (!(b is PillButton p)) return;
+            p.PillColor = SgBlue;
+            p.PillHover = SgBlueHover;
+            p.PillBorder = SgBlue;
+            p.ForeColor = Color.White;
+            p.Font = new Font(p.Font, FontStyle.Bold);
         }
 
         /// <summary>Recolour Next as the accent (primary) or a neutral button.</summary>
         public void SetNextAccent(bool accent)
         {
+            if (!(NextButton is PillButton p)) return;
             if (accent) AccentButton(NextButton);
             else
             {
-                NextButton.BackColor = Color.White;
-                NextButton.ForeColor = SystemColors.ControlText;
-                NextButton.FlatAppearance.BorderColor = Color.FromArgb(0xC4, 0xCB, 0xD2);
-                NextButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(0xEC, 0xF1, 0xF5);
-                NextButton.Font = new Font(NextButton.Font, FontStyle.Regular);
+                p.PillColor = Color.White;
+                p.PillHover = Color.FromArgb(0xEC, 0xF1, 0xF5);
+                p.PillBorder = Color.FromArgb(0xC4, 0xCB, 0xD2);
+                p.ForeColor = SystemColors.ControlText;
+                p.Font = new Font(p.Font, FontStyle.Regular);
             }
+            p.Invalidate();
         }
 
         // ── Chrome painting ──
