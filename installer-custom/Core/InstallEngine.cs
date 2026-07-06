@@ -31,7 +31,9 @@ namespace SgSetup.Core
             {
                 string loc = System.Reflection.Assembly.GetExecutingAssembly().Location;
                 string v = System.Diagnostics.FileVersionInfo.GetVersionInfo(loc).ProductVersion;
-                return string.IsNullOrWhiteSpace(v) ? "0.0.0" : v.Trim();
+                if (string.IsNullOrWhiteSpace(v)) return "0.0.0";
+                int plus = v.IndexOf('+');                 // strip any +git-hash build metadata
+                return (plus >= 0 ? v.Substring(0, plus) : v).Trim();
             }
             catch { return "0.0.0"; }
         }

@@ -13,6 +13,9 @@
     <AssemblyTitle>SG Revit Addin Setup</AssemblyTitle>
     <Version>0.3.16</Version>
     <Deterministic>true</Deterministic>
+    <!-- Keep the version clean ("0.3.16") — don't append the +git-hash to the
+         informational/product version (it would show in Add/Remove Programs). -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <!-- 64-bit so the large embedded payload maps comfortably. -->
     <PlatformTarget>x64</PlatformTarget>
     <!-- App icon (regenerated from the company logo). -->
