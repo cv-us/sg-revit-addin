@@ -207,7 +207,6 @@ namespace SgSetup.Ui
                 catch (Exception ex) { _installFailed = true; _installError = ex.Message; }
                 finally
                 {
-                    _installDone = true;
                     try { if (!IsDisposed) BeginInvoke(new Action(FinishInstall)); } catch { }
                 }
             }) { IsBackground = true };

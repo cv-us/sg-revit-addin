@@ -55,17 +55,16 @@ namespace SgSetup.Ui
             _cornerRadius = (int)Math.Round(10 * f);
             int footerH = (int)Math.Round(58 * f);
 
+            // Dock the three regions so sizing is automatic (robust to DPI): content
+            // fills the middle, header on top, footer on the bottom. Add content first
+            // then send it behind so the header + footer are never covered by it.
+            _content = new Panel { Dock = DockStyle.Fill, BackColor = Color.White };
+            Controls.Add(_content);
+
             BuildHeader(hh, f);
             BuildFooter(footerH, f);
 
-            _content = new Panel
-            {
-                Location = new Point(0, hh),
-                Size = new Size(ClientSize.Width, ClientSize.Height - hh - footerH),
-                BackColor = Color.White
-            };
-            Controls.Add(_content);
-            _content.BringToFront();
+            _content.SendToBack();
 
             ApplyRoundedCorners();
         }
@@ -126,45 +125,52 @@ namespace SgSetup.Ui
             Controls.Add(_header);
         }
 
+        private int _btnW, _btnH, _btnMargin, _btnGap;
+
         private void BuildFooter(int footerH, float f)
         {
             _footer = new Panel { Dock = DockStyle.Bottom, Height = footerH, BackColor = FooterBack };
-            int bw = (int)Math.Round(96 * f), bh = (int)Math.Round(30 * f);
-            int m = (int)Math.Round(14 * f), gap = (int)Math.Round(8 * f);
-            int by = (footerH - bh) / 2;
+            _btnW = (int)Math.Round(96 * f);
+            _btnH = (int)Math.Round(30 * f);
+            _btnMargin = (int)Math.Round(14 * f);
+            _btnGap = (int)Math.Round(8 * f);
 
-            CancelButton2 = MakeFooterButton("Cancel", bw, bh);
-            CancelButton2.Location = new Point(ClientSize.Width - m - bw, by);
-            CancelButton2.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-
-            NextButton = MakeFooterButton("Next", bw, bh);
-            NextButton.Location = new Point(CancelButton2.Left - gap - bw, by);
-            NextButton.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            CancelButton2 = MakeFooterButton("Cancel");
+            NextButton = MakeFooterButton("Next");
             AccentButton(NextButton);
-
-            BackButton = MakeFooterButton("Back", bw, bh);
-            BackButton.Location = new Point(NextButton.Left - gap - bw, by);
-            BackButton.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            BackButton = MakeFooterButton("Back");
 
             _footer.Controls.Add(BackButton);
             _footer.Controls.Add(NextButton);
             _footer.Controls.Add(CancelButton2);
 
-            // Hairline separator above the footer.
+            // Position the buttons from the footer's REAL (docked, DPI-scaled) size —
+            // computing X from the form's ClientSize before layout put them off-frame.
+            _footer.Layout += (s, e) => LayoutFooterButtons();
             _footer.Paint += (s, e) =>
             {
                 using (var p = new Pen(Color.FromArgb(0xDD, 0xE1, 0xE6)))
                     e.Graphics.DrawLine(p, 0, 0, _footer.Width, 0);
             };
             Controls.Add(_footer);
+            LayoutFooterButtons();
         }
 
-        private static Button MakeFooterButton(string text, int w, int h)
+        private void LayoutFooterButtons()
+        {
+            if (_footer == null || CancelButton2 == null) return;
+            int w = _footer.ClientSize.Width;
+            int by = Math.Max(0, (_footer.ClientSize.Height - _btnH) / 2);
+            CancelButton2.SetBounds(w - _btnMargin - _btnW, by, _btnW, _btnH);
+            NextButton.SetBounds(CancelButton2.Left - _btnGap - _btnW, by, _btnW, _btnH);
+            BackButton.SetBounds(NextButton.Left - _btnGap - _btnW, by, _btnW, _btnH);
+        }
+
+        private static Button MakeFooterButton(string text)
         {
             var b = new Button
             {
                 Text = text,
-                Size = new Size(w, h),
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.White,
                 UseVisualStyleBackColor = false
