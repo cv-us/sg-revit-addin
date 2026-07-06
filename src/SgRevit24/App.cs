@@ -380,6 +380,19 @@ namespace SgRevitAddin
                         using (var dlg = new LeakPatrolDialog())
                             dlg.ShowDialog();
                     }
+                },
+                new ModifyButton
+                {
+                    Id = "SgPipeMania",
+                    Label = "Pipe\nMania",
+                    Tooltip = "Coffee break — Pipe Mania. Rotate the tiles to route water from the riser to the sprinkler.",
+                    LargeImage = IconHelper.LoadIcon("import-pipes-32.png"),
+                    SmallImage = IconHelper.LoadIcon("import-pipes-16.png"),
+                    OnClick = () =>
+                    {
+                        using (var dlg = new PipeManiaDialog())
+                            dlg.ShowDialog();
+                    }
                 }
             };
             RibbonStyling.InjectModifyPanel("SG", modifyButtons);
