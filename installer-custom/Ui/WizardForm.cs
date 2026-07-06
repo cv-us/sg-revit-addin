@@ -34,23 +34,31 @@ namespace SgSetup.Ui
         public Button NextButton { get; private set; }
         public Button CancelButton2 { get; private set; }
 
+        // Design-time (96-DPI) window size; scaled to the real DPI in OnHandleCreated.
+        private const int DesignW = 640, DesignH = 470;
+
         public WizardForm()
         {
-            AutoScaleMode = AutoScaleMode.Dpi;
+            AutoScaleMode = AutoScaleMode.None;   // layout is scaled manually via Dpi()
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.CenterScreen;
             BackColor = Color.White;
             Text = "SG Revit Addin Setup";
             SetStyle(ControlStyles.ResizeRedraw, true);
-            ClientSize = new Size(640, 470);
-            MinimumSize = ClientSize;
-            MaximumSize = ClientSize;   // fixed-size wizard
+            ClientSize = new Size(DesignW, DesignH);   // re-scaled for DPI in OnHandleCreated
         }
 
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
             float f = DeviceDpi / 96f;
+
+            // Scale the whole window to the monitor DPI. The header/footer/content and
+            // every page lay out in DPI-scaled units, so without this the fixed 640x470
+            // window clamps the scaled content and everything looks cramped at >100%.
+            ClientSize = new Size((int)Math.Round(DesignW * f), (int)Math.Round(DesignH * f));
+            MinimumSize = MaximumSize = Size;
+
             int hh = (int)Math.Round(52 * f);
             _cornerRadius = (int)Math.Round(10 * f);
             int footerH = (int)Math.Round(58 * f);
@@ -67,6 +75,16 @@ namespace SgSetup.Ui
             _content.SendToBack();
 
             ApplyRoundedCorners();
+        }
+
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+            // Re-center: StartPosition.CenterScreen positioned the window before we
+            // grew it to the DPI-scaled size, so it would otherwise sit off-center.
+            var wa = Screen.FromPoint(Cursor.Position).WorkingArea;
+            Location = new Point(wa.X + Math.Max(0, (wa.Width - Width) / 2),
+                                 wa.Y + Math.Max(0, (wa.Height - Height) / 2));
         }
 
         private void BuildHeader(int hh, float f)
