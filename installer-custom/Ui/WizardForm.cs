@@ -63,15 +63,20 @@ namespace SgSetup.Ui
             _cornerRadius = (int)Math.Round(10 * f);
             int footerH = (int)Math.Round(58 * f);
 
-            // Dock the three regions so sizing is automatic (robust to DPI): content
-            // fills the middle, header on top, footer on the bottom. Add content first
-            // then send it behind so the header + footer are never covered by it.
-            _content = new Panel { Dock = DockStyle.Fill, BackColor = Color.White };
+            BuildHeader(hh, f);       // _header docked Top
+            BuildFooter(footerH, f);  // _footer docked Bottom
+
+            // Content sits EXPLICITLY between the header and footer. (Dock=Fill was
+            // filling the entire client area, so the docked header painted over the
+            // top of the page and clipped its heading.) Explicit bounds match the
+            // proven add-in dialog chrome.
+            _content = new Panel
+            {
+                BackColor = Color.White,
+                Bounds = new Rectangle(0, hh, ClientSize.Width, ClientSize.Height - hh - footerH),
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
+            };
             Controls.Add(_content);
-
-            BuildHeader(hh, f);
-            BuildFooter(footerH, f);
-
             _content.SendToBack();
 
             ApplyRoundedCorners();

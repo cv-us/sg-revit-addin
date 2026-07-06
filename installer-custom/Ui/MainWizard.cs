@@ -60,45 +60,54 @@ namespace SgSetup.Ui
         private int Dpi(int v) => (int)Math.Round(v * DeviceDpi / 96f);
 
         private Label Heading(string text)
-            => new Label { Text = text, AutoSize = true, ForeColor = SgBlue,
+            => new Label { Text = text, AutoSize = true, UseMnemonic = false, ForeColor = SgBlue,
                 Font = new Font("Segoe UI Semibold", 15f, FontStyle.Bold), Location = new Point(Dpi(28), Dpi(22)) };
 
         private Label Body(string text, int top, int width)
-            => new Label { Text = text, AutoSize = true, MaximumSize = new Size(width, 0),
+            => new Label { Text = text, AutoSize = true, UseMnemonic = false, MaximumSize = new Size(width, 0),
                 ForeColor = Color.FromArgb(0x33, 0x3A, 0x40),
                 Font = new Font("Segoe UI", 9.75f), Location = new Point(Dpi(28), top) };
+
+        /// <summary>Measured wrapped height of some text at a width (for flowing a page).</summary>
+        private static int TextH(string text, Font font, int width) =>
+            TextRenderer.MeasureText(text, font, new Size(width, int.MaxValue),
+                TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl).Height;
 
         private Panel BuildWelcome()
         {
             var p = NewPage();
-            p.Controls.Add(Heading("Welcome"));
-            p.Controls.Add(Body(
-                "This installs the SG Revit Addin for Autodesk Revit — a suite of tools for sprinkler " +
-                "layout, hanger placement, pipe routing, annotation, coordination and model checking.",
-                Dpi(56), Dpi(584)));
+            int x = Dpi(28), w = Dpi(584), y = Dpi(16);
 
-            p.Controls.Add(new Label
+            var heading = Heading("Welcome");
+            heading.Location = new Point(x, y);
+            p.Controls.Add(heading);
+            y += TextH("Welcome", heading.Font, w) + Dpi(6);
+
+            string bodyText = "This installs the SG Revit Addin for Autodesk Revit — a suite of tools for sprinkler " +
+                              "layout, hanger placement, pipe routing, annotation, coordination and model checking.";
+            var body = Body(bodyText, y, w);
+            p.Controls.Add(body);
+            y += TextH(bodyText, body.Font, w) + Dpi(10);
+
+            string redText = "Please close all running Revit sessions before continuing.";
+            var red = new Label
             {
-                Text = "Please close all running Revit sessions before continuing.",
-                AutoSize = true,
+                Text = redText, AutoSize = true, UseMnemonic = false,
                 ForeColor = Color.FromArgb(0xC0, 0x28, 0x28),
                 Font = new Font("Segoe UI Semibold", 9.75f, FontStyle.Bold),
-                Location = new Point(Dpi(28), Dpi(102))
-            });
+                Location = new Point(x, y)
+            };
+            p.Controls.Add(red);
+            y += TextH(redText, red.Font, w) + Dpi(16);
 
-            int gx = Dpi(28), gap = Dpi(16), cardH = Dpi(84);
-            int colW = (Dpi(584) - gap) / 2;
-            int rightX = gx + colW + gap;
-            int top1 = Dpi(140), top2 = top1 + cardH + Dpi(12);
+            int gap = Dpi(16), cardH = Dpi(82);
+            int colW = (w - gap) / 2, rightX = x + colW + gap;
+            int top1 = y, top2 = y + cardH + Dpi(12);
 
-            p.Controls.Add(FeatureCard("feat-hangers.png", "Hangers",
-                "Trapeze, seismic & rod hangers placed and synced automatically.", gx, top1, colW, cardH));
-            p.Controls.Add(FeatureCard("feat-routing.png", "Pipe Routing",
-                "Branch lines, drops & flex pipe driven from your sprinkler layout.", rightX, top1, colW, cardH));
-            p.Controls.Add(FeatureCard("feat-annotation.png", "Annotation",
-                "Pipe tags, elevations, sleeves & scale bars in a single click.", gx, top2, colW, cardH));
-            p.Controls.Add(FeatureCard("feat-coordination.png", "Coordination",
-                "Color-coding, clash cleanup & Trimble point export.", rightX, top2, colW, cardH));
+            p.Controls.Add(FeatureCard("feat-hangers.png", "Hangers", "Trapeze, seismic and rod", x, top1, colW, cardH));
+            p.Controls.Add(FeatureCard("feat-routing.png", "Pipe Routing", "Branch lines, drops, flex", rightX, top1, colW, cardH));
+            p.Controls.Add(FeatureCard("feat-annotation.png", "Annotation", "Tags, elevations, sleeves", x, top2, colW, cardH));
+            p.Controls.Add(FeatureCard("feat-coordination.png", "Coordination", "Color-coding and clash", rightX, top2, colW, cardH));
             return p;
         }
 
@@ -109,10 +118,11 @@ namespace SgSetup.Ui
             Color fill = card.Fill;
             int pad = Dpi(14);
             int icon = Dpi(34);
+            int iconY = (h - icon) / 2 - Dpi(2);        // vertically centre the icon in the card
 
             var pic = new PictureBox
             {
-                Location = new Point(pad, pad + Dpi(2)),
+                Location = new Point(pad, iconY),
                 Size = new Size(icon, icon),
                 SizeMode = PictureBoxSizeMode.Zoom,
                 BackColor = fill,
@@ -123,16 +133,16 @@ namespace SgSetup.Ui
             int tx = pad + icon + Dpi(12);
             card.Controls.Add(new Label
             {
-                Text = title, AutoSize = true, ForeColor = SgBlue, BackColor = fill,
+                Text = title, AutoSize = true, UseMnemonic = false, ForeColor = SgBlue, BackColor = fill,
                 Font = new Font("Segoe UI Semibold", 10.5f, FontStyle.Bold),
-                Location = new Point(tx, pad - Dpi(1))
+                Location = new Point(tx, iconY - Dpi(1))
             });
             card.Controls.Add(new Label
             {
-                Text = desc, AutoSize = false, ForeColor = Color.FromArgb(0x4A, 0x53, 0x5B), BackColor = fill,
+                Text = desc, AutoSize = true, UseMnemonic = false, AutoEllipsis = true,
+                ForeColor = Color.FromArgb(0x4A, 0x53, 0x5B), BackColor = fill,
                 Font = new Font("Segoe UI", 9f),
-                Location = new Point(tx, pad + Dpi(20)),
-                Size = new Size(w - tx - pad, h - (pad + Dpi(20)) - Dpi(6))
+                Location = new Point(tx, iconY + Dpi(20))
             });
             return card;
         }
