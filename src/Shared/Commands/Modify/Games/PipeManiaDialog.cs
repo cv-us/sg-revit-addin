@@ -98,7 +98,7 @@ namespace SgRevitAddin.Commands.Modify.Games
                 Size = new Size(boardW, HintH),
                 Font = new Font("Segoe UI", 8.25f),
                 ForeColor = SystemColors.GrayText,
-                Text = "Click a tile to rotate it  •  connect the riser to the sprinkler  •  Enter for a new board"
+                Text = "Click a tile to rotate it  •  connect the riser to the sprinkler  •  Space/Enter for a new board"
             };
             Controls.Add(_hint);
 
@@ -292,7 +292,7 @@ namespace SgRevitAddin.Commands.Modify.Games
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
-            if (keyData == Keys.Enter) { OnEnter(); return true; }
+            if (keyData == Keys.Enter || keyData == Keys.Space) { OnEnter(); return true; }
             return base.ProcessCmdKey(ref msg, keyData);
         }
 
@@ -396,19 +396,19 @@ namespace SgRevitAddin.Commands.Modify.Games
             if (_state == State.Won)
             {
                 title = "Flowing!";
-                sub = $"Solved in {(RoundSeconds - _timeLeft):0.0}s, {_moves} move{(_moves == 1 ? "" : "s")}  •  Enter for a new board";
+                sub = $"Solved in {(RoundSeconds - _timeLeft):0.0}s, {_moves} move{(_moves == 1 ? "" : "s")}  •  Space/Enter for a new board";
                 titleColor = Green;
             }
             else if (_state == State.Lost)
             {
                 title = "Pressure lost";
-                sub = "The riser ran dry  •  Enter to try a new board";
+                sub = "The riser ran dry  •  Space/Enter to try a new board";
                 titleColor = SinkRed;
             }
             else
             {
                 title = "Pipe Mania";
-                sub = "Rotate tiles to connect the riser to the sprinkler  •  Enter to start";
+                sub = "Rotate tiles to connect the riser to the sprinkler  •  Space/Enter to start";
                 titleColor = Blue;
             }
 

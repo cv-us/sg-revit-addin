@@ -189,6 +189,14 @@ namespace SgRevitAddin.Commands.Modify.Games
             _board.Invalidate();
         }
 
+        // Space: start/restart from the idle or game-over screens (like Enter),
+        // pause/resume while playing.
+        private void OnSpace()
+        {
+            if (_state == State.Running || _state == State.Paused) TogglePause();
+            else OnEnter();
+        }
+
         private void UpdateScore() => _score.Text = $"Heads: {_points}     Best: {_best}";
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
@@ -199,8 +207,8 @@ namespace SgRevitAddin.Commands.Modify.Games
                 case Keys.Right: case Keys.D: TrySetDir(1, 0);  return true;
                 case Keys.Up:    case Keys.W: TrySetDir(0, -1); return true;
                 case Keys.Down:  case Keys.S: TrySetDir(0, 1);  return true;
-                case Keys.Enter: OnEnter();     return true;
-                case Keys.Space: TogglePause(); return true;
+                case Keys.Enter: OnEnter();  return true;
+                case Keys.Space: OnSpace();  return true;
             }
             return base.ProcessCmdKey(ref msg, keyData);
         }
@@ -249,12 +257,12 @@ namespace SgRevitAddin.Commands.Modify.Games
                     title = "Paused"; sub = "Space to resume"; break;
                 case State.Dead:
                     title = "Crashed!";
-                    sub = $"You connected {_points} head{(_points == 1 ? "" : "s")}  •  Enter to retry"; break;
+                    sub = $"You connected {_points} head{(_points == 1 ? "" : "s")}  •  Space/Enter to retry"; break;
                 case State.Won:
                     title = "Perfect run!";
-                    sub = "You filled the whole board  •  Enter to play again"; break;
+                    sub = "You filled the whole board  •  Space/Enter to play again"; break;
                 default:
-                    title = "Sprinkler Snake"; sub = "Press Enter to start"; break;
+                    title = "Sprinkler Snake"; sub = "Press Space or Enter to start"; break;
             }
 
             using (var b = new SolidBrush(Color.FromArgb(190, Color.White)))

@@ -86,7 +86,7 @@ namespace SgRevitAddin.Commands.Modify.Games
                 Size = new Size(boardW, HintH),
                 Font = new Font("Segoe UI", 8.25f),
                 ForeColor = SystemColors.GrayText,
-                Text = "Click leaks before they flood  •  Enter to start"
+                Text = "Click leaks before they flood  •  Space/Enter to start"
             };
             Controls.Add(_hint);
 
@@ -211,7 +211,7 @@ namespace SgRevitAddin.Commands.Modify.Games
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
-            if (keyData == Keys.Enter) { Start(); return true; }
+            if (keyData == Keys.Enter || keyData == Keys.Space) { Start(); return true; }
             return base.ProcessCmdKey(ref msg, keyData);
         }
 
@@ -336,12 +336,12 @@ namespace SgRevitAddin.Commands.Modify.Games
             if (_state == State.Over)
             {
                 title = _floods >= MaxFloods ? "Flooded!" : "Time!";
-                sub = $"You patched {_patched} leak{(_patched == 1 ? "" : "s")}  •  Enter to play again";
+                sub = $"You patched {_patched} leak{(_patched == 1 ? "" : "s")}  •  Space/Enter to play again";
             }
             else
             {
                 title = "Leak Patrol";
-                sub = "Click leaks before they flood  •  Enter to start";
+                sub = "Click leaks before they flood  •  Space/Enter to start";
             }
 
             using (var b = new SolidBrush(Color.FromArgb(200, Color.White)))
