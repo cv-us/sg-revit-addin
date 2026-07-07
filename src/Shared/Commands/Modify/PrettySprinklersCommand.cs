@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using WinColor = System.Drawing.Color;
 
 namespace SgRevitAddin.Commands.Modify
 {
@@ -73,15 +74,56 @@ namespace SgRevitAddin.Commands.Modify
                 return;
             }
 
-            // ── Place overlays for the selection ──
+            // ── Options: color each overlay by its head's workset ──
+            bool colorByWorkset = false;
+            Dictionary<int, WinColor> colorMap = null;
+
+            if (doc.IsWorkshared)
+            {
+                var wsNames = new FilteredWorksetCollector(doc)
+                    .OfKind(WorksetKind.UserWorkset)
+                    .ToDictionary(w => w.Id.IntegerValue, w => w.Name);
+                var counts = new Dictionary<int, int>();
+                foreach (var s in sprinklers)
+                {
+                    int w = s.WorksetId.IntegerValue;
+                    counts[w] = (counts.TryGetValue(w, out int c) ? c : 0) + 1;
+                }
+                var worksets = counts.Keys
+                    .Where(id => wsNames.ContainsKey(id))
+                    .Select(id => (id, name: wsNames[id]))
+                    .OrderBy(t => t.name)
+                    .ToList();
+
+                using (var dlg = new PrettySprinklersDialog(worksets, counts))
+                {
+                    if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+                    if (dlg.Action == PrettySprinklersDialog.PrettyAction.ClearColoring)
+                    {
+                        ClearColoring(doc, view);
+                        return;
+                    }
+                    colorByWorkset = dlg.ColorByWorkset && worksets.Count > 0;
+                    colorMap = dlg.WorksetColors;
+                }
+            }
+            else
+            {
+                TaskDialog.Show("Pretty Sprinklers",
+                    "This model isn't workshared, so there are no worksets to color by.\n\n" +
+                    "Placing head overlays without coloring.");
+            }
+
+            // ── Place overlays for the selection (+ color by workset) ──
             var symbolCache = new Dictionary<int, FamilySymbol>();
             var existingOverlays = CollectHeadOverlays(doc, view)
                 .Select(e => new { e.Id, Loc = GetLoc(e) })
                 .Where(x => x.Loc != null)
                 .ToList();
 
-            int placed = 0, refreshed = 0, unresolved = 0;
+            int placed = 0, refreshed = 0, unresolved = 0, colored = 0;
             var missingFamilies = new SortedSet<string>();
+            ElementId solidFillId = GetSolidFillPatternId(doc);
 
             using (var tw = new TransactionWrapper(doc, "Pretty Sprinklers"))
             {
@@ -106,8 +148,14 @@ namespace SgRevitAddin.Commands.Modify
                     if (!sym.IsActive) sym.Activate();
                     try
                     {
-                        doc.Create.NewFamilyInstance(loc, sym, view);
+                        var inst = doc.Create.NewFamilyInstance(loc, sym, view);
                         placed++;
+                        if (colorByWorkset && inst != null && colorMap != null &&
+                            colorMap.TryGetValue(spk.WorksetId.IntegerValue, out WinColor wc))
+                        {
+                            ApplyColor(view, inst.Id, wc, solidFillId);
+                            colored++;
+                        }
                     }
                     catch { unresolved++; }
                 }
@@ -116,12 +164,63 @@ namespace SgRevitAddin.Commands.Modify
 
             string report = $"Pretty Sprinklers\n\n" +
                             $"Overlays placed: {placed}\n";
+            if (colored > 0) report += $"Colored by workset: {colored}\n";
             if (refreshed > 0) report += $"Replaced existing overlays: {refreshed}\n";
             if (unresolved > 0) report += $"Sprinklers skipped (no head symbol / family): {unresolved}\n";
             if (missingFamilies.Count > 0)
                 report += "\nMissing overlay families (load them):\n  " +
                           string.Join(", ", missingFamilies);
             TaskDialog.Show("Pretty Sprinklers", report);
+        }
+
+        // ── Coloring (per-instance view graphic override on the overlay) ──
+
+        /// <summary>
+        /// Comprehensive per-element override so the head symbol recolors whether its
+        /// glyph is drawn as lines or a filled/masking region: projection line color +
+        /// surface/cut foreground pattern color (solid fill). Same recipe as Colorize
+        /// by Workset's view-override path.
+        /// </summary>
+        private static void ApplyColor(View view, ElementId id, WinColor wc, ElementId solidFillId)
+        {
+            var rc = new Color(wc.R, wc.G, wc.B);
+            var ogs = new OverrideGraphicSettings();
+            ogs.SetProjectionLineColor(rc);
+            ogs.SetSurfaceForegroundPatternColor(rc);
+            ogs.SetCutForegroundPatternColor(rc);
+            if (solidFillId != ElementId.InvalidElementId)
+            {
+                ogs.SetSurfaceForegroundPatternId(solidFillId);
+                ogs.SetCutForegroundPatternId(solidFillId);
+            }
+            try { view.SetElementOverrides(id, ogs); } catch { }
+        }
+
+        /// <summary>Removes graphic overrides from every head overlay in the view.</summary>
+        private static void ClearColoring(Document doc, View view)
+        {
+            var overlays = CollectHeadOverlays(doc, view);
+            int cleared = 0;
+            using (var tw = new TransactionWrapper(doc, "Pretty Sprinklers — Clear Coloring"))
+            {
+                var empty = new OverrideGraphicSettings();
+                foreach (var e in overlays)
+                {
+                    try { view.SetElementOverrides(e.Id, empty); cleared++; } catch { }
+                }
+                tw.Commit();
+            }
+            TaskDialog.Show("Pretty Sprinklers",
+                cleared > 0
+                    ? $"Removed coloring from {cleared} head overlay{(cleared != 1 ? "s" : "")} in this view."
+                    : "No head overlays in this view to clear coloring from.");
+        }
+
+        private static ElementId GetSolidFillPatternId(Document doc)
+        {
+            var solid = new FilteredElementCollector(doc).OfClass(typeof(FillPatternElement)).Cast<FillPatternElement>()
+                .FirstOrDefault(f => f.GetFillPattern() != null && f.GetFillPattern().IsSolidFill);
+            return solid?.Id ?? ElementId.InvalidElementId;
         }
 
         // ── Head-symbol resolution from the sprinkler TYPE ──
