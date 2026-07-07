@@ -123,7 +123,6 @@ namespace SgRevitAddin.Commands.Modify
 
             int placed = 0, refreshed = 0, unresolved = 0, colored = 0;
             var missingFamilies = new SortedSet<string>();
-            ElementId solidFillId = GetSolidFillPatternId(doc);
 
             using (var tw = new TransactionWrapper(doc, "Pretty Sprinklers"))
             {
@@ -153,7 +152,7 @@ namespace SgRevitAddin.Commands.Modify
                         if (colorByWorkset && inst != null && colorMap != null &&
                             colorMap.TryGetValue(spk.WorksetId.IntegerValue, out WinColor wc))
                         {
-                            ApplyColor(view, inst.Id, wc, solidFillId);
+                            ApplyColor(view, inst.Id, wc);
                             colored++;
                         }
                     }
@@ -176,23 +175,15 @@ namespace SgRevitAddin.Commands.Modify
         // ── Coloring (per-instance view graphic override on the overlay) ──
 
         /// <summary>
-        /// Comprehensive per-element override so the head symbol recolors whether its
-        /// glyph is drawn as lines or a filled/masking region: projection line color +
-        /// surface/cut foreground pattern color (solid fill). Same recipe as Colorize
-        /// by Workset's view-override path.
+        /// Recolors only the LINES that draw the head glyph — not a solid fill — so the
+        /// symbol keeps the circle pattern/design that distinguishes head types. The
+        /// masking-region background and line weight/pattern are left untouched; only
+        /// the line color changes to the workset color.
         /// </summary>
-        private static void ApplyColor(View view, ElementId id, WinColor wc, ElementId solidFillId)
+        private static void ApplyColor(View view, ElementId id, WinColor wc)
         {
-            var rc = new Color(wc.R, wc.G, wc.B);
             var ogs = new OverrideGraphicSettings();
-            ogs.SetProjectionLineColor(rc);
-            ogs.SetSurfaceForegroundPatternColor(rc);
-            ogs.SetCutForegroundPatternColor(rc);
-            if (solidFillId != ElementId.InvalidElementId)
-            {
-                ogs.SetSurfaceForegroundPatternId(solidFillId);
-                ogs.SetCutForegroundPatternId(solidFillId);
-            }
+            ogs.SetProjectionLineColor(new Color(wc.R, wc.G, wc.B));
             try { view.SetElementOverrides(id, ogs); } catch { }
         }
 
@@ -214,13 +205,6 @@ namespace SgRevitAddin.Commands.Modify
                 cleared > 0
                     ? $"Removed coloring from {cleared} head overlay{(cleared != 1 ? "s" : "")} in this view."
                     : "No head overlays in this view to clear coloring from.");
-        }
-
-        private static ElementId GetSolidFillPatternId(Document doc)
-        {
-            var solid = new FilteredElementCollector(doc).OfClass(typeof(FillPatternElement)).Cast<FillPatternElement>()
-                .FirstOrDefault(f => f.GetFillPattern() != null && f.GetFillPattern().IsSolidFill);
-            return solid?.Id ?? ElementId.InvalidElementId;
         }
 
         // ── Head-symbol resolution from the sprinkler TYPE ──

@@ -40,9 +40,11 @@ remembered per workset name.
 
 Coloring is a **per-instance view graphic override** on the overlay — so three
 heads of the same `HeadN` family on three different worksets can read three
-different colors in the *same* view, with no extra families or types. Because
-it's a view override on an annotation, it applies to the **active view only** and
-does not export to Navisworks (annotations never do).
+different colors in the *same* view, with no extra families or types. It recolors
+only the symbol's **lines**, so the circle pattern/design that distinguishes head
+types is preserved (the masking-region background and line weight are untouched).
+Because it's a view override on an annotation, it applies to the **active view
+only** and does not export to Navisworks (annotations never do).
 
 **Remove Coloring** clears the overrides from every head overlay in the view but
 leaves the overlays in place. On a model that isn't workshared, the command skips
