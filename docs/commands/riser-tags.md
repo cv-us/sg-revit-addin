@@ -5,9 +5,16 @@
 
 ## Purpose
 
-Places a chosen **pipe-tag family** (your riser-nipple symbol, with its mask) at
-the **top of vertical pipes**, centered on the pipe in plan and **auto-rotated to
-the branch** it comes from.
+Places a rotatable **annotation symbol** (your riser-nipple symbol, with its mask)
+at the **top of vertical pipes**, centered on the pipe in plan and **auto-rotated
+to the branch** it comes from.
+
+> It places a **Generic Annotation / Sprinkler Tags family instance** (via
+> `NewFamilyInstance`, like the Pretty Sprinklers head overlays), **not** a pipe
+> tag — because Revit pipe tags (`IndependentTag`) can't be rotated to an arbitrary
+> angle, but annotation-symbol instances can. Put the riser-nipple symbol into a
+> **Generic Annotation** family (with its mask) and load it; the command places
+> and rotates that.
 
 Revit's intrinsic rise/drop symbol on a pipe stops showing once the run is sloped
 off-plumb, so drops/risers on a sloped system often go unmarked. This drops the

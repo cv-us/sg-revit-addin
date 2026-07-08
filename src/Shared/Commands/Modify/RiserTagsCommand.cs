@@ -10,11 +10,15 @@ using System.Linq;
 namespace SgRevitAddin.Commands.Modify
 {
     /// <summary>
-    /// "Riser Tags" — places a chosen pipe-tag family (your riser-nipple symbol, with
-    /// its mask) at the TOP of vertical pipes, centered on the pipe in plan and
-    /// auto-rotated to the branch it comes from. The intrinsic rise/drop symbol on a
-    /// pipe stops showing once the run is sloped off-plumb; this drops the tag in as a
-    /// reliable stand-in without the manual centering/rotation.
+    /// "Riser Tags" — places a rotatable annotation symbol (your riser-nipple symbol,
+    /// with its mask) at the TOP of vertical pipes, centered on the pipe in plan and
+    /// auto-rotated to the branch it comes from.
+    ///
+    /// It places a Generic Annotation / Sprinkler Tags family INSTANCE (via
+    /// NewFamilyInstance, like the Pretty Sprinklers head overlays) rather than a pipe
+    /// tag — because Revit pipe tags (IndependentTag) can't be rotated to an arbitrary
+    /// angle, but annotation-symbol instances can. Supply the riser-nipple symbol in a
+    /// Generic Annotation family; the command places and rotates it.
     ///
     /// Invoked from the Modify-tab SG button via <see cref="DeferredActionHandler"/>.
     /// </summary>
@@ -23,7 +27,14 @@ namespace SgRevitAddin.Commands.Modify
     public class RiserTagsCommand : IExternalCommand
     {
         private const double VerticalTolDeg = 30.0;
+        private const double DupTolFt = 0.20;   // an existing symbol this close to the top counts as already placed
         private static readonly StringComparison OIC = StringComparison.OrdinalIgnoreCase;
+
+        private static readonly BuiltInCategory[] SymbolCats =
+        {
+            BuiltInCategory.OST_GenericAnnotation,
+            BuiltInCategory.OST_SprinklerTags
+        };
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
@@ -38,12 +49,17 @@ namespace SgRevitAddin.Commands.Modify
             Document doc = uidoc.Document;
             View view = doc.ActiveView;
 
-            var allSyms = new FilteredElementCollector(doc)
-                .OfClass(typeof(FamilySymbol)).OfCategory(BuiltInCategory.OST_PipeTags)
-                .Cast<FamilySymbol>().ToList();
+            var catIds = new HashSet<int>(SymbolCats.Select(c => (int)c));
+            var allSyms = new FilteredElementCollector(doc).OfClass(typeof(FamilySymbol))
+                .Cast<FamilySymbol>()
+                .Where(fs => fs.Category != null && catIds.Contains(fs.Category.Id.IntegerValue))
+                .ToList();
             if (allSyms.Count == 0)
             {
-                TaskDialog.Show("Riser Tags", "No Pipe Tag families are loaded in this project.\n\nLoad your riser-nipple pipe tag first.");
+                TaskDialog.Show("Riser Tags",
+                    "No Generic Annotation or Sprinkler Tags symbol families are loaded.\n\n" +
+                    "Put your riser-nipple symbol (with its mask) into a Generic Annotation family and load it, " +
+                    "then run Riser Tags.");
                 return;
             }
 
@@ -64,11 +80,11 @@ namespace SgRevitAddin.Commands.Modify
 
             FamilySymbol sym = ResolveSymbol(allSyms, dlg.SelFamily, dlg.SelType);
             if (sym == null)
-            { TaskDialog.Show("Riser Tags", $"Tag \"{dlg.SelFamily} : {dlg.SelType}\" not found."); return; }
+            { TaskDialog.Show("Riser Tags", $"Symbol \"{dlg.SelFamily} : {dlg.SelType}\" not found."); return; }
 
             if (dlg.Action == RiserTagsDialog.RiserAction.Remove)
             {
-                RemoveRiserTags(doc, view, sym.Family?.Name);
+                RemoveRiserSymbols(doc, view, sym.Family?.Name);
                 return;
             }
 
@@ -91,7 +107,7 @@ namespace SgRevitAddin.Commands.Modify
             double nudgeY = dlg.CenterNudgeYin / 12.0;
             double rotOff = dlg.RotationOffsetDeg * Math.PI / 180.0;
 
-            var alreadyTagged = PipesTaggedByFamily(doc, view, sym.Family?.Name);
+            var existing = ExistingSymbolLocations(doc, view, sym.Family?.Name);
 
             int placed = 0, skDup = 0, skNoTop = 0, rotated = 0;
 
@@ -101,35 +117,34 @@ namespace SgRevitAddin.Commands.Modify
 
                 foreach (var pipe in pipes)
                 {
-                    if (alreadyTagged.Contains(pipe.Id)) { skDup++; continue; }
-
                     XYZ top = TopPoint(pipe);
                     if (top == null) { skNoTop++; continue; }
                     XYZ head = new XYZ(top.X + nudgeX, top.Y + nudgeY, top.Z);
 
+                    if (existing.Any(e => Flat(e).DistanceTo(Flat(head)) <= DupTolFt)) { skDup++; continue; }
+
                     try
                     {
-                        var tag = IndependentTag.Create(doc, view.Id, new Reference(pipe),
-                            false, TagMode.TM_ADDBY_CATEGORY, TagOrientation.Horizontal, head);
-                        if (tag == null) continue;
-                        tag.ChangeTypeId(sym.Id);
-                        try { tag.TagHeadPosition = head; } catch { }
-                        alreadyTagged.Add(pipe.Id);
+                        var inst = doc.Create.NewFamilyInstance(head, sym, view);
+                        if (inst == null) continue;
                         placed++;
+                        existing.Add(head);
 
+                        double angle = rotOff;
                         if (dlg.AutoRotate)
                         {
                             XYZ dir = BranchDir(pipe);
-                            if (dir != null)
+                            if (dir != null) angle = Math.Atan2(dir.Y, dir.X) + rotOff;
+                        }
+                        if (Math.Abs(angle) > 1e-9)
+                        {
+                            try
                             {
-                                double ang = Math.Atan2(dir.Y, dir.X) + rotOff;
-                                try
-                                {
-                                    ElementTransformUtils.RotateElement(doc, tag.Id, Line.CreateUnbound(head, XYZ.BasisZ), ang);
-                                    rotated++;
-                                }
-                                catch { }
+                                ElementTransformUtils.RotateElement(doc, inst.Id,
+                                    Line.CreateUnbound(head, XYZ.BasisZ), angle);
+                                rotated++;
                             }
+                            catch { }
                         }
                     }
                     catch { }
@@ -138,13 +153,14 @@ namespace SgRevitAddin.Commands.Modify
             }
 
             string report = "Riser Tags\n\n" +
-                            $"Tags placed: {placed}\n" +
+                            $"Symbols placed: {placed}\n" +
                             $"Pipes considered: {pipes.Count}\n";
-            if (dlg.AutoRotate) report += $"Auto-rotated to branch: {rotated}\n";
-            if (skDup > 0) report += $"Skipped (already tagged with this family): {skDup}\n";
+            if (dlg.AutoRotate || Math.Abs(rotOff) > 1e-9) report += $"Rotated: {rotated}\n";
+            if (skDup > 0) report += $"Skipped (a symbol already at the top): {skDup}\n";
             if (skNoTop > 0) report += $"Skipped (no location): {skNoTop}\n";
-            report += "\nIf the tag isn't centered or the rotation is off, adjust the " +
-                      "Center nudge / Rotate offset in the dialog for your family.";
+            report += "\nIf the rotation is off, adjust Rotate + in the dialog (it works now — these are " +
+                      "rotatable annotation symbols, not pipe tags). Center nudge shifts the symbol if the " +
+                      "family origin isn't centered.";
             TaskDialog.Show("Riser Tags", report);
         }
 
@@ -179,6 +195,8 @@ namespace SgRevitAddin.Commands.Modify
             var lc = pipe.Location as LocationCurve;
             return lc?.Curve?.Evaluate(0.5, true);
         }
+
+        private static XYZ Flat(XYZ p) => new XYZ(p.X, p.Y, 0);
 
         private static bool IsVertical(Pipe pipe)
         {
@@ -217,14 +235,12 @@ namespace SgRevitAddin.Commands.Modify
                     Element owner = o.Owner;
                     if (owner == null || owner.Id == pipe.Id) continue;
 
-                    // Directly connected horizontal pipe → point toward its body.
                     if (owner is Pipe bp && !IsVertical(bp))
                     {
                         XYZ d = FlattenDir(MidPoint(bp) - origin);
                         if (d != null) return d;
                     }
 
-                    // Through a fitting → its connected horizontal pipe.
                     if ((owner.Category?.Id.IntegerValue ?? 0) == (int)BuiltInCategory.OST_PipeFitting)
                     {
                         var cs = GetConnectors(owner);
@@ -286,7 +302,7 @@ namespace SgRevitAddin.Commands.Modify
             return null;
         }
 
-        // ── Tag helpers ──
+        // ── Symbol helpers ──
 
         private static FamilySymbol ResolveSymbol(List<FamilySymbol> syms, string family, string type)
         {
@@ -301,47 +317,31 @@ namespace SgRevitAddin.Commands.Modify
             return inFam.First();
         }
 
-        private static HashSet<ElementId> PipesTaggedByFamily(Document doc, View view, string family)
+        /// <summary>Plan-view locations of existing instances of the family (for de-dup).</summary>
+        private static List<XYZ> ExistingSymbolLocations(Document doc, View view, string family)
         {
-            var set = new HashSet<ElementId>();
-            if (string.IsNullOrEmpty(family)) return set;
-            foreach (var tag in new FilteredElementCollector(doc, view.Id)
-                         .OfClass(typeof(IndependentTag)).Cast<IndependentTag>())
+            var locs = new List<XYZ>();
+            if (string.IsNullOrEmpty(family)) return locs;
+            foreach (var fi in new FilteredElementCollector(doc, view.Id)
+                         .OfClass(typeof(FamilyInstance)).Cast<FamilyInstance>())
             {
-                var sym = doc.GetElement(tag.GetTypeId()) as FamilySymbol;
-                if (!string.Equals(sym?.Family?.Name, family, OIC)) continue;
-                try
-                {
-                    foreach (var lid in tag.GetTaggedElementIds())
-                        if (lid.HostElementId != ElementId.InvalidElementId)
-                            set.Add(lid.HostElementId);
-                }
-                catch { }
+                if (!string.Equals(fi.Symbol?.Family?.Name, family, OIC)) continue;
+                XYZ p = (fi.Location as LocationPoint)?.Point;
+                if (p == null) { var bb = fi.get_BoundingBox(view); if (bb != null) p = (bb.Min + bb.Max) / 2.0; }
+                if (p != null) locs.Add(p);
             }
-            return set;
+            return locs;
         }
 
-        private static void RemoveRiserTags(Document doc, View view, string family)
+        private static void RemoveRiserSymbols(Document doc, View view, string family)
         {
             if (string.IsNullOrEmpty(family))
-            { TaskDialog.Show("Riser Tags", "Pick the tag family to remove first."); return; }
+            { TaskDialog.Show("Riser Tags", "Pick the symbol family to remove first."); return; }
 
-            var toDelete = new List<ElementId>();
-            foreach (var tag in new FilteredElementCollector(doc, view.Id)
-                         .OfClass(typeof(IndependentTag)).Cast<IndependentTag>())
-            {
-                var sym = doc.GetElement(tag.GetTypeId()) as FamilySymbol;
-                if (!string.Equals(sym?.Family?.Name, family, OIC)) continue;
-                bool hostsPipe = false;
-                try
-                {
-                    foreach (var lid in tag.GetTaggedElementIds())
-                        if (lid.HostElementId != ElementId.InvalidElementId &&
-                            doc.GetElement(lid.HostElementId) is Pipe) { hostsPipe = true; break; }
-                }
-                catch { }
-                if (hostsPipe) toDelete.Add(tag.Id);
-            }
+            var toDelete = new FilteredElementCollector(doc, view.Id)
+                .OfClass(typeof(FamilyInstance)).Cast<FamilyInstance>()
+                .Where(fi => string.Equals(fi.Symbol?.Family?.Name, family, OIC))
+                .Select(fi => fi.Id).ToList();
 
             int removed = 0;
             using (var tw = new TransactionWrapper(doc, "Remove Riser Tags"))
@@ -350,8 +350,8 @@ namespace SgRevitAddin.Commands.Modify
                 tw.Commit();
             }
             TaskDialog.Show("Riser Tags",
-                removed > 0 ? $"Removed {removed} \"{family}\" riser tag(s) from this view."
-                            : $"No \"{family}\" riser tags found in this view.");
+                removed > 0 ? $"Removed {removed} \"{family}\" riser symbol(s) from this view."
+                            : $"No \"{family}\" riser symbols found in this view.");
         }
     }
 }

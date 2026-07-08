@@ -63,17 +63,17 @@ namespace SgRevitAddin.Commands.Modify
 
             Controls.Add(new Label
             {
-                Text = "Places your riser-nipple pipe tag at the TOP of vertical pipes, centered in plan and " +
-                       "rotated to the branch it comes from. Pick the tag family/type and scope below.",
+                Text = "Places your riser-nipple symbol (a rotatable Generic Annotation, with its mask) at the TOP " +
+                       "of vertical pipes, centered in plan and rotated to the branch. Pick the symbol family/type below.",
                 Location = new Point(M, y), Size = new Size(W, 34), ForeColor = SystemColors.GrayText
             });
             y += 40;
 
-            // ── Tag family / type ──
-            Controls.Add(new Label { Text = "Tag family:", Location = new Point(M, y + 3), AutoSize = true });
+            // ── Symbol family / type ──
+            Controls.Add(new Label { Text = "Symbol family:", Location = new Point(M, y + 3), AutoSize = true });
             _cboFamily = new ComboBox
             {
-                Location = new Point(M + 80, y), Size = new Size(W - 80, 24),
+                Location = new Point(M + 100, y), Size = new Size(W - 100, 24),
                 DropDownStyle = ComboBoxStyle.DropDownList
             };
             _cboFamily.Items.AddRange(_families.Cast<object>().ToArray());
@@ -84,7 +84,7 @@ namespace SgRevitAddin.Commands.Modify
             Controls.Add(new Label { Text = "Type:", Location = new Point(M, y + 3), AutoSize = true });
             _cboType = new ComboBox
             {
-                Location = new Point(M + 80, y), Size = new Size(W - 80, 24),
+                Location = new Point(M + 100, y), Size = new Size(W - 100, 24),
                 DropDownStyle = ComboBoxStyle.DropDownList
             };
             Controls.Add(_cboType);
