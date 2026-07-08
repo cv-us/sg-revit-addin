@@ -357,6 +357,15 @@ namespace SgRevitAddin
                 },
                 new ModifyButton
                 {
+                    Id = "SgRiserTags",
+                    Label = "Riser\nTags",
+                    Tooltip = "Tag the top of vertical pipes with your riser-nipple pipe tag — centered in plan and auto-rotated to the branch. Scope: selection / view / model.",
+                    LargeImage = IconHelper.LoadIcon("riser-tags-32.png"),
+                    SmallImage = IconHelper.LoadIcon("riser-tags-16.png"),
+                    OnClick = () => DeferredActionHandler.Run(RiserTagsCommand.Run)
+                },
+                new ModifyButton
+                {
                     Id = "SgPlaceholderOne",
                     Label = "Placeholder\nOne",
                     Tooltip = "Placeholder — reserved for a future tool.",

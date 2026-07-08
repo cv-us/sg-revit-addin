@@ -132,9 +132,14 @@ namespace SgRevitAddin.Commands.Modify.Games
             float elapsed = RoundSeconds - _timeLeft;
 
             _spawnCooldown -= dt;
-            if (_spawnCooldown <= 0f) { SpawnLeak(); _spawnCooldown = SpawnInterval(elapsed); }
+            if (_spawnCooldown <= 0f)
+            {
+                SpawnLeak();
+                if (elapsed > 20f && _rng.NextDouble() < 0.55) SpawnLeak();   // double up late-game
+                _spawnCooldown = SpawnInterval(elapsed);
+            }
 
-            float leakDur = Math.Max(1.6f, 3.2f - elapsed * 0.02f);   // leaks fill faster over time
+            float leakDur = Math.Max(0.85f, 2.0f - elapsed * 0.03f);   // leaks fill faster (and faster over time)
             for (int c = 0; c < Cols; c++)
                 for (int r = 0; r < Rows; r++)
                 {
@@ -159,8 +164,8 @@ namespace SgRevitAddin.Commands.Modify.Games
 
         private float SpawnInterval(float elapsed)
         {
-            float baseGap = Math.Max(0.5f, 1.7f - elapsed * 0.018f);
-            return baseGap * (0.8f + (float)_rng.NextDouble() * 0.5f);
+            float baseGap = Math.Max(0.3f, 1.1f - elapsed * 0.025f);
+            return baseGap * (0.7f + (float)_rng.NextDouble() * 0.45f);
         }
 
         private void SpawnLeak()
