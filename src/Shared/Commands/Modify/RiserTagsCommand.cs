@@ -227,12 +227,29 @@ namespace SgRevitAddin.Commands.Modify
 
         private static XYZ BranchDir(Pipe pipe)
         {
+            Pipe hp = ConnectedHorizontalPipe(pipe, out XYZ origin);
+            if (hp == null || origin == null) return null;
+
+            // Point toward the end of the connecting pipe that joins the branch line
+            // (a tee/cross junction) — robust for armovers, which run branch->elbow->
+            // drop and can extend PAST the drop (the geometric far end would then be
+            // the wrong, non-branch side). Fall back to the geometric far end.
+            XYZ d = TowardBranchJunction(hp, origin);
+            if (d != null) return d;
+            XYZ fe = FarEnd(hp, origin);
+            return fe == null ? null : FlattenDir(fe - origin);
+        }
+
+        /// <summary>The horizontal pipe the vertical riser connects to — directly or
+        /// through its adjacent fitting (elbow/tee) — with the connection point.</summary>
+        private static Pipe ConnectedHorizontalPipe(Pipe pipe, out XYZ origin)
+        {
+            origin = null;
             var cm = pipe.ConnectorManager?.Connectors;
             if (cm == null) return null;
 
             foreach (Connector c in cm.Cast<Connector>().Where(c => c.ConnectorType == ConnectorType.End))
             {
-                XYZ origin = c.Origin;
                 ConnectorSet refs; try { refs = c.AllRefs; } catch { continue; }
                 if (refs == null) continue;
 
@@ -241,12 +258,7 @@ namespace SgRevitAddin.Commands.Modify
                     Element owner = o.Owner;
                     if (owner == null || owner.Id == pipe.Id) continue;
 
-                    if (owner is Pipe bp && !IsVertical(bp))
-                    {
-                        XYZ fe = FarEnd(bp, origin);
-                        XYZ d = fe == null ? null : FlattenDir(fe - origin);
-                        if (d != null) return d;
-                    }
+                    if (owner is Pipe bp && !IsVertical(bp)) { origin = c.Origin; return bp; }
 
                     if ((owner.Category?.Id.IntegerValue ?? 0) == (int)BuiltInCategory.OST_PipeFitting)
                     {
@@ -257,16 +269,36 @@ namespace SgRevitAddin.Commands.Modify
                             ConnectorSet frefs; try { frefs = fc.AllRefs; } catch { continue; }
                             if (frefs == null) continue;
                             foreach (Connector fo in frefs)
-                            {
                                 if (fo.Owner is Pipe fbp && fbp.Id != pipe.Id && !IsVertical(fbp))
-                                {
-                                    XYZ fe = FarEnd(fbp, origin);
-                                    XYZ d = fe == null ? null : FlattenDir(fe - origin);
-                                    if (d != null) return d;
-                                }
-                            }
+                                { origin = c.Origin; return fbp; }
                         }
                     }
+                }
+            }
+            return null;
+        }
+
+        /// <summary>Direction from <paramref name="origin"/> toward the end of
+        /// <paramref name="hp"/> that joins a branch junction (a 3+-connector fitting,
+        /// i.e. a tee/cross) — back toward the branch line.</summary>
+        private static XYZ TowardBranchJunction(Pipe hp, XYZ origin)
+        {
+            var cs = hp.ConnectorManager?.Connectors;
+            if (cs == null) return null;
+
+            foreach (Connector c in cs.Cast<Connector>().Where(c => c.ConnectorType == ConnectorType.End))
+            {
+                ConnectorSet refs; try { refs = c.AllRefs; } catch { continue; }
+                if (refs == null) continue;
+                foreach (Connector r in refs)
+                {
+                    Element owner = r.Owner;
+                    if (owner == null) continue;
+                    if ((owner.Category?.Id.IntegerValue ?? 0) != (int)BuiltInCategory.OST_PipeFitting) continue;
+                    var fcs = GetConnectors(owner);
+                    if (fcs == null || fcs.Size < 3) continue;   // tee/cross = a branch junction
+                    XYZ d = FlattenDir(c.Origin - origin);
+                    if (d != null) return d;
                 }
             }
             return null;

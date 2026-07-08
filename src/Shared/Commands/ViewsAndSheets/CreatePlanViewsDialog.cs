@@ -80,17 +80,16 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
         private void InitializeComponent()
         {
             Text = "Create Plan Views";
-            FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(470, 600);
+            AllowResize = false;    // fixed size — everything at fixed positions so the buttons never get pushed off
+            RememberSize = false;
+            ClientSize = new Size(470, 528);
 
             int margin = 15;
             int y = margin;
             const int GroupW = 440;
-            var growAnchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
-            var belowAnchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
 
             bool hasSources = _sourceModelDisplays.Count > 0;
 
@@ -99,19 +98,19 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             {
                 Text = "Create Views From",
                 Location = new Point(margin, y),
-                Size = new Size(GroupW, 50)
+                Size = new Size(GroupW, 48)
             };
             rbThisModel = new RadioButton
             {
                 Text = "This model (by level)",
-                Location = new Point(10, 20),
+                Location = new Point(10, 19),
                 Size = new Size(200, 20),
                 Checked = true
             };
             rbAnotherModel = new RadioButton
             {
                 Text = "Another model (copy views)",
-                Location = new Point(215, 20),
+                Location = new Point(215, 19),
                 Size = new Size(215, 20),
                 Enabled = hasSources
             };
@@ -119,7 +118,7 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             rbAnotherModel.CheckedChanged += (s, e) => UpdateMode();
             grpMode.Controls.AddRange(new Control[] { rbThisModel, rbAnotherModel });
             Controls.Add(grpMode);
-            y += 55;
+            y += 54;
 
             // ── Shared slot: Levels (this model)  OR  Source (another model) ──
             int slotY = y;
@@ -128,15 +127,13 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             {
                 Text = "Select Levels to Create Views From",
                 Location = new Point(margin, slotY),
-                Size = new Size(GroupW, 150),
-                Anchor = growAnchor   // primary list slot grows with the dialog
+                Size = new Size(GroupW, 110)
             };
             chkLevels = new CheckedListBox
             {
                 Location = new Point(10, 18),
-                Size = new Size(340, 120),
-                CheckOnClick = true,
-                Anchor = growAnchor
+                Size = new Size(340, 84),
+                CheckOnClick = true
             };
             foreach (var name in _levelDisplayNames) chkLevels.Items.Add(name, true);
             grpLevels.Controls.Add(chkLevels);
@@ -150,9 +147,8 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             {
                 Text = "Copy Plan Views From Another Model",
                 Location = new Point(margin, slotY),
-                Size = new Size(GroupW, 150),
-                Visible = false,
-                Anchor = growAnchor
+                Size = new Size(GroupW, 110),
+                Visible = false
             };
             grpSource.Controls.Add(new Label
             {
@@ -164,8 +160,7 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             {
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 Location = new Point(60, 20),
-                Size = new Size(GroupW - 75, 22),
-                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+                Size = new Size(GroupW - 75, 22)
             };
             foreach (var m in _sourceModelDisplays) cboSourceModel.Items.Add(m);
             cboSourceModel.SelectedIndexChanged += (s, e) => PopulateSourceViews(cboSourceModel.SelectedIndex);
@@ -174,33 +169,31 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             chkSourceViews = new CheckedListBox
             {
                 Location = new Point(10, 50),
-                Size = new Size(340, 88),
-                CheckOnClick = true,
-                Anchor = growAnchor
+                Size = new Size(340, 52),
+                CheckOnClick = true
             };
             grpSource.Controls.Add(chkSourceViews);
             grpSource.Controls.Add(MakeSmallButton("All", 360, 50,
                 () => SetAllChecked(chkSourceViews, true)));
-            grpSource.Controls.Add(MakeSmallButton("None", 360, 80,
+            grpSource.Controls.Add(MakeSmallButton("None", 360, 78,
                 () => SetAllChecked(chkSourceViews, false)));
             if (cboSourceModel.Items.Count > 0) cboSourceModel.SelectedIndex = 0;
             Controls.Add(grpSource);
-            y += 155;
+            y += 116;
 
             // ── View types (create / filter) ──
             grpType = new GroupBox
             {
                 Text = "View Types to Create",
                 Location = new Point(margin, y),
-                Size = new Size(GroupW, 80),
-                Anchor = belowAnchor
+                Size = new Size(GroupW, 76)
             };
-            rbBoth = new RadioButton { Text = "Floor and Ceiling Plans", Location = new Point(10, 18), Size = new Size(250, 20), Checked = true };
-            rbFloor = new RadioButton { Text = "Floor Plans only", Location = new Point(10, 38), Size = new Size(250, 20) };
-            rbCeiling = new RadioButton { Text = "Ceiling Plans only", Location = new Point(10, 58), Size = new Size(250, 20) };
+            rbBoth = new RadioButton { Text = "Floor and Ceiling Plans", Location = new Point(10, 16), Size = new Size(250, 20), Checked = true };
+            rbFloor = new RadioButton { Text = "Floor Plans only", Location = new Point(10, 36), Size = new Size(250, 20) };
+            rbCeiling = new RadioButton { Text = "Ceiling Plans only", Location = new Point(10, 56), Size = new Size(250, 20) };
             grpType.Controls.AddRange(new Control[] { rbBoth, rbFloor, rbCeiling });
             Controls.Add(grpType);
-            y += 85;
+            y += 82;
 
             // Restore remembered view-type choice.
             int viewType = DialogMemory.GetInt(MemKey, "ViewType", 0);
@@ -213,38 +206,36 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             {
                 Text = "View Templates",
                 Location = new Point(margin, y),
-                Size = new Size(GroupW, 80),
-                Anchor = belowAnchor
+                Size = new Size(GroupW, 76)
             };
-            grpTemplate.Controls.Add(new Label { Text = "Floor Plans:", Location = new Point(10, 22), Size = new Size(80, 18) });
-            cboFloorTemplate = new ComboBox { Location = new Point(95, 19), Size = new Size(330, 22), DropDownStyle = ComboBoxStyle.DropDownList };
+            grpTemplate.Controls.Add(new Label { Text = "Floor Plans:", Location = new Point(10, 20), Size = new Size(80, 18) });
+            cboFloorTemplate = new ComboBox { Location = new Point(95, 17), Size = new Size(330, 22), DropDownStyle = ComboBoxStyle.DropDownList };
             cboFloorTemplate.Items.Add("(none)");
             foreach (var t in _floorTemplates) cboFloorTemplate.Items.Add(t);
             RestoreOrDefaultTemplate(cboFloorTemplate, "FloorTemplate", "00 Working Floor Fine");
             grpTemplate.Controls.Add(cboFloorTemplate);
 
-            grpTemplate.Controls.Add(new Label { Text = "Ceiling Plans:", Location = new Point(10, 52), Size = new Size(80, 18) });
-            cboCeilingTemplate = new ComboBox { Location = new Point(95, 49), Size = new Size(330, 22), DropDownStyle = ComboBoxStyle.DropDownList };
+            grpTemplate.Controls.Add(new Label { Text = "Ceiling Plans:", Location = new Point(10, 48), Size = new Size(80, 18) });
+            cboCeilingTemplate = new ComboBox { Location = new Point(95, 45), Size = new Size(330, 22), DropDownStyle = ComboBoxStyle.DropDownList };
             cboCeilingTemplate.Items.Add("(none)");
             foreach (var t in _ceilingTemplates) cboCeilingTemplate.Items.Add(t);
             RestoreOrDefaultTemplate(cboCeilingTemplate, "CeilingTemplate", "00 Working Ceiling Fine");
             grpTemplate.Controls.Add(cboCeilingTemplate);
             Controls.Add(grpTemplate);
-            y += 85;
+            y += 82;
 
             // ── Sub-Discipline ──
             var grpSubDisc = new GroupBox
             {
                 Text = "Sub-Discipline  (browser organization)",
                 Location = new Point(margin, y),
-                Size = new Size(GroupW, 55),
-                Anchor = belowAnchor
+                Size = new Size(GroupW, 50)
             };
-            grpSubDisc.Controls.Add(new Label { Text = "Sub-Discipline:", Location = new Point(10, 24), Size = new Size(95, 18) });
+            grpSubDisc.Controls.Add(new Label { Text = "Sub-Discipline:", Location = new Point(10, 22), Size = new Size(95, 18) });
             cboSubDiscipline = new ComboBox
             {
                 DropDownStyle = ComboBoxStyle.DropDown,   // editable: pick or type
-                Location = new Point(110, 21),
+                Location = new Point(110, 19),
                 Size = new Size(GroupW - 125, 22)
             };
             cboSubDiscipline.Items.Add(NoSubDiscipline);
@@ -256,24 +247,23 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             else cboSubDiscipline.SelectedIndex = 0;
             grpSubDisc.Controls.Add(cboSubDiscipline);
             Controls.Add(grpSubDisc);
-            y += 60;
+            y += 56;
 
             // ── View name suffix ──
             var grpSuffix = new GroupBox
             {
                 Text = "View Name Suffix  (appended to the view name)",
                 Location = new Point(margin, y),
-                Size = new Size(GroupW, 95),
-                Anchor = belowAnchor
+                Size = new Size(GroupW, 76)
             };
-            rbOverall = new RadioButton { Text = "OVERALL", Location = new Point(10, 18), Size = new Size(200, 20), Checked = true };
-            rbRefOnly = new RadioButton { Text = "FOR REFERENCE ONLY", Location = new Point(10, 38), Size = new Size(200, 20) };
-            rbCustom = new RadioButton { Text = "Custom:", Location = new Point(10, 62), Size = new Size(70, 20) };
+            rbOverall = new RadioButton { Text = "OVERALL", Location = new Point(10, 16), Size = new Size(200, 20), Checked = true };
+            rbRefOnly = new RadioButton { Text = "FOR REFERENCE ONLY", Location = new Point(10, 35), Size = new Size(200, 20) };
+            rbCustom = new RadioButton { Text = "Custom:", Location = new Point(10, 54), Size = new Size(70, 20) };
             rbCustom.CheckedChanged += (s, e) => txtCustom.Enabled = rbCustom.Checked;
-            txtCustom = new TextBox { Location = new Point(85, 60), Size = new Size(340, 22), Enabled = false };
+            txtCustom = new TextBox { Location = new Point(85, 52), Size = new Size(340, 22), Enabled = false };
             grpSuffix.Controls.AddRange(new Control[] { rbOverall, rbRefOnly, rbCustom, txtCustom });
             Controls.Add(grpSuffix);
-            y += 100;
+            y += 82;
 
             // Restore remembered suffix choice.
             int suffixMode = DialogMemory.GetInt(MemKey, "SuffixMode", 0);
@@ -287,9 +277,8 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             {
                 Text = "Create Views",
                 DialogResult = DialogResult.OK,
-                Location = new Point(270, y),
-                Size = new Size(100, 30),
-                Anchor = AnchorStyles.Bottom | AnchorStyles.Right
+                Location = new Point(GroupW + margin - 75 - 10 - 100, y),
+                Size = new Size(100, 30)
             };
             btnOK.Click += BtnOK_Click;
             AcceptButton = btnOK;
@@ -299,9 +288,8 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             {
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
-                Location = new Point(380, y),
-                Size = new Size(75, 30),
-                Anchor = AnchorStyles.Bottom | AnchorStyles.Right
+                Location = new Point(GroupW + margin - 75, y),
+                Size = new Size(75, 30)
             };
             CancelButton = btnCancel;
             Controls.Add(btnCancel);
