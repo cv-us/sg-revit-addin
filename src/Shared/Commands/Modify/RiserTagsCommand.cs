@@ -134,7 +134,9 @@ namespace SgRevitAddin.Commands.Modify
                         if (dlg.AutoRotate)
                         {
                             XYZ dir = BranchDir(pipe);
-                            if (dir != null) angle = Math.Atan2(dir.Y, dir.X) + rotOff;
+                            // The family's default line points +Y (north) toward the source. Rotate so that
+                            // line points along the branch it comes from (dir): theta = atan2(dir) - 90deg.
+                            if (dir != null) angle = Math.Atan2(dir.Y, dir.X) - Math.PI / 2.0 + rotOff;
                         }
                         if (Math.Abs(angle) > 1e-9)
                         {
@@ -190,10 +192,14 @@ namespace SgRevitAddin.Commands.Modify
             return a.Z >= b.Z ? a : b;
         }
 
-        private static XYZ MidPoint(Pipe pipe)
+        /// <summary>The endpoint of the pipe farther from <paramref name="from"/> — the
+        /// direction the branch runs away from the drop connection.</summary>
+        private static XYZ FarEnd(Pipe pipe, XYZ from)
         {
             var lc = pipe.Location as LocationCurve;
-            return lc?.Curve?.Evaluate(0.5, true);
+            if (lc?.Curve == null) return null;
+            XYZ a = lc.Curve.GetEndPoint(0), b = lc.Curve.GetEndPoint(1);
+            return a.DistanceTo(from) >= b.DistanceTo(from) ? a : b;
         }
 
         private static XYZ Flat(XYZ p) => new XYZ(p.X, p.Y, 0);
@@ -237,7 +243,8 @@ namespace SgRevitAddin.Commands.Modify
 
                     if (owner is Pipe bp && !IsVertical(bp))
                     {
-                        XYZ d = FlattenDir(MidPoint(bp) - origin);
+                        XYZ fe = FarEnd(bp, origin);
+                        XYZ d = fe == null ? null : FlattenDir(fe - origin);
                         if (d != null) return d;
                     }
 
@@ -253,7 +260,8 @@ namespace SgRevitAddin.Commands.Modify
                             {
                                 if (fo.Owner is Pipe fbp && fbp.Id != pipe.Id && !IsVertical(fbp))
                                 {
-                                    XYZ d = FlattenDir(MidPoint(fbp) - origin);
+                                    XYZ fe = FarEnd(fbp, origin);
+                                    XYZ d = fe == null ? null : FlattenDir(fe - origin);
                                     if (d != null) return d;
                                 }
                             }
