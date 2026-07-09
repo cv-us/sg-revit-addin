@@ -12,7 +12,8 @@ namespace SgRevitAddin.Commands.Modify
     /// <summary>
     /// "Riser Tags" — places a rotatable annotation symbol (your riser-nipple symbol,
     /// with its mask) at the TOP of vertical pipes, centered on the pipe in plan and
-    /// auto-rotated to the branch it comes from.
+    /// auto-rotated so the line runs along the horizontal pipe connected at the top
+    /// (the higher pipe) and the solid semicircle marks the lower, vertical side.
     ///
     /// It places a Generic Annotation / Sprinkler Tags family INSTANCE (via
     /// NewFamilyInstance, like the Pretty Sprinklers head overlays) rather than a pipe
@@ -223,17 +224,33 @@ namespace SgRevitAddin.Commands.Modify
             return false;
         }
 
-        // ── Branch direction (what the riser comes from) ──
+        // ── Line direction ──
+        //
+        // Symbol convention: the LINE represents the horizontal-and-HIGHER pipe; the
+        // solid semicircle marks the vertical-and-lower side. So the line must run
+        // along the horizontal pipe connected at the TOP of the vertical, extending
+        // away from the vertical. E.g. branch -> riser up -> armover -> drop down:
+        // both ends tag with the line on the INSIDE of the armover and the
+        // semicircles on the outsides.
 
         private static XYZ BranchDir(Pipe pipe)
         {
-            Pipe hp = ConnectedHorizontalPipe(pipe, out XYZ origin);
+            Pipe hp = ConnectedHorizontalPipe(pipe, out XYZ origin, out bool atTop);
             if (hp == null || origin == null) return null;
 
-            // Point toward the end of the connecting pipe that joins the branch line
-            // (a tee/cross junction) — robust for armovers, which run branch->elbow->
-            // drop and can extend PAST the drop (the geometric far end would then be
-            // the wrong, non-branch side). Fall back to the geometric far end.
+            if (atTop)
+            {
+                // Line = along the higher horizontal pipe, extending away from the
+                // vertical (for an armover this puts the line on the inside and the
+                // semicircle on the outside, at both the riser and the drop end).
+                XYZ feTop = FarEnd(hp, origin);
+                XYZ away = feTop == null ? null : FlattenDir(feTop - origin);
+                if (away != null) return away;
+            }
+
+            // Bottom-connection fallback (e.g. a rise straight off the branch line
+            // with a head on top — no horizontal pipe above): keep the previous
+            // behavior, line along the branch toward its junction side.
             XYZ d = TowardBranchJunction(hp, origin);
             if (d != null) return d;
             XYZ fe = FarEnd(hp, origin);
@@ -241,15 +258,26 @@ namespace SgRevitAddin.Commands.Modify
         }
 
         /// <summary>The horizontal pipe the vertical riser connects to — directly or
-        /// through its adjacent fitting (elbow/tee) — with the connection point.</summary>
-        private static Pipe ConnectedHorizontalPipe(Pipe pipe, out XYZ origin)
+        /// through its adjacent fitting (elbow/tee) — with the connection point.
+        /// Checks the TOP connector first (the symbol's line represents the
+        /// horizontal-and-higher pipe); <paramref name="atTop"/> reports which end
+        /// the returned pipe was found at.</summary>
+        private static Pipe ConnectedHorizontalPipe(Pipe pipe, out XYZ origin, out bool atTop)
         {
             origin = null;
+            atTop = false;
             var cm = pipe.ConnectorManager?.Connectors;
             if (cm == null) return null;
 
-            foreach (Connector c in cm.Cast<Connector>().Where(c => c.ConnectorType == ConnectorType.End))
+            var ends = cm.Cast<Connector>()
+                .Where(c => c.ConnectorType == ConnectorType.End)
+                .OrderByDescending(c => c.Origin.Z)
+                .ToList();
+            double topZ = ends.Count > 0 ? ends[0].Origin.Z : 0;
+
+            foreach (Connector c in ends)
             {
+                bool isTop = ends.Count < 2 || c.Origin.Z >= topZ - 1e-6;
                 ConnectorSet refs; try { refs = c.AllRefs; } catch { continue; }
                 if (refs == null) continue;
 
@@ -258,7 +286,7 @@ namespace SgRevitAddin.Commands.Modify
                     Element owner = o.Owner;
                     if (owner == null || owner.Id == pipe.Id) continue;
 
-                    if (owner is Pipe bp && !IsVertical(bp)) { origin = c.Origin; return bp; }
+                    if (owner is Pipe bp && !IsVertical(bp)) { origin = c.Origin; atTop = isTop; return bp; }
 
                     if ((owner.Category?.Id.IntegerValue ?? 0) == (int)BuiltInCategory.OST_PipeFitting)
                     {
@@ -270,7 +298,7 @@ namespace SgRevitAddin.Commands.Modify
                             if (frefs == null) continue;
                             foreach (Connector fo in frefs)
                                 if (fo.Owner is Pipe fbp && fbp.Id != pipe.Id && !IsVertical(fbp))
-                                { origin = c.Origin; return fbp; }
+                                { origin = c.Origin; atTop = isTop; return fbp; }
                         }
                     }
                 }

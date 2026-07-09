@@ -6,8 +6,9 @@
 ## Purpose
 
 Places a rotatable **annotation symbol** (your riser-nipple symbol, with its mask)
-at the **top of vertical pipes**, centered on the pipe in plan and **auto-rotated
-to the branch** it comes from.
+at the **top of vertical pipes**, centered on the pipe in plan and **auto-rotated**
+so the line runs along the **horizontal pipe connected at the top** (the higher
+pipe) and the solid semicircle marks the lower, vertical side.
 
 > It places a **Generic Annotation / Sprinkler Tags family instance** (via
 > `NewFamilyInstance`, like the Pretty Sprinklers head overlays), **not** a pipe
@@ -29,8 +30,9 @@ otherwise needs.
 - **Vertical pipes only** — restrict to near-vertical pipes (within 30° of plumb).
 - **Only drops (reach a sprinkler)** — further restrict to vertical pipes that
   connect down to a sprinkler within a couple of hops.
-- **Auto-rotate the tag to the branch direction** — rotate the tag so its symbol
-  points along the horizontal branch the riser connects to.
+- **Auto-rotate the tag to the branch direction** — rotate the tag so its line
+  points along the horizontal pipe connected at the **top** of the vertical
+  (the higher pipe), extending away from the vertical.
 - **Fine-tune** — per-family calibration:
   - **Center nudge X / Y** (inches) — offset the tag head if your family's origin
     isn't at the symbol center.
@@ -44,8 +46,13 @@ the active view.
 
 - The tag head lands at the pipe's **top endpoint** in plan (not the 3-D midpoint,
   which drifts off the riser when the pipe is sloped).
-- Auto-rotation reads the connected horizontal branch pipe (directly or through a
-  fitting) and rotates the tag to point along it.
+- Auto-rotation reads the horizontal pipe connected at the vertical's **top**
+  (directly or through a fitting) and points the line along it, away from the
+  vertical — the line marks the horizontal-and-higher pipe, the semicircle the
+  lower side. For an armover (branch → riser up → over → drop down), both ends
+  tag with the lines on the inside of the armover and the semicircles on the
+  outsides. A rise straight off the branch line (head on top, no horizontal
+  above) falls back to the branch at its bottom.
 - Pipes already tagged with the chosen family (in the view) are skipped.
 
 ## Notes
