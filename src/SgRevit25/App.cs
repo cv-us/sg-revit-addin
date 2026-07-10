@@ -18,6 +18,13 @@ namespace SgRevitAddin
             try { application.CreateRibbonTab(tabName); }
             catch (Exception) { }
 
+            // ── Sprinkler Layout panel ──
+            RibbonPanel layoutPanel = application.CreateRibbonPanel(tabName, "Sprinkler Layout");
+            AddLargeButton(layoutPanel, "SprinklerLayout", "Layout", asmPath,
+                "SgRevitAddin.Commands.SprinklerLayout.LayoutCommand",
+                "sprinkler-layout-32.png", "sprinkler-layout-16.png",
+                "Lay out branch lines with sprinklers at VARIABLE spacings to fill an area. Numbered slots hold line spacings and lettered slots hold head spacings; the sequences (e.g. 112112 for lines, AABA for heads) REPEAT to fill the picked rectangle. Two modes: Fill area (pick two corners) or Area + central main (pick two corners and a main line — branches slope down to the main and tie in with riser nipples + tees, draining dry/pre-action systems). Heads at outlets or on sprigs; branch ends can be capped. (Under development — needs field testing.)");
+
             // ── Pipe Routing panel ──
             RibbonPanel pipingPanel = application.CreateRibbonPanel(tabName, "Pipe Routing");
             AddLargeButton(pipingPanel, "AutoShortenFlexPipes", "Shorten\nFlex Pipes", asmPath,

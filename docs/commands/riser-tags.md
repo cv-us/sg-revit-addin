@@ -53,6 +53,9 @@ the active view.
   tag with the lines on the inside of the armover and the semicircles on the
   outsides. A rise straight off the branch line (head on top, no horizontal
   above) falls back to the branch at its bottom.
+- **Sprigs are never tagged** — a vertical pipe off the TOP of the branch line
+  that just feeds a single head above (head above + horizontal pipe below)
+  needs no riser-nipple symbol; the report counts them separately.
 - Pipes already tagged with the chosen family (in the view) are skipped.
 
 ## Notes

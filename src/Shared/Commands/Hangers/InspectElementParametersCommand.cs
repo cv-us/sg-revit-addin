@@ -102,19 +102,32 @@ namespace SgRevitAddin.Commands.Hangers
                 sb.AppendLine();
             }
 
-            // Connector summary (relevant for hangers)
-            if (fi != null && fi.MEPModel?.ConnectorManager != null)
+            // Connector summary — works on fittings (FamilyInstance) AND pipes (MEPCurve).
+            // The connector's size/radius is what drives fitting sizing (relevant for
+            // matching a cap to the pipe it sits on).
+            ConnectorManager cm = fi?.MEPModel?.ConnectorManager
+                                  ?? (target as MEPCurve)?.ConnectorManager;
+            if (cm != null)
             {
                 sb.AppendLine("=== MEP CONNECTORS ===");
                 int connCount = 0;
-                foreach (Connector c in fi.MEPModel.ConnectorManager.Connectors)
+                foreach (Connector c in cm.Connectors)
                 {
                     connCount++;
                     string connInfo = $"  Connector {c.Id}: ";
+                    try { connInfo += $"type={c.ConnectorType}, "; } catch { }
                     try { connInfo += $"domain={c.Domain}, "; } catch { }
-                    try { connInfo += $"isConnected={c.IsConnected}, "; } catch { }
-                    try { connInfo += $"origin=({c.Origin.X:F3},{c.Origin.Y:F3},{c.Origin.Z:F3})"; }
-                    catch { }
+                    try { connInfo += $"shape={c.Shape}, "; } catch { }
+                    try
+                    {
+                        double r = c.Radius;    // feet; throws for non-round
+                        connInfo += $"radius={r:F4} ft  (DIA={r * 24.0:F3} in), ";
+                    }
+                    catch
+                    {
+                        try { connInfo += $"W×H={c.Width * 12.0:F3}×{c.Height * 12.0:F3} in, "; } catch { }
+                    }
+                    try { connInfo += $"isConnected={c.IsConnected}"; } catch { }
                     sb.AppendLine(connInfo);
 
                     if (c.IsConnected)
@@ -123,7 +136,7 @@ namespace SgRevitAddin.Commands.Hangers
                         {
                             foreach (Connector other in c.AllRefs)
                             {
-                                if (other.Owner.Id == fi.Id) continue;
+                                if (other.Owner.Id == target.Id) continue;
                                 sb.AppendLine($"    -> connected to {other.Owner.Category?.Name} " +
                                               $"id={other.Owner.Id.IntegerValue}");
                             }

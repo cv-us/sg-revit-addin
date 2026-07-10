@@ -95,12 +95,20 @@ namespace SgRevitAddin.Commands.Modify
             else if (dlg.VerticalOnly) pipes = pipes.Where(IsVertical).ToList();
             pipes = pipes.GroupBy(p => p.Id).Select(g => g.First()).ToList();
 
+            // Never tag sprigs — a vertical pipe off the TOP of the branch line that
+            // just feeds a single head above needs no riser-nipple symbol.
+            int skSprig = pipes.Count;
+            pipes = pipes.Where(p => !IsSprig(p)).ToList();
+            skSprig -= pipes.Count;
+
             if (pipes.Count == 0)
             {
-                TaskDialog.Show("Riser Tags",
-                    dlg.Scope == RiserTagsDialog.RiserScope.Selection
+                string why = skSprig > 0
+                    ? $"All {skSprig} matching vertical pipe(s) are sprigs (a head above, branch line below) — sprigs aren't tagged."
+                    : dlg.Scope == RiserTagsDialog.RiserScope.Selection
                         ? "No matching pipes in the selection (check the Vertical/Drops filters)."
-                        : "No matching vertical pipes found in the chosen scope.");
+                        : "No matching vertical pipes found in the chosen scope.";
+                TaskDialog.Show("Riser Tags", why);
                 return;
             }
 
@@ -159,6 +167,7 @@ namespace SgRevitAddin.Commands.Modify
                             $"Symbols placed: {placed}\n" +
                             $"Pipes considered: {pipes.Count}\n";
             if (dlg.AutoRotate || Math.Abs(rotOff) > 1e-9) report += $"Rotated: {rotated}\n";
+            if (skSprig > 0) report += $"Skipped (sprigs feeding a head above): {skSprig}\n";
             if (skDup > 0) report += $"Skipped (a symbol already at the top): {skDup}\n";
             if (skNoTop > 0) report += $"Skipped (no location): {skNoTop}\n";
             report += "\nIf the rotation is off, adjust Rotate + in the dialog (it works now — these are " +
@@ -277,33 +286,88 @@ namespace SgRevitAddin.Commands.Modify
 
             foreach (Connector c in ends)
             {
-                bool isTop = ends.Count < 2 || c.Origin.Z >= topZ - 1e-6;
-                ConnectorSet refs; try { refs = c.AllRefs; } catch { continue; }
-                if (refs == null) continue;
-
-                foreach (Connector o in refs)
+                Pipe hp = HorizontalPipeFrom(c, pipe.Id);
+                if (hp != null)
                 {
-                    Element owner = o.Owner;
-                    if (owner == null || owner.Id == pipe.Id) continue;
+                    origin = c.Origin;
+                    atTop = ends.Count < 2 || c.Origin.Z >= topZ - 1e-6;
+                    return hp;
+                }
+            }
+            return null;
+        }
 
-                    if (owner is Pipe bp && !IsVertical(bp)) { origin = c.Origin; atTop = isTop; return bp; }
+        /// <summary>The horizontal pipe reachable from an end connector — directly or
+        /// through the adjacent fitting (elbow/tee).</summary>
+        private static Pipe HorizontalPipeFrom(Connector c, ElementId selfId)
+        {
+            ConnectorSet refs; try { refs = c.AllRefs; } catch { return null; }
+            if (refs == null) return null;
 
-                    if ((owner.Category?.Id.IntegerValue ?? 0) == (int)BuiltInCategory.OST_PipeFitting)
+            foreach (Connector o in refs)
+            {
+                Element owner = o.Owner;
+                if (owner == null || owner.Id == selfId) continue;
+
+                if (owner is Pipe bp && !IsVertical(bp)) return bp;
+
+                if ((owner.Category?.Id.IntegerValue ?? 0) == (int)BuiltInCategory.OST_PipeFitting)
+                {
+                    var cs = GetConnectors(owner);
+                    if (cs == null) continue;
+                    foreach (Connector fc in cs.Cast<Connector>())
                     {
-                        var cs = GetConnectors(owner);
-                        if (cs == null) continue;
-                        foreach (Connector fc in cs.Cast<Connector>())
-                        {
-                            ConnectorSet frefs; try { frefs = fc.AllRefs; } catch { continue; }
-                            if (frefs == null) continue;
-                            foreach (Connector fo in frefs)
-                                if (fo.Owner is Pipe fbp && fbp.Id != pipe.Id && !IsVertical(fbp))
-                                { origin = c.Origin; atTop = isTop; return fbp; }
-                        }
+                        ConnectorSet frefs; try { frefs = fc.AllRefs; } catch { continue; }
+                        if (frefs == null) continue;
+                        foreach (Connector fo in frefs)
+                            if (fo.Owner is Pipe fbp && fbp.Id != selfId && !IsVertical(fbp)) return fbp;
                     }
                 }
             }
             return null;
+        }
+
+        /// <summary>A sprig: a vertical pipe off the TOP of the branch line that feeds
+        /// a single sprinkler above (upright head) — the head above and the horizontal
+        /// pipe below distinguish it from a riser nipple (horizontal pipe above) and a
+        /// pendent drop (horizontal pipe above, head below).</summary>
+        private static bool IsSprig(Pipe pipe)
+        {
+            if (!IsVertical(pipe)) return false;
+            var cm = pipe.ConnectorManager?.Connectors;
+            if (cm == null) return false;
+            var ends = cm.Cast<Connector>().Where(c => c.ConnectorType == ConnectorType.End)
+                .OrderByDescending(c => c.Origin.Z).ToList();
+            if (ends.Count < 2) return false;
+
+            if (!ReachesSprinkler(ends[0], new HashSet<ElementId> { pipe.Id }, 2)) return false;
+            return ReachesHorizontalPipe(ends[ends.Count - 1], new HashSet<ElementId> { pipe.Id }, 2);
+        }
+
+        /// <summary>Whether a horizontal pipe is reachable from a connector, directly or
+        /// through up to <paramref name="hops"/> fittings — symmetric with
+        /// <see cref="ReachesSprinkler"/> so a sprig based on a tee + auto-inserted
+        /// reducer (two fitting hops to the branch line) is still recognized.</summary>
+        private static bool ReachesHorizontalPipe(Connector from, HashSet<ElementId> visited, int hops)
+        {
+            if (from == null) return false;
+            ConnectorSet refs; try { refs = from.AllRefs; } catch { return false; }
+            if (refs == null) return false;
+            foreach (Connector other in refs)
+            {
+                Element owner = other.Owner;
+                if (owner == null || visited.Contains(owner.Id)) continue;
+                if (owner is Pipe bp && !IsVertical(bp)) return true;
+                if (hops > 0 && (owner.Category?.Id.IntegerValue ?? 0) == (int)BuiltInCategory.OST_PipeFitting)
+                {
+                    visited.Add(owner.Id);
+                    var cs = GetConnectors(owner);
+                    if (cs != null)
+                        foreach (Connector oc in cs.Cast<Connector>())
+                            if (ReachesHorizontalPipe(oc, visited, hops - 1)) return true;
+                }
+            }
+            return false;
         }
 
         /// <summary>Direction from <paramref name="origin"/> toward the end of

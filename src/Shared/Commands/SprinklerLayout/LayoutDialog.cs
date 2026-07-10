@@ -1,0 +1,552 @@
+using SgRevitAddin.Utils;
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Globalization;
+using System.Linq;
+using System.Windows.Forms;
+
+namespace SgRevitAddin.Commands.SprinklerLayout
+{
+    /// <summary>
+    /// Settings dialog for <see cref="LayoutCommand"/> — variable-spacing branch-line
+    /// and sprinkler layout that fills a picked area. Line spacings live in numbered
+    /// slots (1-6) and head spacings in lettered slots (A-F); the sequence strings
+    /// CYCLE to fill the area (line "112112" tiles across the width, head "AABA" tiles
+    /// along each line's length). Two pick modes: "Fill area" (pick two corners) and
+    /// "Area + central main" (pick two corners and a main line — branches slope down
+    /// toward the main and tie in with riser nipples + tees, the main slopes toward its
+    /// riser end). All values are remembered.
+    /// </summary>
+    public class LayoutDialog : DpiAwareForm
+    {
+        private const string MemKey = "Layout";
+        private const int SlotCount = 6;
+
+        public enum PickModeKind { FillArea = 0, AreaMain = 1 }
+
+        private readonly TextBox[] _lnFt = new TextBox[SlotCount];
+        private readonly TextBox[] _lnIn = new TextBox[SlotCount];
+        private readonly TextBox[] _hdFt = new TextBox[SlotCount];
+        private readonly TextBox[] _hdIn = new TextBox[SlotCount];
+        private TextBox _txtLineSeq, _txtHeadSeq;
+
+        private ComboBox _cmbPickMode;
+        private Panel _dirToggle;           // clickable arrows: branch-line direction
+        private bool _linesAlongX = true;
+
+        private ComboBox _cmbPipeType, _cmbSystem, _cmbLevel, _cmbHead;
+        private NumericUpDown _numLineSize, _numSprigSize, _numMainSize, _numRiserSize;
+        private TextBox _txtElevFt, _txtElevIn, _txtSlope;
+        private GroupBox _grpMain;
+        private TextBox _txtMainElevFt, _txtMainElevIn, _txtMainSlope;
+        private CheckBox _chkMainReverse;
+        private RadioButton _rbOutlets, _rbSprigs, _rbTermElev, _rbSprigLen;
+        private TextBox _txtTermFt, _txtTermIn, _txtLenFt, _txtLenIn;
+        private CheckBox _chkCap;
+        private TextBox _txtCapFt, _txtCapIn;
+
+        private readonly IList<(int id, string name)> _pipeTypes;
+        private readonly IList<(int id, string name)> _systemTypes;
+        private readonly IList<(int id, string name)> _headTypes;
+        private readonly IList<(int id, string name)> _fittings;
+        private readonly IList<string> _levels;
+        private readonly string _defaultLevel;
+        private readonly string _defaultOutlet;
+        private readonly string _defaultRiserTee;
+
+        // ── Results (valid after DialogResult.OK) ──
+        public double[] LineSlotFt { get; } = new double[SlotCount];
+        public double[] HeadSlotFt { get; } = new double[SlotCount];
+        public string LineSequence { get; private set; } = "";
+        public string HeadSequence { get; private set; } = "";
+        public PickModeKind PickMode { get; private set; }
+        public bool LinesAlongX => _linesAlongX;
+        public int PipeTypeId { get; private set; }
+        public int SystemTypeId { get; private set; }
+        public int HeadSymbolId { get; private set; }
+        public string LevelName { get; private set; } = "";
+        public double StartElevFt { get; private set; }
+        public double SlopeFtPerFt { get; private set; }        // branch slope, ft rise per ft run
+        public double LineSizeIn { get; private set; }
+        public double SprigSizeIn { get; private set; }
+        public bool UseSprigs { get; private set; }
+        public bool SprigsToCommonElev { get; private set; }
+        public double TermElevFt { get; private set; }
+        public double SprigLenFt { get; private set; }
+        public bool CapEnds { get; private set; }
+        public double ExtendToCapFt { get; private set; }
+        public double MainSizeIn { get; private set; }
+        public double RiserSizeIn { get; private set; }
+        public double MainElevFt { get; private set; }
+        public double MainSlopeFtPerFt { get; private set; }    // main slope, ft fall per ft run
+        public bool MainSlopeReversed { get; private set; }
+        public int OutletFittingId { get; private set; } = -1;  // -1 = routing-preference default
+        public int RiserTeeFittingId { get; private set; } = -1;
+
+        private const string DefaultLabel = "(routing-preference default)";
+        private ComboBox _cmbOutlet, _cmbRiserTee;
+
+        public LayoutDialog(IList<(int id, string name)> pipeTypes,
+                            IList<(int id, string name)> systemTypes,
+                            IList<(int id, string name)> headTypes,
+                            IList<string> levels, string defaultLevel,
+                            IList<(int id, string name)> fittings, string defaultOutlet, string defaultRiserTee)
+        {
+            _pipeTypes = pipeTypes;
+            _systemTypes = systemTypes;
+            _headTypes = headTypes;
+            _levels = levels;
+            _defaultLevel = defaultLevel;
+            _fittings = fittings;
+            _defaultOutlet = defaultOutlet;
+            _defaultRiserTee = defaultRiserTee;
+
+            AllowResize = false;    // fixed size — pins the buttons below the groups
+            RememberSize = false;
+            InitializeComponent();
+        }
+
+        private void InitializeComponent()
+        {
+            Text = "Layout";
+            StartPosition = FormStartPosition.CenterScreen;
+            ClientSize = new Size(740, 674);
+            Font = new Font("Segoe UI", 9f);
+
+            const int M = 15;
+
+            // ── Spacing slots (two groups) + mode column, top row ──
+            var grpLines = new GroupBox { Text = "Line spacing slots", Location = new Point(M, 12), Size = new Size(250, 250) };
+            BuildSlots(grpLines, _lnFt, _lnIn, i => (i + 1).ToString(), "Ln");
+            _txtLineSeq = BuildSequence(grpLines, "LineSeq", "112112",
+                "One digit per line spacing; repeats to fill the area's width.");
+            Controls.Add(grpLines);
+
+            var grpHeads = new GroupBox { Text = "Head spacing slots", Location = new Point(M + 258, 12), Size = new Size(250, 250) };
+            BuildSlots(grpHeads, _hdFt, _hdIn, i => ((char)('A' + i)).ToString(), "Hd");
+            _txtHeadSeq = BuildSequence(grpHeads, "HeadSeq", "AABA",
+                "One letter per head spacing; repeats along each line's length.");
+            Controls.Add(grpHeads);
+
+            BuildModeColumn(new Point(M + 516, 12), new Size(194, 250));
+
+            int y = 270;
+
+            // ── Branch lines ──
+            var grpPipe = new GroupBox { Text = "Branch lines", Location = new Point(M, y), Size = new Size(350, 180) };
+            int gy = 22;
+            grpPipe.Controls.Add(new Label { Text = "Pipe type:", Location = new Point(10, gy + 3), AutoSize = true });
+            _cmbPipeType = AddCombo(grpPipe, new Point(80, gy), 258,
+                _pipeTypes.Select(t => t.name), DialogMemory.Get(MemKey, "PipeType", DefaultPipeTypeName()));
+            gy += 27;
+            grpPipe.Controls.Add(new Label { Text = "System:", Location = new Point(10, gy + 3), AutoSize = true });
+            _cmbSystem = AddCombo(grpPipe, new Point(80, gy), 258,
+                _systemTypes.Select(t => t.name), DialogMemory.Get(MemKey, "System", DefaultSystemName()));
+            gy += 27;
+            grpPipe.Controls.Add(new Label { Text = "Line size:", Location = new Point(10, gy + 3), AutoSize = true });
+            _numLineSize = AddSizeNum(grpPipe, new Point(80, gy), DialogMemory.GetDouble(MemKey, "LineSize", 1.25));
+            grpPipe.Controls.Add(new Label { Text = "in", Location = new Point(146, gy + 3), AutoSize = true });
+            grpPipe.Controls.Add(new Label { Text = "Level:", Location = new Point(178, gy + 3), AutoSize = true });
+            _cmbLevel = AddCombo(grpPipe, new Point(218, gy), 120,
+                _levels, DialogMemory.Get(MemKey, "Level", _defaultLevel ?? ""));
+            gy += 27;
+            grpPipe.Controls.Add(new Label { Text = "Start elev:", Location = new Point(10, gy + 3), AutoSize = true });
+            AddFtIn(grpPipe, 80, gy, "ElevFt", "ElevIn", "10", "0", out _txtElevFt, out _txtElevIn);
+            grpPipe.Controls.Add(new Label { Text = "above level", Location = new Point(210, gy + 3), AutoSize = true });
+            gy += 27;
+            grpPipe.Controls.Add(new Label { Text = "Slope:", Location = new Point(10, gy + 3), AutoSize = true });
+            _txtSlope = new TextBox { Location = new Point(80, gy), Size = new Size(48, 22), Text = DialogMemory.Get(MemKey, "BrSlope", "0.5") };
+            grpPipe.Controls.Add(_txtSlope);
+            grpPipe.Controls.Add(new Label { Text = "in / 10 ft  (↓ to main)", Location = new Point(134, gy + 3), AutoSize = true });
+            Controls.Add(grpPipe);
+
+            // ── Main (enabled only in Area + central main mode) ──
+            _grpMain = new GroupBox { Text = "Cross-main (3-point mode)", Location = new Point(M + 360, y), Size = new Size(350, 190) };
+            gy = 22;
+            _grpMain.Controls.Add(new Label { Text = "Main size:", Location = new Point(10, gy + 3), AutoSize = true });
+            _numMainSize = AddSizeNum(_grpMain, new Point(80, gy), DialogMemory.GetDouble(MemKey, "MainSize", 2.5));
+            _grpMain.Controls.Add(new Label { Text = "in", Location = new Point(146, gy + 3), AutoSize = true });
+            _grpMain.Controls.Add(new Label { Text = "Riser:", Location = new Point(178, gy + 3), AutoSize = true });
+            _numRiserSize = AddSizeNum(_grpMain, new Point(228, gy), DialogMemory.GetDouble(MemKey, "RiserSize", 1.5));
+            _grpMain.Controls.Add(new Label { Text = "in", Location = new Point(294, gy + 3), AutoSize = true });
+            gy += 27;
+            _grpMain.Controls.Add(new Label { Text = "Main elev:", Location = new Point(10, gy + 3), AutoSize = true });
+            AddFtIn(_grpMain, 80, gy, "MainElevFt", "MainElevIn", "9", "0", out _txtMainElevFt, out _txtMainElevIn);
+            _grpMain.Controls.Add(new Label { Text = "above level", Location = new Point(210, gy + 3), AutoSize = true });
+            gy += 27;
+            _grpMain.Controls.Add(new Label { Text = "Main slope:", Location = new Point(10, gy + 3), AutoSize = true });
+            _txtMainSlope = new TextBox { Location = new Point(80, gy), Size = new Size(48, 22), Text = DialogMemory.Get(MemKey, "MainSlope", "0.25") };
+            _grpMain.Controls.Add(_txtMainSlope);
+            _grpMain.Controls.Add(new Label { Text = "in / 10 ft   down toward the riser", Location = new Point(134, gy + 3), AutoSize = true });
+            gy += 27;
+            var fitNames = new List<string> { DefaultLabel };
+            fitNames.AddRange(_fittings.Select(f => f.name));
+            _grpMain.Controls.Add(new Label { Text = "Main outlet:", Location = new Point(10, gy + 3), AutoSize = true });
+            _cmbOutlet = AddCombo(_grpMain, new Point(80, gy), 258, fitNames,
+                DialogMemory.Get(MemKey, "Outlet", _defaultOutlet ?? DefaultLabel));
+            gy += 27;
+            _grpMain.Controls.Add(new Label { Text = "Riser tee:", Location = new Point(10, gy + 3), AutoSize = true });
+            _cmbRiserTee = AddCombo(_grpMain, new Point(80, gy), 258, fitNames,
+                DialogMemory.Get(MemKey, "RiserTee", _defaultRiserTee ?? DefaultLabel));
+            gy += 27;
+            _chkMainReverse = new CheckBox
+            {
+                Text = "Riser at the far end (reverse the main's downhill)",
+                Location = new Point(10, gy),
+                AutoSize = true,
+                Checked = DialogMemory.GetBool(MemKey, "MainReverse", false)
+            };
+            _grpMain.Controls.Add(_chkMainReverse);
+            Controls.Add(_grpMain);
+
+            y += 198;
+
+            // ── Sprinklers (full width) ──
+            var grpSprk = new GroupBox { Text = "Sprinklers", Location = new Point(M, y), Size = new Size(710, 150) };
+            gy = 22;
+            grpSprk.Controls.Add(new Label { Text = "Head type:", Location = new Point(10, gy + 3), AutoSize = true });
+            _cmbHead = AddCombo(grpSprk, new Point(80, gy), 400,
+                _headTypes.Select(t => t.name), DialogMemory.Get(MemKey, "Head", ""));
+            gy += 30;
+            _rbOutlets = new RadioButton { Text = "Heads directly at outlets on the line", Location = new Point(10, gy), AutoSize = true };
+            grpSprk.Controls.Add(_rbOutlets);
+            _rbSprigs = new RadioButton { Text = "Sprigs up to heads", Location = new Point(330, gy), AutoSize = true };
+            grpSprk.Controls.Add(_rbSprigs);
+            _numSprigSize = AddSizeNum(grpSprk, new Point(470, gy - 2), DialogMemory.GetDouble(MemKey, "SprigSize", 1.0));
+            grpSprk.Controls.Add(new Label { Text = "in sprig size", Location = new Point(538, gy + 1), AutoSize = true });
+            gy += 26;
+            var pnlSprig = new Panel { Location = new Point(330, gy), Size = new Size(370, 52) };
+            _rbTermElev = new RadioButton { Text = "Common head elevation:", Location = new Point(0, 2), AutoSize = true };
+            pnlSprig.Controls.Add(_rbTermElev);
+            AddFtIn(pnlSprig, 160, 0, "TermFt", "TermIn", "12", "0", out _txtTermFt, out _txtTermIn);
+            pnlSprig.Controls.Add(new Label { Text = "above level", Location = new Point(288, 3), AutoSize = true });
+            _rbSprigLen = new RadioButton { Text = "Fixed sprig length:", Location = new Point(0, 28), AutoSize = true };
+            pnlSprig.Controls.Add(_rbSprigLen);
+            AddFtIn(pnlSprig, 160, 26, "LenFt", "LenIn", "1", "0", out _txtLenFt, out _txtLenIn);
+            grpSprk.Controls.Add(pnlSprig);
+            Controls.Add(grpSprk);
+
+            bool sprigs = DialogMemory.GetBool(MemKey, "UseSprigs", true);
+            _rbSprigs.Checked = sprigs;
+            _rbOutlets.Checked = !sprigs;
+            bool term = DialogMemory.GetBool(MemKey, "CommonElev", true);
+            _rbTermElev.Checked = term;
+            _rbSprigLen.Checked = !term;
+
+            EventHandler syncEnable = (s, e) =>
+            {
+                bool sp = _rbSprigs.Checked;
+                _numSprigSize.Enabled = sp;
+                _rbTermElev.Enabled = _rbSprigLen.Enabled = sp;
+                _txtTermFt.Enabled = _txtTermIn.Enabled = sp && _rbTermElev.Checked;
+                _txtLenFt.Enabled = _txtLenIn.Enabled = sp && _rbSprigLen.Checked;
+            };
+            _rbOutlets.CheckedChanged += syncEnable;
+            _rbSprigs.CheckedChanged += syncEnable;
+            _rbTermElev.CheckedChanged += syncEnable;
+            _rbSprigLen.CheckedChanged += syncEnable;
+            syncEnable(null, EventArgs.Empty);
+
+            y += 158;
+
+            var btnPlace = new Button { Location = new Point(740 - M - 90 - 10 - 170, y), Size = new Size(170, 30) };
+            btnPlace.Click += (s, e) => OnPlace();
+            Controls.Add(btnPlace);
+            AcceptButton = btnPlace;
+
+            var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(740 - M - 90, y), Size = new Size(90, 30) };
+            Controls.Add(btnCancel);
+            CancelButton = btnCancel;
+
+            // Pick-mode wiring: enable the main group + relabel the button.
+            EventHandler modeChanged = (s, e) =>
+            {
+                bool main = _cmbPickMode.SelectedIndex == (int)PickModeKind.AreaMain;
+                _grpMain.Enabled = main;
+                btnPlace.Text = main ? "Place — pick 2 corners + main" : "Place — pick 2 corners";
+            };
+            _cmbPickMode.SelectedIndexChanged += modeChanged;
+            modeChanged(null, EventArgs.Empty);
+        }
+
+        // ── Mode column: pick-mode dropdown, direction arrows, cap options ──
+        private void BuildModeColumn(Point loc, Size size)
+        {
+            var grp = new GroupBox { Text = "Mode", Location = loc, Size = size };
+
+            grp.Controls.Add(new Label { Text = "Pick mode:", Location = new Point(10, 24), AutoSize = true });
+            _cmbPickMode = new ComboBox { Location = new Point(10, 44), Size = new Size(170, 24), DropDownStyle = ComboBoxStyle.DropDownList };
+            _cmbPickMode.Items.Add("Fill area (2 corners)");
+            _cmbPickMode.Items.Add("Area + central main (3 pts)");
+            _cmbPickMode.SelectedIndex = DialogMemory.GetInt(MemKey, "PickMode", 0) == 1 ? 1 : 0;
+            grp.Controls.Add(_cmbPickMode);
+
+            grp.Controls.Add(new Label { Text = "Branch-line direction:", Location = new Point(10, 78), AutoSize = true });
+            _linesAlongX = DialogMemory.GetBool(MemKey, "LinesAlongX", true);
+            _dirToggle = new Panel { Location = new Point(20, 98), Size = new Size(154, 58), Cursor = Cursors.Hand, BorderStyle = BorderStyle.FixedSingle };
+            _dirToggle.Paint += DrawDirArrows;
+            _dirToggle.Click += (s, e) => { _linesAlongX = !_linesAlongX; _dirToggle.Invalidate(); };
+            var tip = new ToolTip();
+            tip.SetToolTip(_dirToggle, "Click to rotate the branch-line direction (X ⇄ Y).");
+            grp.Controls.Add(_dirToggle);
+
+            _chkCap = new CheckBox
+            {
+                Text = "Cap branch-line ends",
+                Location = new Point(10, 168),
+                AutoSize = true,
+                Checked = DialogMemory.GetBool(MemKey, "CapEnds", true)
+            };
+            grp.Controls.Add(_chkCap);
+
+            grp.Controls.Add(new Label { Text = "Extend to cap:", Location = new Point(10, 196), AutoSize = true });
+            AddFtIn(grp, 10, 216, "CapFt", "CapIn", "0", "4", out _txtCapFt, out _txtCapIn);
+
+            Controls.Add(grp);
+        }
+
+        private void DrawDirArrows(object sender, PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            var rc = _dirToggle.ClientRectangle;
+            g.Clear(SystemColors.Window);
+            using (var pen = new Pen(Color.FromArgb(30, 90, 168), 3f))
+            using (var brush = new SolidBrush(Color.FromArgb(30, 90, 168)))
+            {
+                int cx = rc.Width / 2, cy = rc.Height / 2;
+                if (_linesAlongX)
+                {
+                    int x0 = 14, x1 = rc.Width - 14;
+                    g.DrawLine(pen, x0, cy, x1, cy);
+                    FillArrowHead(g, brush, new Point(x0, cy), true, -1);
+                    FillArrowHead(g, brush, new Point(x1, cy), true, +1);
+                }
+                else
+                {
+                    int y0 = 12, y1 = rc.Height - 12;
+                    g.DrawLine(pen, cx, y0, cx, y1);
+                    FillArrowHead(g, brush, new Point(cx, y0), false, -1);
+                    FillArrowHead(g, brush, new Point(cx, y1), false, +1);
+                }
+            }
+            TextRenderer.DrawText(g, _linesAlongX ? "X" : "Y", Font,
+                new Point(rc.Width / 2 - 6, rc.Height / 2 - 20), Color.Gray);
+        }
+
+        private static void FillArrowHead(Graphics g, Brush b, Point tip, bool horizontal, int dir)
+        {
+            const int s = 9;
+            Point[] pts = horizontal
+                ? new[] { tip, new Point(tip.X - dir * s, tip.Y - s), new Point(tip.X - dir * s, tip.Y + s) }
+                : new[] { tip, new Point(tip.X - s, tip.Y - dir * s), new Point(tip.X + s, tip.Y - dir * s) };
+            g.FillPolygon(b, pts);
+        }
+
+        // ── Control builders ──
+
+        private void BuildSlots(GroupBox grp, TextBox[] ft, TextBox[] inch, Func<int, string> label, string memPrefix)
+        {
+            for (int i = 0; i < SlotCount; i++)
+            {
+                int gy = 24 + i * 26;
+                grp.Controls.Add(new Label { Text = label(i), Location = new Point(12, gy + 3), AutoSize = true });
+                ft[i] = new TextBox { Location = new Point(38, gy), Size = new Size(44, 22), Text = DialogMemory.Get(MemKey, memPrefix + "Ft" + i, "") };
+                grp.Controls.Add(ft[i]);
+                grp.Controls.Add(new Label { Text = "ft", Location = new Point(86, gy + 3), AutoSize = true });
+                inch[i] = new TextBox { Location = new Point(106, gy), Size = new Size(44, 22), Text = DialogMemory.Get(MemKey, memPrefix + "In" + i, "") };
+                grp.Controls.Add(inch[i]);
+                grp.Controls.Add(new Label { Text = "in", Location = new Point(154, gy + 3), AutoSize = true });
+            }
+        }
+
+        private TextBox BuildSequence(GroupBox grp, string memField, string hint, string tip)
+        {
+            int gy = 24 + SlotCount * 26 + 6;
+            grp.Controls.Add(new Label { Text = "Sequence:", Location = new Point(12, gy + 3), AutoSize = true });
+            var txt = new TextBox { Location = new Point(82, gy), Size = new Size(150, 22), Text = DialogMemory.Get(MemKey, memField, hint) };
+            grp.Controls.Add(txt);
+            grp.Controls.Add(new Label
+            {
+                Text = tip,
+                Location = new Point(12, gy + 28),
+                Size = new Size(228, 30),
+                ForeColor = SystemColors.GrayText
+            });
+            return txt;
+        }
+
+        private static ComboBox AddCombo(Control parent, Point loc, int width, IEnumerable<string> items, string remembered)
+        {
+            var cmb = new ComboBox { Location = loc, Size = new Size(width, 24), DropDownStyle = ComboBoxStyle.DropDownList };
+            foreach (var it in items) cmb.Items.Add(it);
+            int idx = cmb.Items.IndexOf(remembered);
+            if (idx < 0 && cmb.Items.Count > 0) idx = 0;
+            cmb.SelectedIndex = idx;
+            parent.Controls.Add(cmb);
+            return cmb;
+        }
+
+        private static NumericUpDown AddSizeNum(Control parent, Point loc, double val)
+        {
+            var num = new NumericUpDown
+            {
+                Location = loc, Size = new Size(62, 22),
+                Minimum = 0.25m, Maximum = 24m, DecimalPlaces = 2, Increment = 0.25m,
+                Value = (decimal)Math.Max(0.25, Math.Min(24.0, val))
+            };
+            parent.Controls.Add(num);
+            return num;
+        }
+
+        private void AddFtIn(Control parent, int x, int y, string memF, string memI,
+                             string defF, string defI, out TextBox ft, out TextBox inch)
+        {
+            ft = new TextBox { Location = new Point(x, y), Size = new Size(40, 22), Text = DialogMemory.Get(MemKey, memF, defF) };
+            parent.Controls.Add(ft);
+            parent.Controls.Add(new Label { Text = "ft", Location = new Point(x + 44, y + 3), AutoSize = true });
+            inch = new TextBox { Location = new Point(x + 62, y), Size = new Size(40, 22), Text = DialogMemory.Get(MemKey, memI, defI) };
+            parent.Controls.Add(inch);
+            parent.Controls.Add(new Label { Text = "in", Location = new Point(x + 106, y + 3), AutoSize = true });
+        }
+
+        private string DefaultPipeTypeName()
+        {
+            var t = _pipeTypes.FirstOrDefault(p => p.name.IndexOf("thread", StringComparison.OrdinalIgnoreCase) >= 0);
+            return t.name ?? (_pipeTypes.Count > 0 ? _pipeTypes[0].name : "");
+        }
+
+        private string DefaultSystemName()
+        {
+            var t = _systemTypes.FirstOrDefault(p => p.name.IndexOf("wet", StringComparison.OrdinalIgnoreCase) >= 0);
+            return t.name ?? (_systemTypes.Count > 0 ? _systemTypes[0].name : "");
+        }
+
+        // ── OK ──
+
+        private void OnPlace()
+        {
+            for (int i = 0; i < SlotCount; i++)
+            {
+                LineSlotFt[i] = ParseNum(_lnFt[i]) + ParseNum(_lnIn[i]) / 12.0;
+                HeadSlotFt[i] = ParseNum(_hdFt[i]) + ParseNum(_hdIn[i]) / 12.0;
+            }
+
+            LineSequence = CleanSequence(_txtLineSeq.Text).ToUpperInvariant();
+            HeadSequence = CleanSequence(_txtHeadSeq.Text).ToUpperInvariant();
+
+            if (LineSequence.Length == 0)
+            { Warn("Enter a line-spacing sequence (e.g. 112112) — it repeats to fill the area."); return; }
+            foreach (char c in LineSequence)
+            {
+                if (c < '1' || c > '0' + SlotCount)
+                { Warn($"Line sequence character \"{c}\" isn't a slot number (1-{SlotCount})."); return; }
+                if (LineSlotFt[c - '1'] <= 1e-9)
+                { Warn($"Line slot {c} is referenced by the sequence but has no spacing."); return; }
+            }
+            foreach (char c in HeadSequence)
+            {
+                if (c < 'A' || c >= 'A' + SlotCount)
+                { Warn($"Head sequence character \"{c}\" isn't a slot letter (A-{(char)('A' + SlotCount - 1)})."); return; }
+                if (HeadSlotFt[c - 'A'] <= 1e-9)
+                { Warn($"Head slot {c} is referenced by the sequence but has no spacing."); return; }
+            }
+
+            if (_cmbPipeType.SelectedIndex < 0) { Warn("No pipe type selected."); return; }
+            if (_cmbSystem.SelectedIndex < 0) { Warn("No piping system type selected."); return; }
+            if (_cmbLevel.SelectedIndex < 0) { Warn("No level selected."); return; }
+            if (HeadSequence.Length > 0 && _cmbHead.SelectedIndex < 0)
+            { Warn("No sprinkler type selected."); return; }
+
+            PickMode = _cmbPickMode.SelectedIndex == 1 ? PickModeKind.AreaMain : PickModeKind.FillArea;
+            PipeTypeId = _pipeTypes[_cmbPipeType.SelectedIndex].id;
+            SystemTypeId = _systemTypes[_cmbSystem.SelectedIndex].id;
+            HeadSymbolId = _cmbHead.SelectedIndex >= 0 ? _headTypes[_cmbHead.SelectedIndex].id : -1;
+            LevelName = (string)_cmbLevel.SelectedItem;
+            StartElevFt = ParseNum(_txtElevFt) + ParseNum(_txtElevIn) / 12.0;
+            SlopeFtPerFt = ParseNum(_txtSlope) / 120.0;         // in per 10 ft → ft per ft
+            LineSizeIn = (double)_numLineSize.Value;
+            SprigSizeIn = (double)_numSprigSize.Value;
+            UseSprigs = _rbSprigs.Checked;
+            SprigsToCommonElev = _rbTermElev.Checked;
+            TermElevFt = ParseNum(_txtTermFt) + ParseNum(_txtTermIn) / 12.0;
+            SprigLenFt = ParseNum(_txtLenFt) + ParseNum(_txtLenIn) / 12.0;
+            CapEnds = _chkCap.Checked;
+            ExtendToCapFt = ParseNum(_txtCapFt) + ParseNum(_txtCapIn) / 12.0;
+            MainSizeIn = (double)_numMainSize.Value;
+            RiserSizeIn = (double)_numRiserSize.Value;
+            MainElevFt = ParseNum(_txtMainElevFt) + ParseNum(_txtMainElevIn) / 12.0;
+            MainSlopeFtPerFt = ParseNum(_txtMainSlope) / 120.0;
+            MainSlopeReversed = _chkMainReverse.Checked;
+            OutletFittingId = FittingIdAt(_cmbOutlet);
+            RiserTeeFittingId = FittingIdAt(_cmbRiserTee);
+
+            for (int i = 0; i < SlotCount; i++)
+            {
+                DialogMemory.Set(MemKey, "LnFt" + i, _lnFt[i].Text);
+                DialogMemory.Set(MemKey, "LnIn" + i, _lnIn[i].Text);
+                DialogMemory.Set(MemKey, "HdFt" + i, _hdFt[i].Text);
+                DialogMemory.Set(MemKey, "HdIn" + i, _hdIn[i].Text);
+            }
+            DialogMemory.Set(MemKey, "LineSeq", _txtLineSeq.Text);
+            DialogMemory.Set(MemKey, "HeadSeq", _txtHeadSeq.Text);
+            DialogMemory.SetInt(MemKey, "PickMode", (int)PickMode);
+            DialogMemory.SetBool(MemKey, "LinesAlongX", _linesAlongX);
+            DialogMemory.Set(MemKey, "PipeType", (string)_cmbPipeType.SelectedItem);
+            DialogMemory.Set(MemKey, "System", (string)_cmbSystem.SelectedItem);
+            DialogMemory.Set(MemKey, "Level", LevelName);
+            DialogMemory.Set(MemKey, "Head", _cmbHead.SelectedIndex >= 0 ? (string)_cmbHead.SelectedItem : "");
+            DialogMemory.Set(MemKey, "ElevFt", _txtElevFt.Text);
+            DialogMemory.Set(MemKey, "ElevIn", _txtElevIn.Text);
+            DialogMemory.Set(MemKey, "BrSlope", _txtSlope.Text);
+            DialogMemory.SetDouble(MemKey, "LineSize", LineSizeIn);
+            DialogMemory.SetDouble(MemKey, "SprigSize", SprigSizeIn);
+            DialogMemory.SetBool(MemKey, "UseSprigs", UseSprigs);
+            DialogMemory.SetBool(MemKey, "CommonElev", SprigsToCommonElev);
+            DialogMemory.Set(MemKey, "TermFt", _txtTermFt.Text);
+            DialogMemory.Set(MemKey, "TermIn", _txtTermIn.Text);
+            DialogMemory.Set(MemKey, "LenFt", _txtLenFt.Text);
+            DialogMemory.Set(MemKey, "LenIn", _txtLenIn.Text);
+            DialogMemory.SetBool(MemKey, "CapEnds", CapEnds);
+            DialogMemory.Set(MemKey, "CapFt", _txtCapFt.Text);
+            DialogMemory.Set(MemKey, "CapIn", _txtCapIn.Text);
+            DialogMemory.SetDouble(MemKey, "MainSize", MainSizeIn);
+            DialogMemory.SetDouble(MemKey, "RiserSize", RiserSizeIn);
+            DialogMemory.Set(MemKey, "MainElevFt", _txtMainElevFt.Text);
+            DialogMemory.Set(MemKey, "MainElevIn", _txtMainElevIn.Text);
+            DialogMemory.Set(MemKey, "MainSlope", _txtMainSlope.Text);
+            DialogMemory.SetBool(MemKey, "MainReverse", MainSlopeReversed);
+            DialogMemory.Set(MemKey, "Outlet", (string)_cmbOutlet.SelectedItem ?? DefaultLabel);
+            DialogMemory.Set(MemKey, "RiserTee", (string)_cmbRiserTee.SelectedItem ?? DefaultLabel);
+            DialogMemory.Flush();
+
+            DialogResult = DialogResult.OK;
+            Close();
+        }
+
+        private static string CleanSequence(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return "";
+            return new string(raw.Where(char.IsLetterOrDigit).ToArray());
+        }
+
+        private static double ParseNum(TextBox tb)
+        {
+            return double.TryParse(tb.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double v) ? v : 0.0;
+        }
+
+        /// <summary>Combo index 0 = the "(default)" row → -1; otherwise the fitting id.</summary>
+        private int FittingIdAt(ComboBox cmb)
+        {
+            int i = cmb.SelectedIndex;
+            return i <= 0 || i - 1 >= _fittings.Count ? -1 : _fittings[i - 1].id;
+        }
+
+        private static void Warn(string msg)
+        {
+            MessageBox.Show(msg, "Layout", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+}
