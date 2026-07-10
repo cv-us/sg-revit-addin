@@ -181,6 +181,13 @@ namespace SgRevitAddin
                 "hanger-gap-32.png", "hanger-gap-16.png",
                 "Flag selected hangers whose top-of-pipe to structure gap exceeds a threshold (default 6\").");
 
+            // ── Hydraulics panel ──
+            RibbonPanel hydraulicsPanel = application.CreateRibbonPanel(tabName, "Hydraulics");
+            AddLargeButton(hydraulicsPanel, "FluidDelivery", "Fluid\nDelivery", asmPath,
+                "SgRevitAddin.Commands.Hydraulics.FluidDeliveryCommand",
+                "fluid-delivery-32.png", "fluid-delivery-16.png",
+                "Estimate water-delivery time for a dry/preaction system: pick the source valve, draw a region to flag the flowing heads, trace the network to the most-remote head. Two-phase air-displacement model with PDF export. Engineering estimate — not a listed calc / not for code compliance.");
+
             // ── Coordination panel ──
             RibbonPanel coordPanel = application.CreateRibbonPanel(tabName, "Coordination");
             AddLargeButton(coordPanel, "ColorCodePipes", "Color Code\nPipes", asmPath,

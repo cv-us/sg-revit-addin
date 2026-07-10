@@ -81,6 +81,7 @@ Make-Pair "seismic" "SB" $red $W
 
 # Hydraulics (cyan)
 Make-Pair "hydraulics" "HY" $cyan $W
+Make-Pair "fluid-delivery" "WD" $cyan $W
 
 # Fabrication (brown)
 Make-Pair "fabrication" "CL" $brown $W

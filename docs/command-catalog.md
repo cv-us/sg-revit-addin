@@ -51,6 +51,9 @@ Master list of all SG Revit Addin commands.
 ## Seismic
 - `SeismicBracesCommand` - Auto-place lateral and/or longitudinal seismic braces on welded mains with NFPA spacing and rod length from linked structure
 
+## Hydraulics
+- `FluidDeliveryCommand` - Estimate WATER-DELIVERY TIME for a dry / (double-interlock) preaction system. Pick the source valve; draw a region (rectangle/polygon) to flag the flowing heads `Flowing (Hydratec)=1` (or use existing flowing); Dijkstra-traces the connector graph from source to the most-remote flowing head and runs a two-phase air-displacement model (Heskestad-Kung): air-trip blowdown `≈1.12·V/(K·N)` for dry-pipe differential (or detection latency for electric preaction) + water transit where each segment's fill is the min of air-vent-limited (`A_eff=0.0263·K·N` orifice venting) and supply-limited (Hazen-Williams friction + lift + air back-pressure). Path volume drives the time, whole-system volume is the code gate (`Volume Hydratec` param or computed from `Inside Diameter` bore). Hazard-class picker sets the NFPA 13 Table 8.2.3.6.1 target (Light 60/Ord 50/Extra 45/HP 40/Dwelling 15 s). Clean PDF export via a zero-dependency writer. **Documented engineering estimate (~±25-40%), NOT a listed calc / not for code compliance — verify with a listed program or trip test. Under development — needs field testing**
+
 ## Export
 - `ExportTrimblePointsCommand` - Export hanger locations as Trimble-compatible CSV point files for field layout of inserts before concrete pours
 - `ImportASPipesCommand` - Import pipe geometry from an AutoSPRINK CSV export and create Revit pipes (coordinates in inches)
