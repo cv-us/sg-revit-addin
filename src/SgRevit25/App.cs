@@ -416,6 +416,60 @@ namespace SgRevitAddin
                         using (var dlg = new PipeManiaDialog())
                             dlg.ShowDialog();
                     }
+                },
+                new ModifyButton
+                {
+                    Id = "SgPlaceholderFour",
+                    Label = "Placeholder\nFour",
+                    Tooltip = "Placeholder — reserved for a future tool.",
+                    LargeImage = IconHelper.LoadIcon("placeholder-32.png"),
+                    SmallImage = IconHelper.LoadIcon("placeholder-16.png"),
+                    OnClick = () => { using (var dlg = new DelugeDefenseDialog()) dlg.ShowDialog(); }
+                },
+                new ModifyButton
+                {
+                    Id = "SgPlaceholderFive",
+                    Label = "Placeholder\nFive",
+                    Tooltip = "Placeholder — reserved for a future tool.",
+                    LargeImage = IconHelper.LoadIcon("placeholder-32.png"),
+                    SmallImage = IconHelper.LoadIcon("placeholder-16.png"),
+                    OnClick = () => { using (var dlg = new UpsizeDialog()) dlg.ShowDialog(); }
+                },
+                new ModifyButton
+                {
+                    Id = "SgPlaceholderSix",
+                    Label = "Placeholder\nSix",
+                    Tooltip = "Placeholder — reserved for a future tool.",
+                    LargeImage = IconHelper.LoadIcon("placeholder-32.png"),
+                    SmallImage = IconHelper.LoadIcon("placeholder-16.png"),
+                    OnClick = () => { using (var dlg = new WaterHammerDialog()) dlg.ShowDialog(); }
+                },
+                new ModifyButton
+                {
+                    Id = "SgPlaceholderSeven",
+                    Label = "Placeholder\nSeven",
+                    Tooltip = "Placeholder — reserved for a future tool.",
+                    LargeImage = IconHelper.LoadIcon("placeholder-32.png"),
+                    SmallImage = IconHelper.LoadIcon("placeholder-16.png"),
+                    OnClick = () => { using (var dlg = new PlaceholderDialog("Placeholder Seven")) dlg.ShowDialog(); }
+                },
+                new ModifyButton
+                {
+                    Id = "SgPlaceholderEight",
+                    Label = "Placeholder\nEight",
+                    Tooltip = "Placeholder — reserved for a future tool.",
+                    LargeImage = IconHelper.LoadIcon("placeholder-32.png"),
+                    SmallImage = IconHelper.LoadIcon("placeholder-16.png"),
+                    OnClick = () => { using (var dlg = new PlaceholderDialog("Placeholder Eight")) dlg.ShowDialog(); }
+                },
+                new ModifyButton
+                {
+                    Id = "SgPlaceholderNine",
+                    Label = "Placeholder\nNine",
+                    Tooltip = "Placeholder — reserved for a future tool.",
+                    LargeImage = IconHelper.LoadIcon("placeholder-32.png"),
+                    SmallImage = IconHelper.LoadIcon("placeholder-16.png"),
+                    OnClick = () => { using (var dlg = new PlaceholderDialog("Placeholder Nine")) dlg.ShowDialog(); }
                 }
             };
             RibbonStyling.InjectModifyPanel("SG", modifyButtons);
