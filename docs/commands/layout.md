@@ -77,9 +77,10 @@ junction falls back to the routing-preference default and the count is reported.
 | Sequences | Digits (lines) / letters (heads); repeat to fill the area. A single character = uniform spacing. |
 | Pick mode | Fill area (2 corners), Area + central main (3 points), or Two mains (4 points). The pick guidance shows next to the **Place** button. |
 | Branch-line direction | Clickable arrows — rotate the branch direction between the screen X and Y axes. |
-| Pipe type / System / Line size | The pipe type, piping system, and nominal diameter for the branch lines. |
+| Pipe type / System / Line size | The pipe type, piping system, and size for the branch lines. **Size is a dropdown** of standard sprinkler-pipe sizes (¼″ … 12″; above that is underground only). Main / Riser / Sprig sizes use the same dropdown. |
 | Level / Start elevation | Reference level and the branch centerline elevation above it (in main mode, the branch's low point at the main). |
 | Slope | Branch slope, **inches per 10 ft**. In main mode this is the downhill toward the main (both sides). |
+| Start offset | Distance from the **first-picked corner** to the **first branch line**, before the line sequence repeats. E.g. set 2′-3″ to hold the first line 2′-3″ off a beam you click as the first corner. `0` keeps the original behavior (first line one spacing in). |
 | Cap branch-line ends / Extend to cap | Place the pipe type's routing-preference cap a set distance past the last head. |
 | Cross-main: Main size / Riser size | The cross-main's diameter and the riser-nipple diameter (off the main to the branches). |
 | Main elevation / slope | The cross-main's centerline elevation above the level and its slope (in/10 ft) toward the riser. |

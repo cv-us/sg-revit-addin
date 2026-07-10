@@ -12,7 +12,7 @@
 ; Output: installer\Output\SgRevitAddin-{version}-Setup.exe
 
 #define MyAppName "SG Revit Addin"
-#define MyAppVersion "0.3.31"
+#define MyAppVersion "0.3.32"
 #define MyAppPublisher "SG Fire Protection"
 #define MyAppURL "https://github.com/cv-us/sg-revit-addin"
 

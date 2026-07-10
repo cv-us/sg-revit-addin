@@ -37,8 +37,8 @@ namespace SgRevitAddin.Commands.SprinklerLayout
         private bool _linesAlongX = true;
 
         private ComboBox _cmbPipeType, _cmbSystem, _cmbLevel, _cmbHead, _cmbMainType, _cmbSprigType;
-        private NumericUpDown _numLineSize, _numSprigSize, _numMainSize, _numRiserSize;
-        private TextBox _txtElevFt, _txtElevIn, _txtSlope;
+        private ComboBox _cmbLineSize, _cmbSprigSize, _cmbMainSize, _cmbRiserSize;
+        private TextBox _txtElevFt, _txtElevIn, _txtSlope, _txtOffFt, _txtOffIn;
         private GroupBox _grpMain;
         private TextBox _txtMainElevFt, _txtMainElevIn, _txtMainSlope;
         private Label _lblMainSlope;
@@ -77,6 +77,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
         public double StartElevFt { get; private set; }
         public double SlopeFtPerFt { get; private set; }        // branch slope, ft rise per ft run
         public double LineSizeIn { get; private set; }
+        public double StartOffsetFt { get; private set; }       // 1st corner -> 1st line inset (0 = old behavior)
         public double SprigSizeIn { get; private set; }
         public bool UseSprigs { get; private set; }
         public bool SprigsToCommonElev { get; private set; }
@@ -143,7 +144,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             int y = 270;
 
             // ── Branch lines ──
-            var grpPipe = new GroupBox { Text = "Branch lines", Location = new Point(M, y), Size = new Size(350, 180) };
+            var grpPipe = new GroupBox { Text = "Branch lines", Location = new Point(M, y), Size = new Size(350, 208) };
             int gy = 22;
             grpPipe.Controls.Add(new Label { Text = "Line type:", Location = new Point(10, gy + 3), AutoSize = true });
             _cmbPipeType = AddCombo(grpPipe, new Point(80, gy), 258,
@@ -154,7 +155,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 _systemTypes.Select(t => t.name), DialogMemory.Get(MemKey, "System", DefaultSystemName()));
             gy += 27;
             grpPipe.Controls.Add(new Label { Text = "Line size:", Location = new Point(10, gy + 3), AutoSize = true });
-            _numLineSize = AddSizeNum(grpPipe, new Point(80, gy), DialogMemory.GetDouble(MemKey, "LineSize", 1.25));
+            _cmbLineSize = AddSizeCombo(grpPipe, new Point(80, gy), DialogMemory.GetDouble(MemKey, "LineSize", 1.25));
             grpPipe.Controls.Add(new Label { Text = "in", Location = new Point(146, gy + 3), AutoSize = true });
             grpPipe.Controls.Add(new Label { Text = "Level:", Location = new Point(178, gy + 3), AutoSize = true });
             _cmbLevel = AddCombo(grpPipe, new Point(218, gy), 120,
@@ -168,6 +169,10 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             _txtSlope = new TextBox { Location = new Point(80, gy), Size = new Size(48, 22), Text = DialogMemory.Get(MemKey, "BrSlope", "0.5") };
             grpPipe.Controls.Add(_txtSlope);
             grpPipe.Controls.Add(new Label { Text = "in / 10 ft  (↓ to main)", Location = new Point(134, gy + 3), AutoSize = true });
+            gy += 27;
+            grpPipe.Controls.Add(new Label { Text = "Start offset:", Location = new Point(10, gy + 3), AutoSize = true });
+            AddFtIn(grpPipe, 90, gy, "OffFt", "OffIn", "0", "0", out _txtOffFt, out _txtOffIn);
+            grpPipe.Controls.Add(new Label { Text = "1st corner → 1st line", Location = new Point(222, gy + 3), AutoSize = true });
             Controls.Add(grpPipe);
 
             // ── Main(s) — enabled in Area + central main (3-pt) and Two mains (4-pt) ──
@@ -178,10 +183,10 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 _pipeTypes.Select(t => t.name), DialogMemory.Get(MemKey, "MainType", DefaultMainTypeName()));
             gy += 27;
             _grpMain.Controls.Add(new Label { Text = "Main size:", Location = new Point(10, gy + 3), AutoSize = true });
-            _numMainSize = AddSizeNum(_grpMain, new Point(80, gy), DialogMemory.GetDouble(MemKey, "MainSize", 2.5));
+            _cmbMainSize = AddSizeCombo(_grpMain, new Point(80, gy), DialogMemory.GetDouble(MemKey, "MainSize", 2.5));
             _grpMain.Controls.Add(new Label { Text = "in", Location = new Point(146, gy + 3), AutoSize = true });
             _grpMain.Controls.Add(new Label { Text = "Riser:", Location = new Point(178, gy + 3), AutoSize = true });
-            _numRiserSize = AddSizeNum(_grpMain, new Point(228, gy), DialogMemory.GetDouble(MemKey, "RiserSize", 1.5));
+            _cmbRiserSize = AddSizeCombo(_grpMain, new Point(228, gy), DialogMemory.GetDouble(MemKey, "RiserSize", 1.5));
             _grpMain.Controls.Add(new Label { Text = "in", Location = new Point(294, gy + 3), AutoSize = true });
             gy += 27;
             _grpMain.Controls.Add(new Label { Text = "Main elev:", Location = new Point(10, gy + 3), AutoSize = true });
@@ -243,7 +248,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             grpSprk.Controls.Add(_rbOutlets);
             _rbSprigs = new RadioButton { Text = "Sprigs up to heads", Location = new Point(330, gy), AutoSize = true };
             grpSprk.Controls.Add(_rbSprigs);
-            _numSprigSize = AddSizeNum(grpSprk, new Point(470, gy - 2), DialogMemory.GetDouble(MemKey, "SprigSize", 1.0));
+            _cmbSprigSize = AddSizeCombo(grpSprk, new Point(470, gy - 2), DialogMemory.GetDouble(MemKey, "SprigSize", 1.0));
             grpSprk.Controls.Add(new Label { Text = "in sprig size", Location = new Point(538, gy + 1), AutoSize = true });
             gy += 26;
             var pnlSprig = new Panel { Location = new Point(330, gy), Size = new Size(370, 52) };
@@ -267,7 +272,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             EventHandler syncEnable = (s, e) =>
             {
                 bool sp = _rbSprigs.Checked;
-                _numSprigSize.Enabled = sp;
+                _cmbSprigSize.Enabled = sp;
                 _rbTermElev.Enabled = _rbSprigLen.Enabled = sp;
                 _txtTermFt.Enabled = _txtTermIn.Enabled = sp && _rbTermElev.Checked;
                 _txtLenFt.Enabled = _txtLenIn.Enabled = sp && _rbSprigLen.Checked;
@@ -496,17 +501,31 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             return cmb;
         }
 
-        private static NumericUpDown AddSizeNum(Control parent, Point loc, double val)
+        // Standard sprinkler-pipe sizes (label, inches). Above 12" is underground only.
+        private static readonly (string label, double inches)[] SizeList =
         {
-            var num = new NumericUpDown
+            ("1/4", 0.25), ("1/2", 0.5), ("3/4", 0.75), ("1", 1.0), ("1¼", 1.25), ("1½", 1.5), ("2", 2.0),
+            ("2½", 2.5), ("3", 3.0), ("3½", 3.5), ("4", 4.0), ("5", 5.0), ("6", 6.0),
+            ("8", 8.0), ("10", 10.0), ("12", 12.0)
+        };
+
+        private static ComboBox AddSizeCombo(Control parent, Point loc, double rememberedIn)
+        {
+            var cmb = new ComboBox { Location = loc, Size = new Size(62, 22), DropDownStyle = ComboBoxStyle.DropDownList };
+            foreach (var s in SizeList) cmb.Items.Add(s.label);
+            int idx = 0; double best = double.MaxValue;
+            for (int i = 0; i < SizeList.Length; i++)
             {
-                Location = loc, Size = new Size(62, 22),
-                Minimum = 0.25m, Maximum = 24m, DecimalPlaces = 2, Increment = 0.25m,
-                Value = (decimal)Math.Max(0.25, Math.Min(24.0, val))
-            };
-            parent.Controls.Add(num);
-            return num;
+                double err = Math.Abs(SizeList[i].inches - rememberedIn);
+                if (err <= best) { best = err; idx = i; }   // ties round up to the larger size (list is ascending)
+            }
+            cmb.SelectedIndex = idx;
+            parent.Controls.Add(cmb);
+            return cmb;
         }
+
+        private static double ComboSizeIn(ComboBox cmb) =>
+            cmb.SelectedIndex >= 0 && cmb.SelectedIndex < SizeList.Length ? SizeList[cmb.SelectedIndex].inches : 1.0;
 
         private void AddFtIn(Control parent, int x, int y, string memF, string memI,
                              string defF, string defI, out TextBox ft, out TextBox inch)
@@ -587,16 +606,17 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             LevelName = (string)_cmbLevel.SelectedItem;
             StartElevFt = ParseNum(_txtElevFt) + ParseNum(_txtElevIn) / 12.0;
             SlopeFtPerFt = ParseNum(_txtSlope) / 120.0;         // in per 10 ft → ft per ft
-            LineSizeIn = (double)_numLineSize.Value;
-            SprigSizeIn = (double)_numSprigSize.Value;
+            StartOffsetFt = ParseNum(_txtOffFt) + ParseNum(_txtOffIn) / 12.0;
+            LineSizeIn = ComboSizeIn(_cmbLineSize);
+            SprigSizeIn = ComboSizeIn(_cmbSprigSize);
             UseSprigs = _rbSprigs.Checked;
             SprigsToCommonElev = _rbTermElev.Checked;
             TermElevFt = ParseNum(_txtTermFt) + ParseNum(_txtTermIn) / 12.0;
             SprigLenFt = ParseNum(_txtLenFt) + ParseNum(_txtLenIn) / 12.0;
             CapEnds = _chkCap.Checked;
             ExtendToCapFt = ParseNum(_txtCapFt) + ParseNum(_txtCapIn) / 12.0;
-            MainSizeIn = (double)_numMainSize.Value;
-            RiserSizeIn = (double)_numRiserSize.Value;
+            MainSizeIn = ComboSizeIn(_cmbMainSize);
+            RiserSizeIn = ComboSizeIn(_cmbRiserSize);
             MainElevFt = ParseNum(_txtMainElevFt) + ParseNum(_txtMainElevIn) / 12.0;
             MainSlopeFtPerFt = ParseNum(_txtMainSlope) / 120.0;
             MainSlopeReversed = _mainReversed;
@@ -624,6 +644,8 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             DialogMemory.Set(MemKey, "ElevFt", _txtElevFt.Text);
             DialogMemory.Set(MemKey, "ElevIn", _txtElevIn.Text);
             DialogMemory.Set(MemKey, "BrSlope", _txtSlope.Text);
+            DialogMemory.Set(MemKey, "OffFt", _txtOffFt.Text);
+            DialogMemory.Set(MemKey, "OffIn", _txtOffIn.Text);
             DialogMemory.SetDouble(MemKey, "LineSize", LineSizeIn);
             DialogMemory.SetDouble(MemKey, "SprigSize", SprigSizeIn);
             DialogMemory.SetBool(MemKey, "UseSprigs", UseSprigs);

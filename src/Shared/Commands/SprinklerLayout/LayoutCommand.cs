@@ -226,7 +226,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             if (lengthSpan < 0.5 || widthSpan < 0.5)
             { TaskDialog.Show("Layout", "The two corners are too close together to lay anything out."); return Result.Cancelled; }
 
-            List<double> lineOffsets = Tile(lineGaps, widthSpan);
+            List<double> lineOffsets = LineOffsets(dlg.StartOffsetFt, lineGaps, widthSpan, FromMin(ctx, c1, mMin, mMax));
             List<double> stations = Tile(headGaps, lengthSpan);
             if (lineOffsets.Count == 0)
             { TaskDialog.Show("Layout", "The first line spacing is wider than the picked area — nothing to place."); return Result.Cancelled; }
@@ -308,7 +308,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             if (uMax - uMin < 1.0 || widthSpan < 0.5)
             { TaskDialog.Show("Layout", "The picked area is too small to lay out a main + branches."); return Result.Cancelled; }
 
-            List<double> mOffsets = Tile(lineGaps, widthSpan);      // branch positions along the main
+            List<double> mOffsets = LineOffsets(dlg.StartOffsetFt, lineGaps, widthSpan, FromMin(ctx, c1, mMin, mMax));      // branch positions along the main
             if (mOffsets.Count == 0)
             { TaskDialog.Show("Layout", "The first line spacing is wider than the picked area — nothing to place."); return Result.Cancelled; }
             var branchM = mOffsets.Select(o => mMin + o).ToList();
@@ -480,7 +480,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             if (uHi - uLo < 1.0 || widthSpan < 0.5)
             { TaskDialog.Show("Layout", "The two mains are too close together, or the area is too small."); return Result.Cancelled; }
 
-            List<double> mOffsets = Tile(lineGaps, widthSpan);          // branch positions along the mains
+            List<double> mOffsets = LineOffsets(dlg.StartOffsetFt, lineGaps, widthSpan, FromMin(ctx, c1, mMin, mMax));          // branch positions along the mains
             if (mOffsets.Count == 0)
             { TaskDialog.Show("Layout", "The first line spacing is wider than the picked area — nothing to place."); return Result.Cancelled; }
             var branchM = mOffsets.Select(o => mMin + o).ToList();
@@ -1152,6 +1152,39 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 offs.Add(cum);
             }
             return offs;
+        }
+
+        /// <summary>Line offsets from the mMin edge. With a start offset the first line sits
+        /// that far from the FIRST-picked corner (<paramref name="fromMin"/> says which m-edge
+        /// that corner is), then the gap sequence tiles inward; offset 0 keeps the original
+        /// behavior (first line = first gap in from mMin).</summary>
+        private static List<double> LineOffsets(double startOffset, double[] gaps, double span, bool fromMin)
+        {
+            if (startOffset <= 1e-6) return Tile(gaps, span);
+            var offs = new List<double>();
+            if (startOffset > span + 0.02) return offs;
+            double cum = startOffset;
+            offs.Add(cum);
+            if (gaps != null && gaps.Length > 0)
+                for (int i = 0, guard = 0; guard < 100000; i++, guard++)
+                {
+                    double gap = gaps[i % gaps.Length];
+                    if (gap <= 1e-6) break;
+                    cum += gap;
+                    if (cum > span + 0.02) break;
+                    offs.Add(cum);
+                }
+            if (!fromMin) for (int i = 0; i < offs.Count; i++) offs[i] = span - offs[i];
+            offs.Sort();
+            return offs;
+        }
+
+        /// <summary>True when the first-picked corner is on the mMin edge (so the start offset
+        /// is measured from there); false when it's the mMax edge.</summary>
+        private static bool FromMin(Ctx ctx, XYZ c1, double mMin, double mMax)
+        {
+            double c1m = ctx.LinesAlongX ? c1.Y : c1.X;
+            return Math.Abs(c1m - mMin) <= Math.Abs(c1m - mMax);
         }
 
         private static void SetDiameter(MEPCurve curve, double sizeFt)
