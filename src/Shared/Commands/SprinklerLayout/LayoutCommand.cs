@@ -91,13 +91,19 @@ namespace SgRevitAddin.Commands.SprinklerLayout
 
             // ── Pick points ──
             bool mainMode = dlg.PickMode == LayoutDialog.PickModeKind.AreaMain;
-            XYZ c1, c2, cm = null;
+            bool twoMains = dlg.PickMode == LayoutDialog.PickModeKind.TwoMains;
+            XYZ c1, c2, cm = null, cm2 = null;
             try
             {
                 c1 = uidoc.Selection.PickPoint("Layout: pick the FIRST corner of the area");
                 c2 = uidoc.Selection.PickPoint("Layout: pick the OPPOSITE corner");
                 if (mainMode)
                     cm = uidoc.Selection.PickPoint("Layout: pick where the MAIN runs (branches slope toward it)");
+                else if (twoMains)
+                {
+                    cm = uidoc.Selection.PickPoint("Layout: pick where the PRIMARY main runs");
+                    cm2 = uidoc.Selection.PickPoint("Layout: pick where the SECONDARY (floater) main runs");
+                }
             }
             catch (Autodesk.Revit.Exceptions.OperationCanceledException) { return Result.Cancelled; }
             catch (Autodesk.Revit.Exceptions.InvalidOperationException)
@@ -132,20 +138,23 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 TermZ = level.Elevation + dlg.TermElevFt,
                 SprigLenFt = dlg.SprigLenFt,
                 CapEnds = dlg.CapEnds,
-                ExtendToCapFt = dlg.ExtendToCapFt
+                ExtendToCapFt = dlg.ExtendToCapFt,
+                Tailback = dlg.Tailback
             };
 
             double[] lineGaps = dlg.LineSequence.Select(c => dlg.LineSlotFt[c - '1']).ToArray();
             double[] headGaps = dlg.HeadSequence.Select(c => dlg.HeadSlotFt[c - 'A']).ToArray();
 
             var rpt = new Report();
-            Result result = mainMode
-                ? BuildMainMode(ctx, dlg, c1, c2, cm, lineGaps, headGaps, rpt: rpt)
-                : BuildFillArea(ctx, dlg, c1, c2, lineGaps, headGaps, rpt);
+            Result result = twoMains
+                ? BuildTwoMainsMode(ctx, dlg, c1, c2, cm, cm2, lineGaps, headGaps, rpt)
+                : mainMode
+                    ? BuildMainMode(ctx, dlg, c1, c2, cm, lineGaps, headGaps, rpt: rpt)
+                    : BuildFillArea(ctx, dlg, c1, c2, lineGaps, headGaps, rpt);
 
             if (result != Result.Succeeded) return result;
 
-            TaskDialog.Show("Layout", rpt.ToString(mainMode, ctx.CapEnds && ctx.CapSym == null));
+            TaskDialog.Show("Layout", rpt.ToString(mainMode || twoMains, ctx.CapEnds && ctx.CapSym == null));
             return Result.Succeeded;
         }
 
@@ -166,6 +175,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             public double TermZ, SprigLenFt;
             public bool CapEnds;
             public double ExtendToCapFt;
+            public bool Tailback;   // two-mains: tee + stub (vs elbow) at each main tie-in
 
             /// <summary>Map (along-u, along-m, z) into world XY per the branch direction.</summary>
             public XYZ Pt(double u, double m, double z)
@@ -431,6 +441,183 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 tx.Commit();
             }
             return Result.Succeeded;
+        }
+
+        // ── Two-mains mode (four points: 2 corners + primary + secondary main) ──
+
+        private class MainRun
+        {
+            public double U;                               // the main's position on the branch (u) axis
+            public List<Pipe> Segs = new List<Pipe>();     // pieces between consecutive branch crossings
+            public Pipe LoStub, HiStub;                    // open 6" stubs past the outer branches
+
+            public Pipe Before(int bi) => bi - 1 >= 0 && bi - 1 < Segs.Count ? Segs[bi - 1] : LoStub;
+            public Pipe After(int bi) => bi >= 0 && bi < Segs.Count ? Segs[bi] : HiStub;
+        }
+
+        /// <summary>Two parallel mains (primary + secondary/floater). Each FLAT branch runs
+        /// between them, tying into both with a riser nipple + GOL on the main. With a
+        /// tailback the branch continues a short capped stub past each main (Firelock tee);
+        /// without, it terminates into the riser with an elbow. Unsloped.</summary>
+        private Result BuildTwoMainsMode(Ctx ctx, LayoutDialog dlg, XYZ c1, XYZ c2, XYZ cmA, XYZ cmB,
+                                         double[] lineGaps, double[] headGaps, Report rpt)
+        {
+            Document doc = ctx.Doc;
+            if (cmA == null || cmB == null)
+            { TaskDialog.Show("Layout", "Two-mains mode needs both main points."); return Result.Cancelled; }
+
+            double minX = Math.Min(c1.X, c2.X), maxX = Math.Max(c1.X, c2.X);
+            double minY = Math.Min(c1.Y, c2.Y), maxY = Math.Max(c1.Y, c2.Y);
+
+            double uMin, uMax, mMin, mMax, uA, uB;
+            if (ctx.LinesAlongX)
+            { uMin = minX; uMax = maxX; mMin = minY; mMax = maxY; uA = Clamp(cmA.X, uMin, uMax); uB = Clamp(cmB.X, uMin, uMax); }
+            else
+            { uMin = minY; uMax = maxY; mMin = minX; mMax = maxX; uA = Clamp(cmA.Y, uMin, uMax); uB = Clamp(cmB.Y, uMin, uMax); }
+
+            double uLo = Math.Min(uA, uB), uHi = Math.Max(uA, uB);
+            double widthSpan = mMax - mMin;
+            if (uHi - uLo < 1.0 || widthSpan < 0.5)
+            { TaskDialog.Show("Layout", "The two mains are too close together, or the area is too small."); return Result.Cancelled; }
+
+            List<double> mOffsets = Tile(lineGaps, widthSpan);          // branch positions along the mains
+            if (mOffsets.Count == 0)
+            { TaskDialog.Show("Layout", "The first line spacing is wider than the picked area — nothing to place."); return Result.Cancelled; }
+            var branchM = mOffsets.Select(o => mMin + o).ToList();
+
+            double branchZ = ctx.Level.Elevation + dlg.StartElevFt;      // flat
+            double mainZ = ctx.Level.Elevation + dlg.MainElevFt;         // flat
+            double tailFt = ctx.ExtendToCapFt > 0.02 ? ctx.ExtendToCapFt : MainStubFt;
+
+            if (!Confirmed(mOffsets.Count, headGaps.Length == 0 ? 0 : (int)((uHi - uLo) / Math.Max(0.5, headGaps.Min())))) return Result.Cancelled;
+
+            using (var tx = new Transaction(doc, "Layout"))
+            {
+                ApplySwallow(tx);
+                tx.Start();
+                Activate(ctx);
+
+                // Two flat mains along m, each broken at every branch crossing (open 6" ends).
+                var mains = new[] { new MainRun { U = uLo }, new MainRun { U = uHi } };
+                foreach (var main in mains)
+                {
+                    for (int i = 0; i + 1 < branchM.Count; i++)
+                        main.Segs.Add(CreatePipe(ctx,
+                            ctx.Pt(main.U, branchM[i], mainZ),
+                            ctx.Pt(main.U, branchM[i + 1], mainZ), ctx.MainSizeFt, ctx.MainPipeTypeId, rpt));
+                    main.LoStub = CreatePipe(ctx,
+                        ctx.Pt(main.U, branchM[0], mainZ),
+                        ctx.Pt(main.U, branchM[0] - MainStubFt, mainZ), ctx.MainSizeFt, ctx.MainPipeTypeId, rpt);
+                    main.HiStub = CreatePipe(ctx,
+                        ctx.Pt(main.U, branchM[branchM.Count - 1], mainZ),
+                        ctx.Pt(main.U, branchM[branchM.Count - 1] + MainStubFt, mainZ), ctx.MainSizeFt, ctx.MainPipeTypeId, rpt);
+                }
+
+                // Flat branches: [stub] main(uLo) heads... main(uHi) [stub].
+                var branches = new List<LineWork>();
+                foreach (double m in branchM)
+                {
+                    branches.Add(BuildBranchFlat(ctx, uLo, uHi, m, headGaps, branchZ, ctx.Tailback, tailFt, rpt));
+                    rpt.Lines++;
+                }
+
+                PlaceHeads(ctx, branches, rpt);
+                doc.Regenerate();
+                RepinHeads(ctx, branches);
+                doc.Regenerate();
+
+                for (int bi = 0; bi < branches.Count; bi++)
+                {
+                    LineWork work = branches[bi];
+                    ConnectLine(ctx, work, rpt);
+                    double m = branchM[bi];
+
+                    foreach (var cross in work.Stations.Where(s => s.Kind == StationKind.Crossing))
+                    {
+                        MainRun main = mains[Math.Max(0, cross.MainIdx)];
+                        if (branchZ - mainZ > SprigMinFt)
+                        {
+                            XYZ topPt = ctx.Pt(main.U, m, branchZ);
+                            XYZ botPt = ctx.Pt(main.U, m, mainZ);
+                            Pipe nipple = CreatePipe(ctx, topPt, botPt, ctx.RiserSizeFt, ctx.MainPipeTypeId, rpt);
+                            if (nipple != null)
+                            {
+                                rpt.Nipples++;
+                                Connector nBot = FreeEndNear(nipple, botPt);
+                                Connector mA = FreeEndNear(main.Before(bi), botPt);
+                                Connector mB = FreeEndNear(main.After(bi), botPt);
+                                JoinRun(ctx, mA, mB, nBot, rpt);                    // GOL, break the main
+
+                                Connector nTop = FreeEndNear(nipple, topPt);
+                                if (nTop != null && (cross.RunA != null || cross.RunB != null))
+                                    JoinBranch(ctx, cross.RunA, cross.RunB, nTop, rpt);   // tee (tailback) or elbow
+                                SetDiameter(nipple, ctx.RiserSizeFt);
+                            }
+                        }
+                        else
+                        {
+                            rpt.ShortNipple++;
+                            if (cross.RunA != null && cross.RunB != null)
+                            { try { cross.RunA.ConnectTo(cross.RunB); rpt.PlainConn++; } catch { rpt.Fail++; } }
+                        }
+                    }
+
+                    // Cap the tailback stubs at the branch ends (never a main crossing).
+                    if (ctx.Tailback && ctx.CapEnds && ctx.CapSym != null)
+                    {
+                        if (work.HasLeftCap && work.Segs.Count > 0) CapEnd(ctx, work.Segs[0], work.LeftCapPt, rpt);
+                        if (work.HasRightCap && work.Segs.Count > 0) CapEnd(ctx, work.Segs[work.Segs.Count - 1], work.RightCapPt, rpt);
+                    }
+                }
+
+                tx.Commit();
+            }
+            return Result.Succeeded;
+        }
+
+        /// <summary>One flat branch spanning the two mains: heads tiled between them, a
+        /// crossing node at each main. With a tailback a short stub extends past each main
+        /// (so the crossing tees); without, the crossing is the branch end (elbow).</summary>
+        private LineWork BuildBranchFlat(Ctx ctx, double uLo, double uHi, double m, double[] headGaps,
+                                         double branchZ, bool tailback, double tailFt, Report rpt)
+        {
+            Func<double, XYZ> at = u => ctx.Pt(u, m, branchZ);
+
+            var heads = new List<double>();
+            foreach (double off in Tile(headGaps, uHi - uLo))
+            {
+                double u = uLo + off;
+                if (u > uLo + HeadMarginFt && u < uHi - HeadMarginFt) heads.Add(u);
+            }
+
+            var work = new LineWork();
+            var nodeU = new List<double>();
+            var nodeKind = new List<StationKind?>();   // null = cap stub
+            var nodeMain = new List<int>();            // crossing → main index (0=uLo, 1=uHi)
+
+            if (tailback) { nodeU.Add(uLo - tailFt); nodeKind.Add(null); nodeMain.Add(-1); work.HasLeftCap = true; work.LeftCapPt = at(uLo - tailFt); }
+            nodeU.Add(uLo); nodeKind.Add(StationKind.Crossing); nodeMain.Add(0);
+            foreach (double u in heads) { nodeU.Add(u); nodeKind.Add(StationKind.Head); nodeMain.Add(-1); }
+            nodeU.Add(uHi); nodeKind.Add(StationKind.Crossing); nodeMain.Add(1);
+            if (tailback) { nodeU.Add(uHi + tailFt); nodeKind.Add(null); nodeMain.Add(-1); work.HasRightCap = true; work.RightCapPt = at(uHi + tailFt); }
+
+            for (int k = 0; k + 1 < nodeU.Count; k++)
+                work.Segs.Add(CreatePipe(ctx, at(nodeU[k]), at(nodeU[k + 1]), ctx.LineSizeFt, ctx.PipeTypeId, rpt));
+
+            for (int k = 0; k < nodeU.Count; k++)
+            {
+                if (nodeKind[k] == null) continue;
+                XYZ T = at(nodeU[k]);
+                var st = new Station { T = T, NodeIndex = k, Kind = nodeKind[k].Value, MainIdx = nodeMain[k] };
+                if (nodeKind[k] == StationKind.Head)
+                {
+                    (bool useSprig, XYZ target) = SprigDecision(ctx, T, rpt);
+                    st.UseSprig = useSprig; st.Target = target;
+                }
+                else { st.Target = T; }
+                work.Stations.Add(st);
+            }
+            return work;
         }
 
         /// <summary>Build one branch as a shallow V (low at the main crossing, rising to
@@ -941,6 +1128,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             public bool UseSprig;
             public StationKind Kind = StationKind.Head;
             public int NodeIndex = -1;      // >=0 in main mode (index into Segs/nodes); -1 in fill mode
+            public int MainIdx = -1;        // two-mains: which main (0/1) this crossing ties into
             public Connector RunA, RunB, BranchConn;   // crossing: the two through ends
         }
 

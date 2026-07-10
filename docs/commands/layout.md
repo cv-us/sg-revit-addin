@@ -40,6 +40,15 @@ point, sloping down toward its **riser end** (reversible); past the last riser
 at the top of the slope it continues a short 6″ piece that is **capped**, and
 the low/riser end is left **open** to tie into the system riser.
 
+### Two mains — pick 2 corners + 2 mains
+Pick two corners, then the **primary** main and the **secondary / floater** main.
+Each branch line runs **between the two mains** (flat / unsloped), tying into both
+with a **riser nipple** + **GOL** on the main. With **Tailback** on, the branch
+continues a short capped stub past each main (a **Firelock tee**); with it off,
+the branch **elbows** into the riser at each main (no stub). Heads are tiled along
+each branch between the two mains. The mains break at every crossing (GOL) and are
+left **open** at their ends (6″ stubs) to tie in. Unsloped.
+
 The **Main outlet** and **Riser tee** fittings are selectable (defaulting to a
 GOL and a Firelock tee found by name). They're forced by temporarily injecting a
 top-priority routing-preference rule for the one placement, then removing it, so
@@ -66,7 +75,7 @@ junction falls back to the routing-preference default and the count is reported.
 |---|---|
 | Line / head spacing slots | Feet + inches per slot; blank slots can't be referenced. |
 | Sequences | Digits (lines) / letters (heads); repeat to fill the area. A single character = uniform spacing. |
-| Pick mode | Fill area (2 corners) or Area + central main (3 points). |
+| Pick mode | Fill area (2 corners), Area + central main (3 points), or Two mains (4 points). The pick guidance shows next to the **Place** button. |
 | Branch-line direction | Clickable arrows — rotate the branch direction between the screen X and Y axes. |
 | Pipe type / System / Line size | The pipe type, piping system, and nominal diameter for the branch lines. |
 | Level / Start elevation | Reference level and the branch centerline elevation above it (in main mode, the branch's low point at the main). |
@@ -76,7 +85,8 @@ junction falls back to the routing-preference default and the count is reported.
 | Main elevation / slope | The cross-main's centerline elevation above the level and its slope (in/10 ft) toward the riser. |
 | Main outlet | Fitting where each riser nipple taps the main (default a GOL / grooved outlet, tapped without cutting the main). |
 | Riser tee | Fitting at the top of the riser where the branch lines meet (default an HCAD Firelock tee). |
-| Riser at the far end | Reverse which end of the main is the low (riser/drain) end. |
+| Main / slope image | Clickable image of the main (perpendicular to the branches). In 3-point mode it labels **HIGH / LOW** — click to flip the slope (which end drains to the riser). The branch-direction toggle reorients it; two-mains shows both mains. |
+| Tailback at mains | Two-mains only: tee + short stub past each main (on) vs an elbow into the riser (off). |
 | Heads directly at outlets | Heads placed with their inlet on the line, joined as the tee branch. |
 | Sprigs up to heads | A vertical sprig pipe rises from the line to each head. |
 | Common / Fixed sprig | All heads at one elevation (sprigs adapt to the slope) or every sprig the same length. |

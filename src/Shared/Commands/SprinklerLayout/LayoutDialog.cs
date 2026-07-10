@@ -24,7 +24,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
         private const string MemKey = "Layout";
         private const int SlotCount = 6;
 
-        public enum PickModeKind { FillArea = 0, AreaMain = 1 }
+        public enum PickModeKind { FillArea = 0, AreaMain = 1, TwoMains = 2 }
 
         private readonly TextBox[] _lnFt = new TextBox[SlotCount];
         private readonly TextBox[] _lnIn = new TextBox[SlotCount];
@@ -41,7 +41,12 @@ namespace SgRevitAddin.Commands.SprinklerLayout
         private TextBox _txtElevFt, _txtElevIn, _txtSlope;
         private GroupBox _grpMain;
         private TextBox _txtMainElevFt, _txtMainElevIn, _txtMainSlope;
-        private CheckBox _chkMainReverse;
+        private Label _lblMainSlope;
+        private Panel _mainToggle;          // clickable main image: orientation + HIGH/LOW slope
+        private bool _mainReversed;
+        private CheckBox _chkTailback;
+        private Label _lblGuidance;
+        private Button _btnPlace;
         private RadioButton _rbOutlets, _rbSprigs, _rbTermElev, _rbSprigLen;
         private TextBox _txtTermFt, _txtTermIn, _txtLenFt, _txtLenIn;
         private CheckBox _chkCap;
@@ -84,6 +89,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
         public double MainElevFt { get; private set; }
         public double MainSlopeFtPerFt { get; private set; }    // main slope, ft fall per ft run
         public bool MainSlopeReversed { get; private set; }
+        public bool Tailback { get; private set; } = true;      // two-mains: tee + stub (vs elbow) at each main
         public int OutletFittingId { get; private set; } = -1;  // -1 = routing-preference default
         public int RiserTeeFittingId { get; private set; } = -1;
 
@@ -114,7 +120,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
         {
             Text = "Layout";
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(740, 700);
+            ClientSize = new Size(740, 748);
             Font = new Font("Segoe UI", 9f);
 
             const int M = 15;
@@ -164,8 +170,8 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             grpPipe.Controls.Add(new Label { Text = "in / 10 ft  (↓ to main)", Location = new Point(134, gy + 3), AutoSize = true });
             Controls.Add(grpPipe);
 
-            // ── Main (enabled only in Area + central main mode) ──
-            _grpMain = new GroupBox { Text = "Cross-main (3-point mode)", Location = new Point(M + 360, y), Size = new Size(350, 216) };
+            // ── Main(s) — enabled in Area + central main (3-pt) and Two mains (4-pt) ──
+            _grpMain = new GroupBox { Text = "Cross-main(s)", Location = new Point(M + 360, y), Size = new Size(350, 272) };
             gy = 22;
             _grpMain.Controls.Add(new Label { Text = "Main type:", Location = new Point(10, gy + 3), AutoSize = true });
             _cmbMainType = AddCombo(_grpMain, new Point(80, gy), 258,
@@ -182,7 +188,8 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             AddFtIn(_grpMain, 80, gy, "MainElevFt", "MainElevIn", "9", "0", out _txtMainElevFt, out _txtMainElevIn);
             _grpMain.Controls.Add(new Label { Text = "above level", Location = new Point(210, gy + 3), AutoSize = true });
             gy += 27;
-            _grpMain.Controls.Add(new Label { Text = "Main slope:", Location = new Point(10, gy + 3), AutoSize = true });
+            _lblMainSlope = new Label { Text = "Main slope:", Location = new Point(10, gy + 3), AutoSize = true };
+            _grpMain.Controls.Add(_lblMainSlope);
             _txtMainSlope = new TextBox { Location = new Point(80, gy), Size = new Size(48, 22), Text = DialogMemory.Get(MemKey, "MainSlope", "0.25") };
             _grpMain.Controls.Add(_txtMainSlope);
             _grpMain.Controls.Add(new Label { Text = "in / 10 ft   down toward the riser", Location = new Point(134, gy + 3), AutoSize = true });
@@ -196,18 +203,31 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             _grpMain.Controls.Add(new Label { Text = "Riser tee:", Location = new Point(10, gy + 3), AutoSize = true });
             _cmbRiserTee = AddCombo(_grpMain, new Point(80, gy), 258, fitNames,
                 DialogMemory.Get(MemKey, "RiserTee", _defaultRiserTee ?? DefaultLabel));
-            gy += 27;
-            _chkMainReverse = new CheckBox
+            gy += 30;
+
+            // Clickable main image: shows the main ⊥ to the branches. In 3-pt mode it
+            // labels HIGH/LOW (click to flip the slope direction); in two-mains it shows
+            // both mains. Reorients when the branch-direction toggle flips.
+            _grpMain.Controls.Add(new Label { Text = "Main / slope  (click to flip HIGH↔LOW):", Location = new Point(10, gy), AutoSize = true });
+            _mainReversed = DialogMemory.GetBool(MemKey, "MainReverse", false);
+            _mainToggle = new Panel { Location = new Point(10, gy + 20), Size = new Size(150, 56), Cursor = Cursors.Hand, BorderStyle = BorderStyle.FixedSingle };
+            _mainToggle.Paint += DrawMainSlope;
+            _mainToggle.Click += (s, e) => { _mainReversed = !_mainReversed; _mainToggle.Invalidate(); };
+            var mtip = new ToolTip();
+            mtip.SetToolTip(_mainToggle, "Click to flip which end of the main is high / low (the slope direction).");
+            _grpMain.Controls.Add(_mainToggle);
+
+            _chkTailback = new CheckBox
             {
-                Text = "Riser at the far end (reverse the main's downhill)",
-                Location = new Point(10, gy),
-                AutoSize = true,
-                Checked = DialogMemory.GetBool(MemKey, "MainReverse", false)
+                Text = "Tailback at mains\n(tee + stub; off = elbow)",
+                Location = new Point(178, gy + 22),
+                Size = new Size(164, 40),
+                Checked = DialogMemory.GetBool(MemKey, "Tailback", true)
             };
-            _grpMain.Controls.Add(_chkMainReverse);
+            _grpMain.Controls.Add(_chkTailback);
             Controls.Add(_grpMain);
 
-            y += 224;
+            y += 280;
 
             // ── Sprinklers (full width) ──
             var grpSprk = new GroupBox { Text = "Sprinklers", Location = new Point(M, y), Size = new Size(710, 150) };
@@ -260,21 +280,40 @@ namespace SgRevitAddin.Commands.SprinklerLayout
 
             y += 158;
 
-            var btnPlace = new Button { Location = new Point(740 - M - 90 - 10 - 170, y), Size = new Size(170, 30) };
-            btnPlace.Click += (s, e) => OnPlace();
-            Controls.Add(btnPlace);
-            AcceptButton = btnPlace;
+            _btnPlace = new Button { Text = "Place", Location = new Point(740 - M - 90 - 10 - 90, y), Size = new Size(90, 30) };
+            _btnPlace.Click += (s, e) => OnPlace();
+            Controls.Add(_btnPlace);
+            AcceptButton = _btnPlace;
 
             var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(740 - M - 90, y), Size = new Size(90, 30) };
             Controls.Add(btnCancel);
             CancelButton = btnCancel;
 
-            // Pick-mode wiring: enable the main group + relabel the button.
+            // Guidance text sits to the LEFT of the buttons, along the bottom of the window.
+            _lblGuidance = new Label
+            {
+                Location = new Point(M, y + 6),
+                Size = new Size(740 - M - 90 - 10 - 90 - 10 - M, 22),
+                TextAlign = ContentAlignment.MiddleRight,
+                ForeColor = SystemColors.GrayText
+            };
+            Controls.Add(_lblGuidance);
+
+            // Pick-mode wiring: enable the main group + set guidance + reorient images.
             EventHandler modeChanged = (s, e) =>
             {
-                bool main = _cmbPickMode.SelectedIndex == (int)PickModeKind.AreaMain;
-                _grpMain.Enabled = main;
-                btnPlace.Text = main ? "Place — pick 2 corners + main" : "Place — pick 2 corners";
+                int idx = _cmbPickMode.SelectedIndex;
+                bool main = idx == (int)PickModeKind.AreaMain;
+                bool two = idx == (int)PickModeKind.TwoMains;
+                _grpMain.Enabled = main || two;
+                _lblGuidance.Text = two
+                    ? "Pick: 1st corner  →  opposite corner  →  primary main  →  secondary main"
+                    : main
+                        ? "Pick: 1st corner  →  opposite corner  →  main line"
+                        : "Pick: 1st corner  →  opposite corner";
+                _lblMainSlope.Enabled = _txtMainSlope.Enabled = main;   // slope is 3-pt only; two-mains is flat
+                _chkTailback.Enabled = two;
+                _mainToggle.Invalidate();
             };
             _cmbPickMode.SelectedIndexChanged += modeChanged;
             modeChanged(null, EventArgs.Empty);
@@ -289,16 +328,17 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             _cmbPickMode = new ComboBox { Location = new Point(10, 44), Size = new Size(170, 24), DropDownStyle = ComboBoxStyle.DropDownList };
             _cmbPickMode.Items.Add("Fill area (2 corners)");
             _cmbPickMode.Items.Add("Area + central main (3 pts)");
-            _cmbPickMode.SelectedIndex = DialogMemory.GetInt(MemKey, "PickMode", 0) == 1 ? 1 : 0;
+            _cmbPickMode.Items.Add("Two mains (4 pts)");
+            _cmbPickMode.SelectedIndex = Math.Max(0, Math.Min(2, DialogMemory.GetInt(MemKey, "PickMode", 0)));
             grp.Controls.Add(_cmbPickMode);
 
             grp.Controls.Add(new Label { Text = "Branch-line direction:", Location = new Point(10, 78), AutoSize = true });
             _linesAlongX = DialogMemory.GetBool(MemKey, "LinesAlongX", true);
             _dirToggle = new Panel { Location = new Point(20, 98), Size = new Size(154, 58), Cursor = Cursors.Hand, BorderStyle = BorderStyle.FixedSingle };
             _dirToggle.Paint += DrawDirArrows;
-            _dirToggle.Click += (s, e) => { _linesAlongX = !_linesAlongX; _dirToggle.Invalidate(); };
+            _dirToggle.Click += (s, e) => { _linesAlongX = !_linesAlongX; _dirToggle.Invalidate(); _mainToggle?.Invalidate(); };
             var tip = new ToolTip();
-            tip.SetToolTip(_dirToggle, "Click to rotate the branch-line direction (X ⇄ Y).");
+            tip.SetToolTip(_dirToggle, "Click to rotate the branch-line direction (X ⇄ Y). The main(s) stay perpendicular.");
             grp.Controls.Add(_dirToggle);
 
             _chkCap = new CheckBox
@@ -352,6 +392,64 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 ? new[] { tip, new Point(tip.X - dir * s, tip.Y - s), new Point(tip.X - dir * s, tip.Y + s) }
                 : new[] { tip, new Point(tip.X - s, tip.Y - dir * s), new Point(tip.X + s, tip.Y - dir * s) };
             g.FillPolygon(b, pts);
+        }
+
+        /// <summary>Paint the main image: the main runs perpendicular to the branch lines.
+        /// In 3-pt mode it labels HIGH/LOW with a downhill arrow (click flips); in two-mains
+        /// it shows both parallel mains (flat, no slope).</summary>
+        private void DrawMainSlope(object sender, PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            var rc = _mainToggle.ClientRectangle;
+            g.Clear(SystemColors.Window);
+
+            bool two = _cmbPickMode != null && _cmbPickMode.SelectedIndex == (int)PickModeKind.TwoMains;
+            bool mainAlongY = _linesAlongX;              // main is perpendicular to the branches
+            var col = Color.FromArgb(150, 40, 40);
+            int cx = rc.Width / 2, cy = rc.Height / 2;
+
+            using (var pen = new Pen(col, 3f))
+            using (var brush = new SolidBrush(col))
+            {
+                if (two)
+                {
+                    if (mainAlongY)
+                    {
+                        g.DrawLine(pen, cx - 26, 10, cx - 26, rc.Height - 10);
+                        g.DrawLine(pen, cx + 26, 10, cx + 26, rc.Height - 10);
+                    }
+                    else
+                    {
+                        g.DrawLine(pen, 12, cy - 14, rc.Width - 12, cy - 14);
+                        g.DrawLine(pen, 12, cy + 14, rc.Width - 12, cy + 14);
+                    }
+                    TextRenderer.DrawText(g, "2 mains", Font, new Point(cx - 24, cy - 8), Color.Gray);
+                    return;
+                }
+
+                // single sloped main with HIGH / LOW ends (3-pt mode)
+                if (mainAlongY)
+                {
+                    int x = cx, y0 = 14, y1 = rc.Height - 14;
+                    g.DrawLine(pen, x, y0, x, y1);
+                    Point hi = _mainReversed ? new Point(x, y1) : new Point(x, y0);   // not reversed → HIGH at top
+                    Point lo = _mainReversed ? new Point(x, y0) : new Point(x, y1);
+                    FillArrowHead(g, brush, lo, false, lo.Y > hi.Y ? +1 : -1);
+                    TextRenderer.DrawText(g, "HIGH", Font, new Point(x + 6, hi.Y - 7), col);
+                    TextRenderer.DrawText(g, "LOW", Font, new Point(x + 6, lo.Y - 7), col);
+                }
+                else
+                {
+                    int y = cy, x0 = 14, x1 = rc.Width - 14;
+                    g.DrawLine(pen, x0, y, x1, y);
+                    Point hi = _mainReversed ? new Point(x0, y) : new Point(x1, y);   // not reversed → HIGH at right
+                    Point lo = _mainReversed ? new Point(x1, y) : new Point(x0, y);
+                    FillArrowHead(g, brush, lo, true, lo.X > hi.X ? +1 : -1);
+                    TextRenderer.DrawText(g, "HIGH", Font, new Point(hi.X - (hi.X > cx ? 34 : 2), y - 20), col);
+                    TextRenderer.DrawText(g, "LOW", Font, new Point(lo.X - (lo.X > cx ? 30 : 0), y + 5), col);
+                }
+            }
         }
 
         // ── Control builders ──
@@ -478,7 +576,9 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             if (HeadSequence.Length > 0 && _cmbHead.SelectedIndex < 0)
             { Warn("No sprinkler type selected."); return; }
 
-            PickMode = _cmbPickMode.SelectedIndex == 1 ? PickModeKind.AreaMain : PickModeKind.FillArea;
+            PickMode = _cmbPickMode.SelectedIndex == 1 ? PickModeKind.AreaMain
+                     : _cmbPickMode.SelectedIndex == 2 ? PickModeKind.TwoMains
+                     : PickModeKind.FillArea;
             PipeTypeId = _pipeTypes[_cmbPipeType.SelectedIndex].id;
             MainPipeTypeId = _cmbMainType.SelectedIndex >= 0 ? _pipeTypes[_cmbMainType.SelectedIndex].id : PipeTypeId;
             SprigPipeTypeId = _cmbSprigType.SelectedIndex >= 0 ? _pipeTypes[_cmbSprigType.SelectedIndex].id : PipeTypeId;
@@ -499,7 +599,8 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             RiserSizeIn = (double)_numRiserSize.Value;
             MainElevFt = ParseNum(_txtMainElevFt) + ParseNum(_txtMainElevIn) / 12.0;
             MainSlopeFtPerFt = ParseNum(_txtMainSlope) / 120.0;
-            MainSlopeReversed = _chkMainReverse.Checked;
+            MainSlopeReversed = _mainReversed;
+            Tailback = _chkTailback.Checked;
             OutletFittingId = FittingIdAt(_cmbOutlet);
             RiserTeeFittingId = FittingIdAt(_cmbRiserTee);
 
@@ -540,6 +641,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             DialogMemory.Set(MemKey, "MainElevIn", _txtMainElevIn.Text);
             DialogMemory.Set(MemKey, "MainSlope", _txtMainSlope.Text);
             DialogMemory.SetBool(MemKey, "MainReverse", MainSlopeReversed);
+            DialogMemory.SetBool(MemKey, "Tailback", Tailback);
             DialogMemory.Set(MemKey, "Outlet", (string)_cmbOutlet.SelectedItem ?? DefaultLabel);
             DialogMemory.Set(MemKey, "RiserTee", (string)_cmbRiserTee.SelectedItem ?? DefaultLabel);
             DialogMemory.Flush();
