@@ -85,11 +85,11 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             StartPosition = FormStartPosition.CenterScreen;
             AllowResize = false;    // fixed size — everything at fixed positions so the buttons never get pushed off
             RememberSize = false;
-            ClientSize = new Size(470, 528);
+            ClientSize = new Size(530, 632);
 
             int margin = 15;
             int y = margin;
-            const int GroupW = 440;
+            const int GroupW = 500;
 
             bool hasSources = _sourceModelDisplays.Count > 0;
 
@@ -127,19 +127,19 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             {
                 Text = "Select Levels to Create Views From",
                 Location = new Point(margin, slotY),
-                Size = new Size(GroupW, 110)
+                Size = new Size(GroupW, 210)
             };
             chkLevels = new CheckedListBox
             {
                 Location = new Point(10, 18),
-                Size = new Size(340, 84),
+                Size = new Size(GroupW - 100, 182),
                 CheckOnClick = true
             };
             foreach (var name in _levelDisplayNames) chkLevels.Items.Add(name, true);
             grpLevels.Controls.Add(chkLevels);
-            grpLevels.Controls.Add(MakeSmallButton("All", 360, 18,
+            grpLevels.Controls.Add(MakeSmallButton("All", GroupW - 75, 18,
                 () => SetAllChecked(chkLevels, true)));
-            grpLevels.Controls.Add(MakeSmallButton("None", 360, 48,
+            grpLevels.Controls.Add(MakeSmallButton("None", GroupW - 75, 48,
                 () => SetAllChecked(chkLevels, false)));
             Controls.Add(grpLevels);
 
@@ -147,7 +147,7 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             {
                 Text = "Copy Plan Views From Another Model",
                 Location = new Point(margin, slotY),
-                Size = new Size(GroupW, 110),
+                Size = new Size(GroupW, 210),
                 Visible = false
             };
             grpSource.Controls.Add(new Label
@@ -169,17 +169,17 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
             chkSourceViews = new CheckedListBox
             {
                 Location = new Point(10, 50),
-                Size = new Size(340, 52),
+                Size = new Size(GroupW - 100, 150),
                 CheckOnClick = true
             };
             grpSource.Controls.Add(chkSourceViews);
-            grpSource.Controls.Add(MakeSmallButton("All", 360, 50,
+            grpSource.Controls.Add(MakeSmallButton("All", GroupW - 75, 50,
                 () => SetAllChecked(chkSourceViews, true)));
-            grpSource.Controls.Add(MakeSmallButton("None", 360, 78,
+            grpSource.Controls.Add(MakeSmallButton("None", GroupW - 75, 80,
                 () => SetAllChecked(chkSourceViews, false)));
             if (cboSourceModel.Items.Count > 0) cboSourceModel.SelectedIndex = 0;
             Controls.Add(grpSource);
-            y += 116;
+            y += 216;
 
             // ── View types (create / filter) ──
             grpType = new GroupBox
@@ -209,14 +209,14 @@ namespace SgRevitAddin.Commands.ViewsAndSheets
                 Size = new Size(GroupW, 76)
             };
             grpTemplate.Controls.Add(new Label { Text = "Floor Plans:", Location = new Point(10, 20), Size = new Size(80, 18) });
-            cboFloorTemplate = new ComboBox { Location = new Point(95, 17), Size = new Size(330, 22), DropDownStyle = ComboBoxStyle.DropDownList };
+            cboFloorTemplate = new ComboBox { Location = new Point(95, 17), Size = new Size(GroupW - 110, 22), DropDownStyle = ComboBoxStyle.DropDownList };
             cboFloorTemplate.Items.Add("(none)");
             foreach (var t in _floorTemplates) cboFloorTemplate.Items.Add(t);
             RestoreOrDefaultTemplate(cboFloorTemplate, "FloorTemplate", "00 Working Floor Fine");
             grpTemplate.Controls.Add(cboFloorTemplate);
 
             grpTemplate.Controls.Add(new Label { Text = "Ceiling Plans:", Location = new Point(10, 48), Size = new Size(80, 18) });
-            cboCeilingTemplate = new ComboBox { Location = new Point(95, 45), Size = new Size(330, 22), DropDownStyle = ComboBoxStyle.DropDownList };
+            cboCeilingTemplate = new ComboBox { Location = new Point(95, 45), Size = new Size(GroupW - 110, 22), DropDownStyle = ComboBoxStyle.DropDownList };
             cboCeilingTemplate.Items.Add("(none)");
             foreach (var t in _ceilingTemplates) cboCeilingTemplate.Items.Add(t);
             RestoreOrDefaultTemplate(cboCeilingTemplate, "CeilingTemplate", "00 Working Ceiling Fine");
