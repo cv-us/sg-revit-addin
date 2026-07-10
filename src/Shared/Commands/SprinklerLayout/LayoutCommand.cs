@@ -85,6 +85,9 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             { TaskDialog.Show("Layout", "The selected sprinkler type was not found."); return Result.Cancelled; }
 
             var pipeType = doc.GetElement(new ElementId(dlg.PipeTypeId)) as PipeType;
+            var mainPipeTypeId = dlg.MainPipeTypeId > 0 ? new ElementId(dlg.MainPipeTypeId) : new ElementId(dlg.PipeTypeId);
+            var sprigPipeTypeId = dlg.SprigPipeTypeId > 0 ? new ElementId(dlg.SprigPipeTypeId) : new ElementId(dlg.PipeTypeId);
+            var mainPipeType = doc.GetElement(mainPipeTypeId) as PipeType;
 
             // ── Pick points ──
             bool mainMode = dlg.PickMode == LayoutDialog.PickModeKind.AreaMain;
@@ -113,7 +116,10 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 CapSym = dlg.CapEnds ? ResolveCapSymbol(doc, pipeType) : null,
                 SysId = new ElementId(dlg.SystemTypeId),
                 PipeTypeId = new ElementId(dlg.PipeTypeId),
+                MainPipeTypeId = mainPipeTypeId,
+                SprigPipeTypeId = sprigPipeTypeId,
                 PipeType = pipeType,
+                MainPipeType = mainPipeType,
                 OutletSymId = dlg.OutletFittingId > 0 ? new ElementId(dlg.OutletFittingId) : ElementId.InvalidElementId,
                 RiserTeeSymId = dlg.RiserTeeFittingId > 0 ? new ElementId(dlg.RiserTeeFittingId) : ElementId.InvalidElementId,
                 LinesAlongX = dlg.LinesAlongX,
@@ -151,8 +157,8 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             public Level Level;
             public FamilySymbol HeadSym;
             public FamilySymbol CapSym;
-            public ElementId SysId, PipeTypeId;
-            public PipeType PipeType;
+            public ElementId SysId, PipeTypeId, MainPipeTypeId, SprigPipeTypeId;
+            public PipeType PipeType, MainPipeType;
             public ElementId OutletSymId, RiserTeeSymId;
             public bool LinesAlongX;
             public double LineSizeFt, SprigSizeFt, MainSizeFt, RiserSizeFt;
@@ -243,7 +249,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                     Func<double, XYZ> at = d => ctx.Pt(uMin + d, mMin + lineOff, zBase + slope * d);
 
                     for (int k = 0; k + 1 < cuts.Count; k++)
-                        work.Segs.Add(CreatePipe(ctx, at(cuts[k]), at(cuts[k + 1]), ctx.LineSizeFt, rpt));
+                        work.Segs.Add(CreatePipe(ctx, at(cuts[k]), at(cuts[k + 1]), ctx.LineSizeFt, ctx.PipeTypeId, rpt));
 
                     // node 0 = near edge (open); node j+1 = head station j
                     for (int j = 0; j < stations.Count; j++)
@@ -334,13 +340,24 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 for (int i = 0; i + 1 < branchM.Count; i++)
                     mainSegs.Add(CreatePipe(ctx,
                         ctx.Pt(uMain, branchM[i], mainZ(branchM[i])),
-                        ctx.Pt(uMain, branchM[i + 1], mainZ(branchM[i + 1])), ctx.MainSizeFt, rpt));
+                        ctx.Pt(uMain, branchM[i + 1], mainZ(branchM[i + 1])), ctx.MainSizeFt, ctx.MainPipeTypeId, rpt));
 
+                int highDir = dlg.MainSlopeReversed ? -1 : 1;
                 int hiIndex = dlg.MainSlopeReversed ? 0 : branchM.Count - 1;
-                double stubEndM = branchM[hiIndex] + (dlg.MainSlopeReversed ? -1 : 1) * MainStubFt;
-                XYZ mainStubEndPt = ctx.Pt(uMain, stubEndM, mainZ(stubEndM));
+                int loIndex = dlg.MainSlopeReversed ? branchM.Count - 1 : 0;
+
+                // High (top-of-slope) end: continue 6" and CAP it.
+                double stubHiM = branchM[hiIndex] + highDir * MainStubFt;
+                XYZ mainStubHiPt = ctx.Pt(uMain, stubHiM, mainZ(stubHiM));
                 Pipe mainStub = CreatePipe(ctx,
-                    ctx.Pt(uMain, branchM[hiIndex], mainZ(branchM[hiIndex])), mainStubEndPt, ctx.MainSizeFt, rpt);
+                    ctx.Pt(uMain, branchM[hiIndex], mainZ(branchM[hiIndex])), mainStubHiPt, ctx.MainSizeFt, ctx.MainPipeTypeId, rpt);
+
+                // Low (riser) end: continue 6" and leave it OPEN (no cap) so it can be
+                // extended into the system riser.
+                double stubLoM = branchM[loIndex] - highDir * MainStubFt;
+                Pipe mainStubLo = CreatePipe(ctx,
+                    ctx.Pt(uMain, branchM[loIndex], mainZ(branchM[loIndex])),
+                    ctx.Pt(uMain, stubLoM, mainZ(stubLoM)), ctx.MainSizeFt, ctx.MainPipeTypeId, rpt);
 
                 PlaceHeads(ctx, branches, rpt);
                 doc.Regenerate();
@@ -360,7 +377,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                     {
                         XYZ topPt = ctx.Pt(uMain, branchM[i], branchLowZ);
                         XYZ botPt = ctx.Pt(uMain, branchM[i], mZ);
-                        Pipe nipple = CreatePipe(ctx, topPt, botPt, ctx.RiserSizeFt, rpt);
+                        Pipe nipple = CreatePipe(ctx, topPt, botPt, ctx.RiserSizeFt, ctx.MainPipeTypeId, rpt);
                         if (nipple != null)
                         {
                             rpt.Nipples++;
@@ -369,8 +386,12 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                             Connector nBot = FreeEndNear(nipple, botPt);
                             Pipe mBefore = i - 1 >= 0 && i - 1 < mainSegs.Count ? mainSegs[i - 1] : null;
                             Pipe mAfter = i < mainSegs.Count ? mainSegs[i] : null;
+                            // Splice the high-end (capped) and low-end (open) stubs in so
+                            // those end crossings tee (not elbow).
                             if (i == hiIndex && mainStub != null)
                             { if (dlg.MainSlopeReversed) mBefore = mainStub; else mAfter = mainStub; }
+                            if (i == loIndex && mainStubLo != null)
+                            { if (dlg.MainSlopeReversed) mAfter = mainStubLo; else mBefore = mainStubLo; }
                             Connector mA = mBefore != null ? FreeEndNear(mBefore, botPt) : null;
                             Connector mB = mAfter != null ? FreeEndNear(mAfter, botPt) : null;
                             JoinRun(ctx, mA, mB, nBot, rpt);
@@ -404,7 +425,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 if (mainStub != null && ctx.CapEnds && ctx.CapSym != null)
                 {
                     doc.Regenerate();   // settle the tees before reading the stub's open end
-                    CapEnd(ctx, mainStub, mainStubEndPt, rpt);
+                    CapEnd(ctx, mainStub, mainStubHiPt, rpt);
                 }
 
                 tx.Commit();
@@ -470,7 +491,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             if (addRightCap) { double rc = rightHeads[rightHeads.Count - 1] + ctx.ExtendToCapFt; nodeU.Add(rc); nodeKind.Add(null); work.HasRightCap = true; work.RightCapPt = at(rc); }
 
             for (int k = 0; k + 1 < nodeU.Count; k++)
-                work.Segs.Add(CreatePipe(ctx, at(nodeU[k]), at(nodeU[k + 1]), ctx.LineSizeFt, rpt));
+                work.Segs.Add(CreatePipe(ctx, at(nodeU[k]), at(nodeU[k + 1]), ctx.LineSizeFt, ctx.PipeTypeId, rpt));
 
             for (int k = 0; k < nodeU.Count; k++)
             {
@@ -551,7 +572,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 Connector branchConn = null;
                 if (st.UseSprig)
                 {
-                    Pipe sprig = CreatePipe(ctx, st.T, new XYZ(st.T.X, st.T.Y, st.Target.Z), ctx.SprigSizeFt, rpt);
+                    Pipe sprig = CreatePipe(ctx, st.T, new XYZ(st.T.X, st.T.Y, st.Target.Z), ctx.SprigSizeFt, ctx.SprigPipeTypeId, rpt);
                     if (sprig != null) { st.Sprig = sprig; rpt.Sprigs++; branchConn = FreeEndNear(sprig, st.T); }
                 }
                 else if (st.Head != null)
@@ -605,7 +626,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                     if (chosen != null)
                     {
                         if (!chosen.IsActive) { chosen.Activate(); doc.Regenerate(); }
-                        WithForcedJunctionFitting(ctx.PipeType, chosen.Id, () => doc.Create.NewTeeFitting(mainA, mainB, branch));
+                        WithForcedJunctionFitting(ctx.MainPipeType ?? ctx.PipeType, chosen.Id, () => doc.Create.NewTeeFitting(mainA, mainB, branch));
                         rpt.Tees++; rpt.ChosenFit++;
                     }
                     else { doc.Create.NewTeeFitting(mainA, mainB, branch); rpt.Tees++; rpt.DefaultFit++; }
@@ -714,11 +735,11 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             return (false, T);
         }
 
-        private Pipe CreatePipe(Ctx ctx, XYZ a, XYZ b, double sizeFt, Report rpt)
+        private Pipe CreatePipe(Ctx ctx, XYZ a, XYZ b, double sizeFt, ElementId pipeTypeId, Report rpt)
         {
             if (a.DistanceTo(b) <= 0.01) return null;
             Pipe p = null;
-            try { p = Pipe.Create(ctx.Doc, ctx.SysId, ctx.PipeTypeId, ctx.Level.Id, a, b); } catch { }
+            try { p = Pipe.Create(ctx.Doc, ctx.SysId, pipeTypeId, ctx.Level.Id, a, b); } catch { }
             if (p != null) { SetDiameter(p, sizeFt); rpt.Segs++; }
             else rpt.Fail++;
             return p;
@@ -884,10 +905,14 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             => double.TryParse(g.Value, System.Globalization.NumberStyles.Float,
                                System.Globalization.CultureInfo.InvariantCulture, out double v) ? v : 0;
 
+        /// <summary>Drive a fitting's size to the pipe diameter via whatever writable size
+        /// parameter it exposes. For the HCAD/Vic indexed cap, "Connector Diameter" is the
+        /// writable driver (Nominal Diameter/Radius are read-only lookup outputs).</summary>
         private static void TrySetSize(FamilyInstance fi, double diaFt)
         {
             if (fi == null || diaFt <= 0) return;
-            foreach (var name in new[] { "Nominal Diameter", "Nominal Radius", "Size", "Diameter" })
+            foreach (var name in new[] { "Connector Diameter", "Connector Radius",
+                                         "Nominal Diameter", "Nominal Radius", "Size", "Diameter" })
             {
                 Parameter p = fi.LookupParameter(name);
                 if (p != null && !p.IsReadOnly && p.StorageType == StorageType.Double)

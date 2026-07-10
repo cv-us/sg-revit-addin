@@ -36,7 +36,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
         private Panel _dirToggle;           // clickable arrows: branch-line direction
         private bool _linesAlongX = true;
 
-        private ComboBox _cmbPipeType, _cmbSystem, _cmbLevel, _cmbHead;
+        private ComboBox _cmbPipeType, _cmbSystem, _cmbLevel, _cmbHead, _cmbMainType, _cmbSprigType;
         private NumericUpDown _numLineSize, _numSprigSize, _numMainSize, _numRiserSize;
         private TextBox _txtElevFt, _txtElevIn, _txtSlope;
         private GroupBox _grpMain;
@@ -63,7 +63,9 @@ namespace SgRevitAddin.Commands.SprinklerLayout
         public string HeadSequence { get; private set; } = "";
         public PickModeKind PickMode { get; private set; }
         public bool LinesAlongX => _linesAlongX;
-        public int PipeTypeId { get; private set; }
+        public int PipeTypeId { get; private set; }        // line (branch) pipe type
+        public int MainPipeTypeId { get; private set; }
+        public int SprigPipeTypeId { get; private set; }
         public int SystemTypeId { get; private set; }
         public int HeadSymbolId { get; private set; }
         public string LevelName { get; private set; } = "";
@@ -112,7 +114,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
         {
             Text = "Layout";
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(740, 674);
+            ClientSize = new Size(740, 700);
             Font = new Font("Segoe UI", 9f);
 
             const int M = 15;
@@ -137,7 +139,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             // ── Branch lines ──
             var grpPipe = new GroupBox { Text = "Branch lines", Location = new Point(M, y), Size = new Size(350, 180) };
             int gy = 22;
-            grpPipe.Controls.Add(new Label { Text = "Pipe type:", Location = new Point(10, gy + 3), AutoSize = true });
+            grpPipe.Controls.Add(new Label { Text = "Line type:", Location = new Point(10, gy + 3), AutoSize = true });
             _cmbPipeType = AddCombo(grpPipe, new Point(80, gy), 258,
                 _pipeTypes.Select(t => t.name), DialogMemory.Get(MemKey, "PipeType", DefaultPipeTypeName()));
             gy += 27;
@@ -163,8 +165,12 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             Controls.Add(grpPipe);
 
             // ── Main (enabled only in Area + central main mode) ──
-            _grpMain = new GroupBox { Text = "Cross-main (3-point mode)", Location = new Point(M + 360, y), Size = new Size(350, 190) };
+            _grpMain = new GroupBox { Text = "Cross-main (3-point mode)", Location = new Point(M + 360, y), Size = new Size(350, 216) };
             gy = 22;
+            _grpMain.Controls.Add(new Label { Text = "Main type:", Location = new Point(10, gy + 3), AutoSize = true });
+            _cmbMainType = AddCombo(_grpMain, new Point(80, gy), 258,
+                _pipeTypes.Select(t => t.name), DialogMemory.Get(MemKey, "MainType", DefaultMainTypeName()));
+            gy += 27;
             _grpMain.Controls.Add(new Label { Text = "Main size:", Location = new Point(10, gy + 3), AutoSize = true });
             _numMainSize = AddSizeNum(_grpMain, new Point(80, gy), DialogMemory.GetDouble(MemKey, "MainSize", 2.5));
             _grpMain.Controls.Add(new Label { Text = "in", Location = new Point(146, gy + 3), AutoSize = true });
@@ -201,14 +207,17 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             _grpMain.Controls.Add(_chkMainReverse);
             Controls.Add(_grpMain);
 
-            y += 198;
+            y += 224;
 
             // ── Sprinklers (full width) ──
             var grpSprk = new GroupBox { Text = "Sprinklers", Location = new Point(M, y), Size = new Size(710, 150) };
             gy = 22;
             grpSprk.Controls.Add(new Label { Text = "Head type:", Location = new Point(10, gy + 3), AutoSize = true });
-            _cmbHead = AddCombo(grpSprk, new Point(80, gy), 400,
+            _cmbHead = AddCombo(grpSprk, new Point(80, gy), 290,
                 _headTypes.Select(t => t.name), DialogMemory.Get(MemKey, "Head", ""));
+            grpSprk.Controls.Add(new Label { Text = "Sprig/drop type:", Location = new Point(385, gy + 3), AutoSize = true });
+            _cmbSprigType = AddCombo(grpSprk, new Point(490, gy), 210,
+                _pipeTypes.Select(t => t.name), DialogMemory.Get(MemKey, "SprigType", DefaultSprigTypeName()));
             gy += 30;
             _rbOutlets = new RadioButton { Text = "Heads directly at outlets on the line", Location = new Point(10, gy), AutoSize = true };
             grpSprk.Controls.Add(_rbOutlets);
@@ -302,7 +311,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             grp.Controls.Add(_chkCap);
 
             grp.Controls.Add(new Label { Text = "Extend to cap:", Location = new Point(10, 196), AutoSize = true });
-            AddFtIn(grp, 10, 216, "CapFt", "CapIn", "0", "4", out _txtCapFt, out _txtCapIn);
+            AddFtIn(grp, 10, 216, "CapFt6", "CapIn6", "0", "6", out _txtCapFt, out _txtCapIn);
 
             Controls.Add(grp);
         }
@@ -412,10 +421,19 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             parent.Controls.Add(new Label { Text = "in", Location = new Point(x + 106, y + 3), AutoSize = true });
         }
 
-        private string DefaultPipeTypeName()
+        private string DefaultPipeTypeName() => PipeTypeMatch("welded", "line");
+        private string DefaultMainTypeName() => PipeTypeMatch("welded", "main");
+        private string DefaultSprigTypeName() => PipeTypeMatch("thread", "line");
+
+        /// <summary>First pipe type containing BOTH words; else either word; else first.</summary>
+        private string PipeTypeMatch(string a, string b)
         {
-            var t = _pipeTypes.FirstOrDefault(p => p.name.IndexOf("thread", StringComparison.OrdinalIgnoreCase) >= 0);
-            return t.name ?? (_pipeTypes.Count > 0 ? _pipeTypes[0].name : "");
+            var both = _pipeTypes.FirstOrDefault(p =>
+                p.name.IndexOf(a, StringComparison.OrdinalIgnoreCase) >= 0 &&
+                p.name.IndexOf(b, StringComparison.OrdinalIgnoreCase) >= 0);
+            if (both.name != null) return both.name;
+            var one = _pipeTypes.FirstOrDefault(p => p.name.IndexOf(a, StringComparison.OrdinalIgnoreCase) >= 0);
+            return one.name ?? (_pipeTypes.Count > 0 ? _pipeTypes[0].name : "");
         }
 
         private string DefaultSystemName()
@@ -462,6 +480,8 @@ namespace SgRevitAddin.Commands.SprinklerLayout
 
             PickMode = _cmbPickMode.SelectedIndex == 1 ? PickModeKind.AreaMain : PickModeKind.FillArea;
             PipeTypeId = _pipeTypes[_cmbPipeType.SelectedIndex].id;
+            MainPipeTypeId = _cmbMainType.SelectedIndex >= 0 ? _pipeTypes[_cmbMainType.SelectedIndex].id : PipeTypeId;
+            SprigPipeTypeId = _cmbSprigType.SelectedIndex >= 0 ? _pipeTypes[_cmbSprigType.SelectedIndex].id : PipeTypeId;
             SystemTypeId = _systemTypes[_cmbSystem.SelectedIndex].id;
             HeadSymbolId = _cmbHead.SelectedIndex >= 0 ? _headTypes[_cmbHead.SelectedIndex].id : -1;
             LevelName = (string)_cmbLevel.SelectedItem;
@@ -495,6 +515,8 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             DialogMemory.SetInt(MemKey, "PickMode", (int)PickMode);
             DialogMemory.SetBool(MemKey, "LinesAlongX", _linesAlongX);
             DialogMemory.Set(MemKey, "PipeType", (string)_cmbPipeType.SelectedItem);
+            DialogMemory.Set(MemKey, "MainType", _cmbMainType.SelectedIndex >= 0 ? (string)_cmbMainType.SelectedItem : "");
+            DialogMemory.Set(MemKey, "SprigType", _cmbSprigType.SelectedIndex >= 0 ? (string)_cmbSprigType.SelectedItem : "");
             DialogMemory.Set(MemKey, "System", (string)_cmbSystem.SelectedItem);
             DialogMemory.Set(MemKey, "Level", LevelName);
             DialogMemory.Set(MemKey, "Head", _cmbHead.SelectedIndex >= 0 ? (string)_cmbHead.SelectedItem : "");
@@ -510,8 +532,8 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             DialogMemory.Set(MemKey, "LenFt", _txtLenFt.Text);
             DialogMemory.Set(MemKey, "LenIn", _txtLenIn.Text);
             DialogMemory.SetBool(MemKey, "CapEnds", CapEnds);
-            DialogMemory.Set(MemKey, "CapFt", _txtCapFt.Text);
-            DialogMemory.Set(MemKey, "CapIn", _txtCapIn.Text);
+            DialogMemory.Set(MemKey, "CapFt6", _txtCapFt.Text);
+            DialogMemory.Set(MemKey, "CapIn6", _txtCapIn.Text);
             DialogMemory.SetDouble(MemKey, "MainSize", MainSizeIn);
             DialogMemory.SetDouble(MemKey, "RiserSize", RiserSizeIn);
             DialogMemory.Set(MemKey, "MainElevFt", _txtMainElevFt.Text);
