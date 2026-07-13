@@ -227,23 +227,83 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             { TaskDialog.Show("Layout", "The two corners are too close together to lay anything out."); return Result.Cancelled; }
 
             List<double> lineOffsets = LineOffsets(dlg.StartOffsetFt, lineGaps, widthSpan, FromMin(ctx, c1, mMin, mMax));
-            List<double> stations = Tile(headGaps, lengthSpan);
             if (lineOffsets.Count == 0)
             { TaskDialog.Show("Layout", "The first line spacing is wider than the picked area — nothing to place."); return Result.Cancelled; }
 
-            // Segment cut list: near edge (0), each head, then extend past the last head
-            // to the cap (or out to the far edge if no extension and no heads).
-            var cuts = new List<double> { 0 };
-            cuts.AddRange(stations);
-            double lastStation = stations.Count > 0 ? stations[stations.Count - 1] : 0.0;
-            double farEnd = stations.Count == 0 ? lengthSpan : lastStation + ctx.ExtendToCapFt;
-            bool capFar = ctx.CapEnds && ctx.CapSym != null && stations.Count > 0 && farEnd - lastStation > 0.02;
-            if (farEnd - lastStation > 0.02) cuts.Add(farEnd);
+            // Node list along each line (d = distance from uMin): head stations + the open/cap
+            // ends. With an End offset, the FIRST-picked corner's along-line edge is the dead
+            // (capped) end — the last sprinkler sits that far from it, the cap runs one
+            // cap-length further toward the corner, and heads tile away toward the far (open)
+            // edge. End offset 0 keeps the original behavior (heads from uMin, cap far).
+            var nodes = new List<(double d, bool head)>();
+            int capNodeIdx = -1;
+            double endOff = dlg.EndOffsetFt, capExt = ctx.ExtendToCapFt;
+            int stationCount;
+
+            if (endOff <= 1e-6 || headGaps == null || headGaps.Length == 0)
+            {
+                List<double> st = Tile(headGaps, lengthSpan);
+                stationCount = st.Count;
+                nodes.Add((0.0, false));
+                foreach (var s in st) nodes.Add((s, true));
+                double lastStation = st.Count > 0 ? st[st.Count - 1] : 0.0;
+                double farEnd = st.Count == 0 ? lengthSpan : lastStation + capExt;
+                if (farEnd - lastStation > 0.02)
+                {
+                    nodes.Add((farEnd, false));
+                    if (ctx.CapEnds && ctx.CapSym != null && st.Count > 0) capNodeIdx = nodes.Count - 1;
+                }
+            }
+            else
+            {
+                double c1u = ctx.LinesAlongX ? c1.X : c1.Y;
+                bool uFromMin = Math.Abs(c1u - uMin) <= Math.Abs(c1u - uMax);   // corner's along-line edge = uMin?
+                double dir = uFromMin ? 1.0 : -1.0;
+                double capEdge = uFromMin ? 0.0 : lengthSpan;
+                double d0 = capEdge + dir * endOff;                            // last sprinkler d
+
+                var st = new List<double>();
+                if (headGaps != null && headGaps.Length > 0)
+                {
+                    double cum = 0;
+                    for (int i = 0, guard = 0; guard < 100000; i++, guard++)
+                    {
+                        double d = d0 + dir * cum;
+                        if (d < -0.02 || d > lengthSpan + 0.02) break;
+                        st.Add(d);
+                        double gap = headGaps[i % headGaps.Length]; if (gap <= 1e-6) break;
+                        cum += gap;
+                    }
+                }
+                stationCount = st.Count;
+
+                bool wantCap = ctx.CapEnds && ctx.CapSym != null && st.Count > 0 && capExt > 0.02;
+                double capD = capEdge + dir * (endOff - capExt);              // cap = last head back toward the corner
+                double farEdge = uFromMin ? lengthSpan : 0.0;                 // open far end
+
+                // When capping is wanted, add the cap-stub node toward the corner; when not
+                // (e.g. Extend-to-cap ~0), skip it so the last head elbows cleanly with no
+                // dangling open stub (matching the End-offset-0 behavior).
+                if (wantCap) nodes.Add((capD, false));
+                foreach (var s in st) nodes.Add((s, true));
+                nodes.Add((farEdge, false));
+                nodes.Sort((a, b) => a.d.CompareTo(b.d));
+                for (int i = nodes.Count - 1; i > 0; i--)
+                    if (nodes[i].d - nodes[i - 1].d < 0.02)
+                    { nodes[i - 1] = (nodes[i - 1].d, nodes[i].head || nodes[i - 1].head); nodes.RemoveAt(i); }
+
+                if (wantCap)
+                {
+                    double target = capD;
+                    capNodeIdx = nodes.FindIndex(n => Math.Abs(n.d - target) < 1e-6);
+                    if (capNodeIdx < 0) capNodeIdx = uFromMin ? 0 : nodes.Count - 1;
+                }
+            }
 
             double slope = dlg.SlopeFtPerFt;
             double zBase = ctx.Level.Elevation + dlg.StartElevFt;
 
-            if (!Confirmed(lineOffsets.Count, stations.Count)) return Result.Cancelled;
+            if (!Confirmed(lineOffsets.Count, stationCount)) return Result.Cancelled;
 
             using (var tx = new Transaction(doc, "Layout"))
             {
@@ -255,18 +315,17 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 foreach (double lineOff in lineOffsets)
                 {
                     var work = new LineWork();
-                    // start point of this line at along-u = 0
                     Func<double, XYZ> at = d => ctx.Pt(uMin + d, mMin + lineOff, zBase + slope * d);
 
-                    for (int k = 0; k + 1 < cuts.Count; k++)
-                        work.Segs.Add(CreatePipe(ctx, at(cuts[k]), at(cuts[k + 1]), ctx.LineSizeFt, ctx.PipeTypeId, rpt));
+                    for (int k = 0; k + 1 < nodes.Count; k++)
+                        work.Segs.Add(CreatePipe(ctx, at(nodes[k].d), at(nodes[k + 1].d), ctx.LineSizeFt, ctx.PipeTypeId, rpt));
 
-                    // node 0 = near edge (open); node j+1 = head station j
-                    for (int j = 0; j < stations.Count; j++)
+                    for (int i = 0; i < nodes.Count; i++)
                     {
-                        XYZ T = at(stations[j]);
+                        if (!nodes[i].head) continue;
+                        XYZ T = at(nodes[i].d);
                         (bool useSprig, XYZ target) = SprigDecision(ctx, T, rpt);
-                        work.Stations.Add(new Station { T = T, Target = target, UseSprig = useSprig, Kind = StationKind.Head, NodeIndex = j + 1 });
+                        work.Stations.Add(new Station { T = T, Target = target, UseSprig = useSprig, Kind = StationKind.Head, NodeIndex = i });
                     }
                     lines.Add(work);
                     rpt.Lines++;
@@ -280,9 +339,12 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 foreach (var work in lines)
                 {
                     ConnectLine(ctx, work, rpt);
-                    // Cap the far end (the last segment's still-open outer end).
-                    if (capFar && work.Segs.Count > 0)
-                        CapEnd(ctx, work.Segs[work.Segs.Count - 1], null, rpt);
+                    // Cap the dead end (the still-open outer connector of that end's segment).
+                    if (capNodeIdx >= 0 && work.Segs.Count > 0)
+                    {
+                        Pipe capSeg = capNodeIdx == 0 ? work.Segs[0] : work.Segs[work.Segs.Count - 1];
+                        CapEnd(ctx, capSeg, null, rpt);
+                    }
                 }
 
                 tx.Commit();

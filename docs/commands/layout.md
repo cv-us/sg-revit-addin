@@ -81,6 +81,7 @@ junction falls back to the routing-preference default and the count is reported.
 | Level / Start elevation | Reference level and the branch centerline elevation above it (in main mode, the branch's low point at the main). |
 | Slope | Branch slope, **inches per 10 ft**. In main mode this is the downhill toward the main (both sides). |
 | Start offset | Distance from the **first-picked corner** to the **first branch line**, before the line sequence repeats. E.g. set 2′-3″ to hold the first line 2′-3″ off a beam you click as the first corner. `0` keeps the original behavior (first line one spacing in). |
+| End offset | *(Fill-area mode)* Distance from that **same first corner** to the **last sprinkler** along the line — that corner is treated as the branch lines' capped/dead end. The pipe runs one cap-length (Extend to cap) further to the cap **toward** that corner, and heads tile away toward the far (open) end. So one corner click sets both the first-line and the last-head dimension. `0` = original behavior (heads from the near edge, cap at the far end). |
 | Cap branch-line ends / Extend to cap | Place the pipe type's routing-preference cap a set distance past the last head. |
 | Cross-main: Main size / Riser size | The cross-main's diameter and the riser-nipple diameter (off the main to the branches). |
 | Main elevation / slope | The cross-main's centerline elevation above the level and its slope (in/10 ft) toward the riser. |
