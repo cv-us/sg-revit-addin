@@ -30,7 +30,16 @@ tiles along each line and the pipe extends past the last head to its cap.
 
 ### Area + central main — pick 2 corners + a main point
 Pick two corners, then a third point where the **cross-main** runs. Branch lines
-run perpendicular to the main. Each branch is a shallow **V** — lowest where it
+run perpendicular to the main. The head sequence tiles **once, continuously**
+across each whole line, so the head-to-head gap that straddles the main is the
+same sequence gap as every other gap — the main never eats a head or squeezes the
+two heads next to it. If the picked main lands closer than **Head clear** to a head
+centerline, the **main** slides to that head's near side at exactly that distance;
+the heads never move. The summary reports any shift. If the head spacing is so
+tight that no spot in the area clears a head, the command says so and places
+nothing rather than building a kinked crossing.
+
+Each branch is a shallow **V** — lowest where it
 crosses the main, rising to both outer edges at the **branch slope** — so the
 branch drains toward the main (dry / pre-action systems). At each crossing the
 branch is continuous with a **Firelock tee** and a vertical **riser nipple**
@@ -45,9 +54,11 @@ Pick two corners, then the **primary** main and the **secondary / floater** main
 Each branch line runs **between the two mains** (flat / unsloped), tying into both
 with a **riser nipple** + **GOL** on the main. With **Tailback** on, the branch
 continues a short capped stub past each main (a **Firelock tee**); with it off,
-the branch **elbows** into the riser at each main (no stub). Heads are tiled along
-each branch between the two mains. The mains break at every crossing (GOL) and are
-left **open** at their ends (6″ stubs) to tie in. Unsloped.
+the branch **elbows** into the riser at each main (no stub). Heads tile from the
+lower main across to the far one; if the last head lands within **Head clear** of
+the far main, that main slides **outward** to make room (the head stays put). The
+mains break at every crossing (GOL) and are left **open** at their ends (6″ stubs)
+to tie in. Unsloped.
 
 The **Main outlet** and **Riser tee** fittings are selectable (defaulting to a
 GOL and a Firelock tee found by name). They're forced by temporarily injecting a
@@ -85,6 +96,7 @@ junction falls back to the routing-preference default and the count is reported.
 | Cap branch-line ends / Extend to cap | Place the pipe type's routing-preference cap a set distance past the last head. |
 | Cross-main: Main size / Riser size | The cross-main's diameter and the riser-nipple diameter (off the main to the branches). |
 | Main elevation / slope | The cross-main's centerline elevation above the level and its slope (in/10 ft) toward the riser. |
+| Head clear | Minimum **centerline** distance from a main to the nearest sprinkler (default 6″). Head spacing is never altered to make room — the **main shifts** off the picked point instead, and the summary says by how much. On a **sloped** branch the command raises it to 12″ (and says so): the branch runs flat for 12″ through the crossing so the riser tee stays straight, and a head inside that flat run would sit on the slope break and get a kinked tee. Unsloped branches (two mains, or slope 0) honor the value as typed. |
 | Main outlet | Fitting where each riser nipple taps the main (default a GOL / grooved outlet, tapped without cutting the main). |
 | Riser tee | Fitting at the top of the riser where the branch lines meet (default an HCAD Firelock tee). |
 | Main / slope image | Clickable image of the main (perpendicular to the branches). In 3-point mode it labels **HIGH / LOW** — click to flip the slope (which end drains to the riser). The branch-direction toggle reorients it; two-mains shows both mains. |
@@ -105,6 +117,10 @@ junction falls back to the routing-preference default and the count is reported.
   report says so). A cap needs a non-zero **extend to cap** so there's a stub.
   Only the cap is placed — no separate coupling (the grooved cap accounts for
   the coupling already).
+- In main mode the head sequence is anchored at the **first line edge** and tiles
+  straight across, so any leftover shorter-than-a-gap remainder lands at the far
+  edge — not at the main. (Older builds tiled inward from *both* edges, which put
+  the odd gap right at the crossing.)
 - In main mode, if the **Main elevation** is at or above the branch low point the
   nipple can't drop — that crossing is skipped and reported (raise the branch or
   lower the main).

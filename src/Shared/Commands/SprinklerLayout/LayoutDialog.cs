@@ -40,7 +40,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
         private ComboBox _cmbLineSize, _cmbSprigSize, _cmbMainSize, _cmbRiserSize;
         private TextBox _txtElevFt, _txtElevIn, _txtSlope, _txtOffFt, _txtOffIn, _txtEndFt, _txtEndIn;
         private GroupBox _grpMain;
-        private TextBox _txtMainElevFt, _txtMainElevIn, _txtMainSlope;
+        private TextBox _txtMainElevFt, _txtMainElevIn, _txtMainSlope, _txtHeadClear;
         private Label _lblMainSlope;
         private Panel _mainToggle;          // clickable main image: orientation + HIGH/LOW slope
         private bool _mainReversed;
@@ -90,6 +90,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
         public double RiserSizeIn { get; private set; }
         public double MainElevFt { get; private set; }
         public double MainSlopeFtPerFt { get; private set; }    // main slope, ft fall per ft run
+        public double MainHeadClearFt { get; private set; }     // min centerline gap main -> nearest head; the main shifts over
         public bool MainSlopeReversed { get; private set; }
         public bool Tailback { get; private set; } = true;      // two-mains: tee + stub (vs elbow) at each main
         public int OutletFittingId { get; private set; } = -1;  // -1 = routing-preference default
@@ -122,7 +123,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
         {
             Text = "Layout";
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(740, 748);
+            ClientSize = new Size(740, 775);
             Font = new Font("Segoe UI", 9f);
 
             const int M = 15;
@@ -181,7 +182,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             Controls.Add(grpPipe);
 
             // ── Main(s) — enabled in Area + central main (3-pt) and Two mains (4-pt) ──
-            _grpMain = new GroupBox { Text = "Cross-main(s)", Location = new Point(M + 360, y), Size = new Size(350, 272) };
+            _grpMain = new GroupBox { Text = "Cross-main(s)", Location = new Point(M + 360, y), Size = new Size(350, 299) };
             gy = 22;
             _grpMain.Controls.Add(new Label { Text = "Main type:", Location = new Point(10, gy + 3), AutoSize = true });
             _cmbMainType = AddCombo(_grpMain, new Point(80, gy), 258,
@@ -213,6 +214,15 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             _grpMain.Controls.Add(new Label { Text = "Riser tee:", Location = new Point(10, gy + 3), AutoSize = true });
             _cmbRiserTee = AddCombo(_grpMain, new Point(80, gy), 258, fitNames,
                 DialogMemory.Get(MemKey, "RiserTee", _defaultRiserTee ?? DefaultLabel));
+            gy += 27;
+            _grpMain.Controls.Add(new Label { Text = "Head clear:", Location = new Point(10, gy + 3), AutoSize = true });
+            _txtHeadClear = new TextBox { Location = new Point(80, gy), Size = new Size(48, 22), Text = DialogMemory.Get(MemKey, "HeadClear", "6") };
+            var hctip = new ToolTip();
+            hctip.SetToolTip(_txtHeadClear,
+                "Minimum centerline distance from the main to the nearest sprinkler.\n" +
+                "Head spacing never changes — the main shifts over to make room.");
+            _grpMain.Controls.Add(_txtHeadClear);
+            _grpMain.Controls.Add(new Label { Text = "in   min main → head (main shifts)", Location = new Point(134, gy + 3), AutoSize = true });
             gy += 30;
 
             // Clickable main image: shows the main ⊥ to the branches. In 3-pt mode it
@@ -237,7 +247,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             _grpMain.Controls.Add(_chkTailback);
             Controls.Add(_grpMain);
 
-            y += 280;
+            y += 307;
 
             // ── Sprinklers (full width) ──
             var grpSprk = new GroupBox { Text = "Sprinklers", Location = new Point(M, y), Size = new Size(710, 150) };
@@ -625,6 +635,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             RiserSizeIn = ComboSizeIn(_cmbRiserSize);
             MainElevFt = ParseNum(_txtMainElevFt) + ParseNum(_txtMainElevIn) / 12.0;
             MainSlopeFtPerFt = ParseNum(_txtMainSlope) / 120.0;
+            MainHeadClearFt = Math.Max(0.0, ParseNum(_txtHeadClear) / 12.0);
             MainSlopeReversed = _mainReversed;
             Tailback = _chkTailback.Checked;
             OutletFittingId = FittingIdAt(_cmbOutlet);
@@ -670,6 +681,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             DialogMemory.Set(MemKey, "MainElevFt", _txtMainElevFt.Text);
             DialogMemory.Set(MemKey, "MainElevIn", _txtMainElevIn.Text);
             DialogMemory.Set(MemKey, "MainSlope", _txtMainSlope.Text);
+            DialogMemory.Set(MemKey, "HeadClear", _txtHeadClear.Text);
             DialogMemory.SetBool(MemKey, "MainReverse", MainSlopeReversed);
             DialogMemory.SetBool(MemKey, "Tailback", Tailback);
             DialogMemory.Set(MemKey, "Outlet", (string)_cmbOutlet.SelectedItem ?? DefaultLabel);

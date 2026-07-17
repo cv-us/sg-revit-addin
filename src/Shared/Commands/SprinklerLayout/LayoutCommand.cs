@@ -32,7 +32,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
     public class LayoutCommand : IExternalCommand
     {
         private const double SprigMinFt = 0.05;   // a sprig shorter than this becomes a line outlet
-        private const double HeadMarginFt = 1.0;  // keep heads at least this far from the main crossing
+        private const double MinSegFt = 0.25;     // 3" — shortest pipe piece we'll build between two nodes
         private const double MainStubFt = 0.5;    // 6" the main continues past the last high-end riser
         private const double CrossFlatFt = 1.0;   // short horizontal run at the crossing so the tee is collinear
 
@@ -139,6 +139,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 SprigLenFt = dlg.SprigLenFt,
                 CapEnds = dlg.CapEnds,
                 ExtendToCapFt = dlg.ExtendToCapFt,
+                HeadClearFt = dlg.MainHeadClearFt,
                 Tailback = dlg.Tailback
             };
 
@@ -175,6 +176,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             public double TermZ, SprigLenFt;
             public bool CapEnds;
             public double ExtendToCapFt;
+            public double HeadClearFt;   // min centerline gap main -> nearest head (the main shifts, heads never move)
             public bool Tailback;   // two-mains: tee + stub (vs elbow) at each main tie-in
 
             /// <summary>Map (along-u, along-m, z) into world XY per the branch direction.</summary>
@@ -186,6 +188,10 @@ namespace SgRevitAddin.Commands.SprinklerLayout
         {
             public int Lines, Segs, Heads, Sprigs, Nipples, Tees, Elbows, Caps,
                        HeadConn, PlainConn, Outlet, ShortNipple, Fail, ChosenFit, DefaultFit, Joints;
+            public double MainShiftFt;      // how far the main had to slide off a head
+            public double ClearFloored;     // effective head clearance when it had to exceed the dialog's
+            public bool ClearFlooredSlope;  // ...because of the sloped crossing's flat run (vs the min pipe piece)
+            public double ClearShortFt;     // clearance actually achieved when it couldn't be honored
 
             public string ToString(bool mainMode, bool capMissing)
             {
@@ -201,6 +207,17 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                     r += $"Junction fittings: {ChosenFit} chosen (GOL / Firelock)" +
                          (DefaultFit > 0 ? $", {DefaultFit} fell back to the routing-preference default" : "") + "\n";
                 if (Joints > 0) r += $"Slope-transition couplings: {Joints}\n";
+                if (MainShiftFt > 0.005)
+                    r += $"Main shifted {MainShiftFt * 12.0:0.#}\" off the picked point to clear the nearest " +
+                         "head (head spacing kept).\n";
+                if (ClearFloored > 0)
+                    r += $"Head clear raised to {ClearFloored * 12.0:0.#}\" — " + (ClearFlooredSlope
+                        ? $"a sloped branch runs flat for {CrossFlatFt * 12.0:0.#}\" through the crossing, so a head " +
+                          "can't sit closer than that plus a fitting piece (unslope the branch for a smaller clearance)."
+                        : "that's the shortest pipe piece that can be built between the main and a head.") + "\n";
+                if (ClearShortFt > 0)
+                    r += $"Head spacing is tighter than twice the head clearance — the main is only " +
+                         $"{ClearShortFt * 12.0:0.#}\" from the nearest head (the roomiest spot available).\n";
                 if (PlainConn > 0) r += $"Joined without a fitting (tee/elbow failed — check routing preferences): {PlainConn}\n";
                 if (Outlet > 0) r += $"Heads placed as line outlets (sprig omitted): {Outlet}\n";
                 if (ShortNipple > 0) r += $"Crossings with the main at/above the branch (nipple skipped — check the main elevation): {ShortNipple}\n";
@@ -377,6 +394,36 @@ namespace SgRevitAddin.Commands.SprinklerLayout
 
             double branchSlope = Math.Abs(dlg.SlopeFtPerFt);        // magnitude; both sides fall to the main
             double branchLowZ = ctx.Level.Elevation + dlg.StartElevFt;
+
+            // Heads tile ONCE across the whole line (same rhythm on both sides of the main),
+            // then the main slides off any head it lands on. Every line shares these
+            // stations, so the shift is one decision for the whole run.
+            var headU = HeadStations(uMin, uMax, headGaps);
+            double clearFloor = MainClearFloor(branchSlope);
+            double clearFt = Math.Max(ctx.HeadClearFt, clearFloor);
+            double mainShift;
+            uMain = ShiftMainClear(uMain, headU, clearFt, uMin, uMax, out mainShift);
+            rpt.MainShiftFt = mainShift;
+            rpt.ClearFloored = clearFt > ctx.HeadClearFt + 1e-9 ? clearFt : 0.0;
+            rpt.ClearFlooredSlope = branchSlope > 1e-9;
+
+            // Below the floor a head would sit inside the crossing's flat zone: the slope
+            // break would land on that head's tee (which must be collinear) and its node
+            // would fall on the wrong side of the flat-zone joint. Refuse rather than build it.
+            double got = headU.Count > 0 ? HeadClearance(uMain, headU) : double.MaxValue;
+            if (got < clearFloor - 1e-6)
+            {
+                TaskDialog.Show("Layout",
+                    "The head spacing is too tight to fit the cross-main between two heads.\n\n" +
+                    $"The main needs at least {clearFloor * 12.0:0.#}\" of centerline clearance to the nearest " +
+                    $"head, but the roomiest spot in the picked area is {got * 12.0:0.#}\".\n\n" +
+                    (branchSlope > 1e-9
+                        ? $"A sloped branch runs flat for {CrossFlatFt * 12.0:0.#}\" through the crossing so the " +
+                          "riser tee stays straight — widen the head spacing, or set the branch slope to 0."
+                        : "Widen the head spacing."));
+                return Result.Cancelled;
+            }
+            rpt.ClearShortFt = got < clearFt - 1e-6 ? got : 0.0;
             double mainElev = ctx.Level.Elevation + dlg.MainElevFt;
             double mainSlope = Math.Abs(dlg.MainSlopeFtPerFt);
             // main falls toward the riser end; "reversed" puts the riser at the far (mMax) end
@@ -398,8 +445,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 var branches = new List<LineWork>();
                 foreach (double m in branchM)
                 {
-                    var work = BuildBranchV(ctx, uMin, uMax, uMain, m, headGaps,
-                                            branchLowZ, branchSlope, rpt);
+                    var work = BuildBranchV(ctx, headU, uMain, m, branchLowZ, branchSlope, rpt);
                     branches.Add(work);
                     rpt.Lines++;
                 }
@@ -547,6 +593,18 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             { TaskDialog.Show("Layout", "The first line spacing is wider than the picked area — nothing to place."); return Result.Cancelled; }
             var branchM = mOffsets.Select(o => mMin + o).ToList();
 
+            // Heads tile continuously from the primary main. If the last one crowds the
+            // secondary main, THAT main slides outward — the head rhythm never changes.
+            // (The stations are anchored at uLo, so only uHi can move without moving them.)
+            double clearFt = Math.Max(ctx.HeadClearFt, MainClearFloor(0.0));   // two-mains branches are flat
+            var headU = HeadStations(uLo, uHi, headGaps).Where(u => u - uLo >= clearFt - 1e-9).ToList();
+            if (headU.Count > 0)
+            {
+                double lastHead = headU[headU.Count - 1];
+                if (uHi - lastHead < clearFt - 1e-9)
+                { rpt.MainShiftFt = clearFt - (uHi - lastHead); uHi = lastHead + clearFt; }
+            }
+
             double branchZ = ctx.Level.Elevation + dlg.StartElevFt;      // flat
             double mainZ = ctx.Level.Elevation + dlg.MainElevFt;         // flat
             double tailFt = ctx.ExtendToCapFt > 0.02 ? ctx.ExtendToCapFt : MainStubFt;
@@ -579,7 +637,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 var branches = new List<LineWork>();
                 foreach (double m in branchM)
                 {
-                    branches.Add(BuildBranchFlat(ctx, uLo, uHi, m, headGaps, branchZ, ctx.Tailback, tailFt, rpt));
+                    branches.Add(BuildBranchFlat(ctx, uLo, uHi, m, headU, branchZ, ctx.Tailback, tailFt, rpt));
                     rpt.Lines++;
                 }
 
@@ -637,20 +695,15 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             return Result.Succeeded;
         }
 
-        /// <summary>One flat branch spanning the two mains: heads tiled between them, a
-        /// crossing node at each main. With a tailback a short stub extends past each main
-        /// (so the crossing tees); without, the crossing is the branch end (elbow).</summary>
-        private LineWork BuildBranchFlat(Ctx ctx, double uLo, double uHi, double m, double[] headGaps,
+        /// <summary>One flat branch spanning the two mains, with a crossing node at each
+        /// main. <paramref name="heads"/> is the shared station list (tiled once from the
+        /// primary main and already clear of both). With a tailback a short stub extends
+        /// past each main (so the crossing tees); without, the crossing is the branch end
+        /// (elbow).</summary>
+        private LineWork BuildBranchFlat(Ctx ctx, double uLo, double uHi, double m, List<double> heads,
                                          double branchZ, bool tailback, double tailFt, Report rpt)
         {
             Func<double, XYZ> at = u => ctx.Pt(u, m, branchZ);
-
-            var heads = new List<double>();
-            foreach (double off in Tile(headGaps, uHi - uLo))
-            {
-                double u = uLo + off;
-                if (u > uLo + HeadMarginFt && u < uHi - HeadMarginFt) heads.Add(u);
-            }
 
             var work = new LineWork();
             var nodeU = new List<double>();
@@ -683,40 +736,22 @@ namespace SgRevitAddin.Commands.SprinklerLayout
         }
 
         /// <summary>Build one branch as a shallow V (low at the main crossing, rising to
-        /// both outer edges), with head nodes tiled from each outer edge inward and a
-        /// crossing node at the main. Returns segments + stations (heads + the crossing).</summary>
-        private LineWork BuildBranchV(Ctx ctx, double uMin, double uMax, double uMain, double m,
-                                      double[] headGaps, double branchLowZ, double branchSlope, Report rpt)
+        /// both outer edges). <paramref name="headU"/> is the line's head stations — one
+        /// continuous tiling of the sequence across the whole span — so the head-to-head
+        /// gap straddling the main matches every other gap. The main has already been
+        /// shifted clear of those stations; heads never move for it.</summary>
+        private LineWork BuildBranchV(Ctx ctx, List<double> headU, double uMain, double m,
+                                      double branchLowZ, double branchSlope, Report rpt)
         {
-            // Head u-positions on each half, measured inward from the outer edge.
-            var leftHeads = new List<double>();
-            var rightHeads = new List<double>();
-            if (headGaps.Length > 0)
-            {
-                // left half: uMin + cumulative, inward toward uMain
-                double c = 0;
-                for (int i = 0, g = 0; g < 100000; i++, g++)
-                {
-                    double gap = headGaps[i % headGaps.Length]; if (gap <= 1e-6) break;
-                    c += gap; double up = uMin + c;
-                    if (up > uMain - HeadMarginFt) break;
-                    leftHeads.Add(up);
-                }
-                // right half: uMax - cumulative, inward toward uMain
-                c = 0;
-                for (int i = 0, g = 0; g < 100000; i++, g++)
-                {
-                    double gap = headGaps[i % headGaps.Length]; if (gap <= 1e-6) break;
-                    c += gap; double up = uMax - c;
-                    if (up < uMain + HeadMarginFt) break;
-                    rightHeads.Add(up);
-                }
-                rightHeads.Sort();
-            }
+            var leftHeads = headU.Where(u => u < uMain).ToList();
+            var rightHeads = headU.Where(u => u > uMain).ToList();
 
             // A short horizontal run centered on the crossing keeps the riser-top tee's
             // two run connectors collinear (a sloped V would kink and defeat NewTeeFitting).
-            // The pipe is flat within flatHalf of the crossing, then slopes up to the edges.
+            // The pipe is flat within flatHalf of the crossing, then slopes up to the edges,
+            // so the slope break lands on the Joint nodes — couplings, which tolerate a kink.
+            // It must never land on a HEAD, whose tee needs collinear runs; MainClearFloor
+            // keeps every head outside the flat zone by a buildable margin.
             double flatHalf = branchSlope > 1e-9 ? CrossFlatFt / 2.0 : 0.0;
             Func<double, double> bz = u => branchLowZ + branchSlope * Math.Max(0.0, Math.Abs(u - uMain) - flatHalf);
             Func<double, XYZ> at = u => ctx.Pt(u, m, bz(u));
@@ -1214,6 +1249,81 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 offs.Add(cum);
             }
             return offs;
+        }
+
+        /// <summary>Head u-stations for a line: the head sequence tiled ONCE, continuously,
+        /// from uMin across the whole span. A main crossing never breaks that rhythm — the
+        /// head-to-head gap straddling the main is the same sequence gap as everywhere else.
+        /// The main moves instead (see <see cref="ShiftMainClear"/>).</summary>
+        private static List<double> HeadStations(double uMin, double uMax, double[] headGaps)
+            => Tile(headGaps, uMax - uMin).Select(o => uMin + o).ToList();
+
+        /// <summary>Smallest main-to-head clearance the branch geometry can actually take.
+        /// A sloped branch is flat for CrossFlatFt/2 either side of the crossing so the riser
+        /// tee's run connectors stay collinear; the slope break then sits on a Joint, which is
+        /// only a coupling and tolerates the kink. A HEAD there would get a NewTeeFitting on
+        /// non-collinear runs and fail, so no head may sit inside the flat zone — and it needs
+        /// a buildable piece of pipe clear of it. Unsloped branches have no flat zone, so the
+        /// user's value stands (down to one buildable piece).</summary>
+        private static double MainClearFloor(double branchSlope)
+            => branchSlope > 1e-9 ? CrossFlatFt / 2.0 + 2.0 * MinSegFt : MinSegFt;
+
+        /// <summary>Centerline distance from <paramref name="u"/> to the nearest head.</summary>
+        private static double HeadClearance(double u, List<double> heads)
+        {
+            double d = double.MaxValue;
+            foreach (double h in heads) d = Math.Min(d, Math.Abs(h - u));
+            return d;
+        }
+
+        /// <summary>Nudge a picked main off the heads it would land on. Head spacing is
+        /// sacred, so the MAIN moves: if the nearest head centerline is closer than
+        /// <paramref name="clearFt"/>, the main slides to that head's nearer side at exactly
+        /// clearFt (staying inside [uLo, uHi]). <paramref name="shiftedFt"/> reports how far.</summary>
+        private static double ShiftMainClear(double uMain, List<double> heads, double clearFt,
+                                             double uLo, double uHi, out double shiftedFt)
+        {
+            shiftedFt = 0.0;
+            if (clearFt <= 1e-6 || heads == null || heads.Count == 0) return uMain;
+            if (HeadClearance(uMain, heads) >= clearFt - 1e-9) return uMain;
+
+            double nearest = heads[0];
+            foreach (double h in heads)
+                if (Math.Abs(h - uMain) < Math.Abs(nearest - uMain)) nearest = h;
+
+            // Shorter move first: the side of that head the pick already sits on.
+            double near = nearest - clearFt, far = nearest + clearFt;
+            foreach (double cand in uMain <= nearest ? new[] { near, far } : new[] { far, near })
+            {
+                if (cand < uLo - 1e-9 || cand > uHi + 1e-9) continue;
+                if (HeadClearance(cand, heads) >= clearFt - 1e-9)
+                { shiftedFt = Math.Abs(cand - uMain); return cand; }
+            }
+
+            // Heads packed tighter than 2x the clearance (or the area is too small): the
+            // clearance can't be honored anywhere. Take the roomiest spot going — including
+            // the middle of the gap the pick landed in, which beats both ±clearFt candidates
+            // when the heads are that tight — and let the caller report the shortfall.
+            double lo = double.NegativeInfinity, hi = double.PositiveInfinity;
+            foreach (double h in heads)
+            {
+                if (h <= uMain && h > lo) lo = h;
+                if (h >= uMain && h < hi) hi = h;
+            }
+            double mid = double.IsNegativeInfinity(lo) || double.IsPositiveInfinity(hi)
+                ? uMain : 0.5 * (lo + hi);
+
+            double best = Clamp(uMain, uLo, uHi), bestClear = HeadClearance(best, heads);
+            foreach (double cand in new[] { near, far, mid })
+            {
+                double c2 = Clamp(cand, uLo, uHi);
+                double c = HeadClearance(c2, heads);
+                bool better = c > bestClear + 1e-9
+                    || (c > bestClear - 1e-9 && Math.Abs(c2 - uMain) < Math.Abs(best - uMain) - 1e-9);
+                if (better) { bestClear = c; best = c2; }
+            }
+            shiftedFt = Math.Abs(best - uMain);
+            return best;
         }
 
         /// <summary>Line offsets from the mMin edge. With a start offset the first line sits
