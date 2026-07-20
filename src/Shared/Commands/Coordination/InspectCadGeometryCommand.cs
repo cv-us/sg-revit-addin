@@ -421,10 +421,103 @@ namespace SgRevitAddin.Commands.Coordination
         /// triangulation. Seed on such a pair, then flood outward taking every face whose
         /// normal is perpendicular to that axis. Growth stops naturally at a joint, where the
         /// faces belong to a different axis.</summary>
+        private static bool Solve3(double[,] M, double[] b, double[] outp)
+        {
+            double[,] A = (double[,])M.Clone(); double[] r = (double[])b.Clone();
+            for (int c = 0; c < 3; c++)
+            {
+                int piv = c;
+                for (int q = c + 1; q < 3; q++) if (Math.Abs(A[q, c]) > Math.Abs(A[piv, c])) piv = q;
+                if (Math.Abs(A[piv, c]) < 1e-12) return false;
+                if (piv != c)
+                {
+                    for (int j = 0; j < 3; j++) { double tv = A[c, j]; A[c, j] = A[piv, j]; A[piv, j] = tv; }
+                    double tb = r[c]; r[c] = r[piv]; r[piv] = tb;
+                }
+                for (int q = c + 1; q < 3; q++)
+                {
+                    double f = A[q, c] / A[c, c];
+                    for (int j = c; j < 3; j++) A[q, j] -= f * A[c, j];
+                    r[q] -= f * r[c];
+                }
+            }
+            for (int i = 2; i >= 0; i--)
+            {
+                double s2 = r[i];
+                for (int j = i + 1; j < 3; j++) s2 -= A[i, j] * outp[j];
+                outp[i] = s2 / A[i, i];
+            }
+            return true;
+        }
+
+        /// <summary>Pin the axis LINE, not just its direction. Every side facet of ONE
+        /// cylinder satisfies (p - c).n = d for a constant d (axis-to-chord-plane distance),
+        /// which is linear in (c_u, c_v, d). Without this constraint, growth leaks through a
+        /// welded tee into a neighbouring pipe and the circle fit spans both — measured on
+        /// the real model as ~2x inflated diameters and, tellingly, ZERO level runs.
+        ///
+        /// Solved by RANSAC rather than least squares: the bootstrap patch can itself be
+        /// contaminated (the seed's own neighbour may already be on the wrong pipe), and one
+        /// foreign face drags a least-squares solve off the true line, after which the second
+        /// pass rejects nearly everything.</summary>
+        private static bool SolveAxisLine(FaceGraph g, List<int> idx, XYZ axis, XYZ u, XYZ v,
+                                          out double cu, out double cv, out double d)
+        {
+            cu = cv = d = 0;
+            var NU = new List<double>(); var NV = new List<double>(); var R = new List<double>();
+            foreach (int i in idx)
+            {
+                XYZ nn = g.N[i];
+                if (nn == null || Math.Abs(nn.DotProduct(axis)) > 0.35) continue;
+                double nu = nn.DotProduct(u), nv = nn.DotProduct(v);
+                double len = Math.Sqrt(nu * nu + nv * nv);
+                if (len < 1e-9) continue;
+                nu /= len; nv /= len;
+                XYZ p;
+                try { p = g.F[i].Evaluate(new UV(0.5, 0.5)); } catch { continue; }
+                NU.Add(nu); NV.Add(nv); R.Add(p.DotProduct(u) * nu + p.DotProduct(v) * nv);
+            }
+            int n = NU.Count;
+            if (n < 3) return false;
+
+            const double Tol = 0.02;   // 1/4 in
+            int bestIn = 0; var sol = new double[3]; var outp = new double[3];
+            for (int i = 0; i < n; i++)
+                for (int j = i + 1; j < n; j++)
+                    for (int k = j + 1; k < n; k++)
+                    {
+                        double[,] M = { { NU[i], NV[i], 1 }, { NU[j], NV[j], 1 }, { NU[k], NV[k], 1 } };
+                        double[] b = { R[i], R[j], R[k] };
+                        if (!Solve3(M, b, outp)) continue;
+                        int inl = 0;
+                        for (int m = 0; m < n; m++)
+                            if (Math.Abs(NU[m] * outp[0] + NV[m] * outp[1] + outp[2] - R[m]) < Tol) inl++;
+                        if (inl > bestIn) { bestIn = inl; sol[0] = outp[0]; sol[1] = outp[1]; sol[2] = outp[2]; }
+                    }
+            if (bestIn < 3) return false;
+            cu = sol[0]; cv = sol[1]; d = sol[2];
+            return true;
+        }
+
+        private static double LineResid(FaceGraph g, int i, XYZ axis, XYZ u, XYZ v,
+                                        double cu, double cv, double d)
+        {
+            XYZ nn = g.N[i];
+            if (nn == null) return double.MaxValue;
+            double nu = nn.DotProduct(u), nv = nn.DotProduct(v);
+            double len = Math.Sqrt(nu * nu + nv * nv);
+            if (len < 1e-9) return double.MaxValue;
+            nu /= len; nv /= len;
+            XYZ p;
+            try { p = g.F[i].Evaluate(new UV(0.5, 0.5)); } catch { return double.MaxValue; }
+            return Math.Abs(p.DotProduct(u) * nu + p.DotProduct(v) * nv - (cu * nu + cv * nv) - d);
+        }
+
         private static List<List<int>> Cylinders(FaceGraph g, List<int> comp)
         {
             const double Coplanar = 0.9995;   // two triangles of one flat facet
             const double PerpTol = 0.06;      // |n . axis| for "this face wraps that axis" (~3.4 deg)
+            const double LineTol = 0.02;      // 1/4 in from the fitted axis line
 
             var result = new List<List<int>>();
             var used = new HashSet<int>();
@@ -451,6 +544,29 @@ namespace SgRevitAddin.Commands.Coordination
                 }
                 if (axis == null) continue;   // flat plate region, not a tube
 
+                XYZ tmp = Math.Abs(axis.Z) < 0.9 ? XYZ.BasisZ : XYZ.BasisX;
+                XYZ uu = axis.CrossProduct(tmp).Normalize();
+                XYZ vv = axis.CrossProduct(uu).Normalize();
+
+                // PASS 1: a small local patch on perpendicularity alone, to pin the axis line.
+                var patch = new List<int>();
+                {
+                    var q0 = new Queue<int>();
+                    var v0 = new HashSet<int> { seed };
+                    q0.Enqueue(seed);
+                    while (q0.Count > 0 && patch.Count < 12)
+                    {
+                        int cur = q0.Dequeue();
+                        if (used.Contains(cur) || g.N[cur] == null) continue;
+                        if (Math.Abs(g.N[cur].DotProduct(axis)) > PerpTol) continue;
+                        patch.Add(cur);
+                        foreach (int nb in g.Adj[cur]) if (v0.Add(nb)) q0.Enqueue(nb);
+                    }
+                }
+                double cu, cv, dd;
+                bool haveLine = SolveAxisLine(g, patch, axis, uu, vv, out cu, out cv, out dd);
+
+                // PASS 2: full growth, now also requiring the face to hug THAT axis line.
                 var region = new List<int>();
                 var q = new Queue<int>();
                 var visited = new HashSet<int> { seed };
@@ -460,6 +576,7 @@ namespace SgRevitAddin.Commands.Coordination
                     int cur = q.Dequeue();
                     if (used.Contains(cur) || g.N[cur] == null) continue;
                     if (Math.Abs(g.N[cur].DotProduct(axis)) > PerpTol) continue;   // different axis
+                    if (haveLine && LineResid(g, cur, axis, uu, vv, cu, cv, dd) > LineTol) continue;
                     region.Add(cur); used.Add(cur);
                     foreach (int nb in g.Adj[cur]) if (visited.Add(nb)) q.Enqueue(nb);
                 }
@@ -507,6 +624,28 @@ namespace SgRevitAddin.Commands.Coordination
                 sb.AppendLine($"  {i,2}  {s.Faces.Size,6}  {s.Edges.Size,6}  {vol,10:0.###}  {area,10:0.#}  {valid,9}  {split,12}  {layer}");
             }
             sb.AppendLine($"  SplitVolumes total pieces: {totalSplit}   (useful: {splitWorked})");
+
+            // BULK CROSS-CHECK — independent of any fitting, and the thing that caught the
+            // fit being wrong. For a cylinder V = pi r^2 L and lateral A = 2 pi r L, so
+            // r = 2V/A and L = A/(2 pi r) straight off the solid's own volume and area.
+            // If the fitted diameters disagree with this, the segmentation is leaking.
+            double totVol = 0, totArea = 0;
+            foreach (Solid s2 in solids)
+            {
+                try { totVol += Math.Abs(s2.Volume); } catch { }
+                try { totArea += s2.SurfaceArea; } catch { }
+            }
+            if (totVol > 1e-9 && totArea > 1e-9)
+            {
+                double rAvg = 2.0 * totVol / totArea;
+                double lTot = totArea / (2.0 * Math.PI * rAvg);
+                sb.AppendLine();
+                sb.AppendLine($"  BULK CROSS-CHECK (from volume+area alone, no fitting):");
+                sb.AppendLine($"     average DIAMETER 2*(2V/A) = {rAvg * 24.0:0.##} in");
+                sb.AppendLine($"     total LENGTH  A/(2*pi*r)  = {lTot:0} linear ft");
+                sb.AppendLine("     -> fitted sizes should straddle that diameter. If they run well above it,");
+                sb.AppendLine("        regions are spanning more than one pipe and the radii are inflated.");
+            }
 
             // ── face-adjacency components, then region-grown cylinders ──
             var fits = new List<Cyl>();
