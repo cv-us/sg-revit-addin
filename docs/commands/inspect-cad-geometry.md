@@ -29,6 +29,36 @@ a link that *is* readable. This command tells you what survived that trip.
 | **Coordinates** | Model extent and the **float32 ulp** at that distance — the precision trap (see below). |
 | **Layers** | `GraphicsStyle` names that survived. Once FBX has discarded sizes and systems, layers are the only metadata left. |
 
+## Segmentation probe
+
+Imported CAD usually arrives as a handful of **merged** solids (Revit tends to group
+by layer), so the question that decides the project's size is whether those can be
+split back into individual pipes. The probe attacks it three ways and prints all of it:
+
+1. **Per-solid detail** — faces, edges, volume, surface area, `IsValidForTessellation`,
+   and the layer name. `volume = 0` means an **open shell** rather than a closed solid
+   (common after an FBX round trip, which often drops caps or leaves surfaces unwelded).
+2. **`SolidUtils.SplitVolumes()`** — free segmentation when the solids are valid volumes.
+   Reports the piece count per solid, or the exception if it refuses. Open shells
+   generally won't split this way.
+3. **Face-adjacency connected components** — built from `Edge.GetFace(0)` / `GetFace(1)`,
+   so it's **topological**: no tolerance to tune, and it works fine on zero-volume shells.
+   Connected components are the separable objects. Prints a size histogram.
+
+It then **fits** the largest 600 components — axis from the area-weighted normal
+covariance, radius from a circle fit with cap facets excluded — and reports fitted OD
+against nominal steel sizes (with the miss in mils), the on-catalog hit rate, and the
+level / sloped / vertical split with min-median-max pitch.
+
+Reading the result: hundreds of components each landing within a few mils of a real pipe
+size, with sensible slopes, means the pipeline works and the remaining effort is topology
+(tees vs elbows) and building the Revit pipe. A handful of thousand-face blobs instead
+means the geometry is welded into one mesh and connectivity won't separate it — that's
+the RANSAC case.
+
+Note the probe triangulates far more geometry than the basic pass, so expect a few
+seconds on a large model.
+
 ## Workflow
 
 1. Link the DWG (**Insert > Link CAD**).
