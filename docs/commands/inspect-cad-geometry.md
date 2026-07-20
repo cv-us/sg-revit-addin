@@ -41,9 +41,25 @@ split back into individual pipes. The probe attacks it three ways and prints all
 2. **`SolidUtils.SplitVolumes()`** — free segmentation when the solids are valid volumes.
    Reports the piece count per solid, or the exception if it refuses. Open shells
    generally won't split this way.
-3. **Face-adjacency connected components** — built from `Edge.GetFace(0)` / `GetFace(1)`,
-   so it's **topological**: no tolerance to tune, and it works fine on zero-volume shells.
-   Connected components are the separable objects. Prints a size histogram.
+3. **Face-adjacency connected components** — faces are joined where they share an edge,
+   with edges keyed on **quantised endpoint pairs** (~1/40″, order-independent). Object
+   identity is deliberately avoided: Revit returns a *fresh* `Face`/`Edge` wrapper on
+   every call, so matching `Edge.GetFace()` against `Solid.Faces` by reference never hits
+   (an early version did exactly that and every one of 42,089 edges failed to resolve,
+   leaving each face as its own component). The report prints `edge uses` and
+   `matched pairs` so a matching failure is visible rather than silent.
+4. **Axis clusters within each component.** A connected component is a whole welded
+   *run*, not a single pipe, so fitting it directly fails on mixed axes. A tessellated
+   cylinder's side facets are long thin quads whose **long edge is parallel to the axis**,
+   so every face votes for a direction; faces are then binned by that direction plus their
+   offset perpendicular to it, which also separates parallel pipes on the same heading.
+
+### Reading `volume`
+
+A **negative** volume means a closed solid whose faces are **inverted** — a common FBX /
+3ds Max round-trip artifact — not an empty or open one. It is harmless for fitting, since
+the axis comes from `n·nᵀ` and the normal's sign cancels. The report counts inverted
+solids separately so this can't be misread as "no geometry".
 
 It then **fits** the largest 600 components — axis from the area-weighted normal
 covariance, radius from a circle fit with cap facets excluded — and reports fitted OD

@@ -118,7 +118,8 @@ namespace SgRevitAddin.Commands.Coordination
 
             sb.AppendLine($"  geometry objects: Solid={s.Solids}  Mesh={s.Meshes}  " +
                           $"Curve={s.Curves}  GeometryInstance={s.Instances}  other={s.Other}");
-            sb.AppendLine($"  solids with volume: {s.SolidsWithVolume}   total triangles (meshes): {s.Triangles}");
+            sb.AppendLine($"  solids with volume: {s.SolidsWithVolume} (of which NEGATIVE/inverted: {s.NegativeVolume})" +
+                          $"   total triangles (meshes): {s.Triangles}");
             sb.AppendLine($"  faces: total={s.Faces}  CYLINDRICAL={s.CylFaces}  planar={s.PlanarFaces}  " +
                           $"conical={s.ConicalFaces}  revolved={s.RevolvedFaces}  other={s.OtherFaces}");
             if (s.Layers.Count > 0)
@@ -206,7 +207,13 @@ namespace SgRevitAddin.Commands.Coordination
                     s.Solids++;
                     double vol = 0;
                     try { vol = solid.Volume; } catch { }
-                    if (vol > 1e-9) s.SolidsWithVolume++;
+                    // NOTE: use Abs. Imported CAD often comes back with INVERTED face
+                    // orientation, which Revit reports as a NEGATIVE volume — that is a
+                    // closed solid with flipped normals, not an empty one. (v1 tested
+                    // vol > 0 and so reported "solids with volume: 0" on a solid whose
+                    // volume was -131.8 cu ft, which read as "open shells". It wasn't.)
+                    if (Math.Abs(vol) > 1e-9) s.SolidsWithVolume++;
+                    if (vol < -1e-9) s.NegativeVolume++;
 
                     foreach (Face f in solid.Faces)
                     {
@@ -308,10 +315,121 @@ namespace SgRevitAddin.Commands.Coordination
             }
         }
 
-        private class RefEq : IEqualityComparer<Face>
+        /// <summary>Quantised endpoint-pair key for an edge. Revit hands back a FRESH Face/Edge
+        /// wrapper on every call, so reference equality can't be used to match an Edge's faces
+        /// to the solid's face list (v1 of this probe tried that: all 42,089 edges failed to
+        /// resolve and every face came back as its own component). Keying on geometry instead
+        /// sidesteps object identity entirely.</summary>
+        private static long EdgeKey(XYZ a, XYZ b)
         {
-            public bool Equals(Face a, Face b) => ReferenceEquals(a, b);
-            public int GetHashCode(Face f) => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(f);
+            // Order-independent so both faces on an edge produce the same key.
+            if (a.X > b.X || (a.X == b.X && (a.Y > b.Y || (a.Y == b.Y && a.Z > b.Z))))
+            { XYZ t = a; a = b; b = t; }
+            const double Q = 1.0 / 512.0;   // ~1/40 in — finer than any real joint, coarser than round-off
+            unchecked
+            {
+                long h = 17;
+                h = h * 31 + (long)Math.Round(a.X / Q);
+                h = h * 31 + (long)Math.Round(a.Y / Q);
+                h = h * 31 + (long)Math.Round(a.Z / Q);
+                h = h * 31 + (long)Math.Round(b.X / Q);
+                h = h * 31 + (long)Math.Round(b.Y / Q);
+                h = h * 31 + (long)Math.Round(b.Z / Q);
+                return h;
+            }
+        }
+
+        /// <summary>Faces of one solid grouped into connected components by shared edges.</summary>
+        private static List<List<Face>> Components(Solid s, out int edgesSeen, out int shared)
+        {
+            var faces = new List<Face>();
+            foreach (Face f in s.Faces) faces.Add(f);
+
+            int[] parent = new int[faces.Count];
+            for (int i = 0; i < parent.Length; i++) parent[i] = i;
+            Func<int, int> Find = null;
+            Find = x => { while (parent[x] != x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+
+            var byKey = new Dictionary<long, int>();
+            edgesSeen = 0; shared = 0;
+            for (int i = 0; i < faces.Count; i++)
+            {
+                EdgeArrayArray loops;
+                try { loops = faces[i].EdgeLoops; } catch { continue; }
+                if (loops == null) continue;
+                foreach (EdgeArray loop in loops)
+                    foreach (Edge e in loop)
+                    {
+                        Curve c;
+                        try { c = e.AsCurve(); } catch { continue; }
+                        if (c == null) continue;
+                        long k = EdgeKey(c.GetEndPoint(0), c.GetEndPoint(1));
+                        edgesSeen++;
+                        int other;
+                        if (byKey.TryGetValue(k, out other))
+                        {
+                            shared++;
+                            int ra = Find(i), rb = Find(other);
+                            if (ra != rb) parent[ra] = rb;
+                        }
+                        else byKey[k] = i;
+                    }
+            }
+
+            var groups = new Dictionary<int, List<Face>>();
+            for (int i = 0; i < faces.Count; i++)
+            {
+                int r = Find(i);
+                List<Face> g;
+                if (!groups.TryGetValue(r, out g)) { g = new List<Face>(); groups[r] = g; }
+                g.Add(faces[i]);
+            }
+            return groups.Values.ToList();
+        }
+
+        /// <summary>Split one connected component into individual straight pipes. A tessellated
+        /// cylinder's side facets are long thin quads whose LONG edge runs parallel to the axis,
+        /// so each face votes for an axis direction; faces are then binned by that direction and,
+        /// within a direction, by position perpendicular to it (which separates parallel pipes).</summary>
+        private static List<List<Face>> AxisClusters(List<Face> comp)
+        {
+            var buckets = new Dictionary<string, List<Face>>();
+            foreach (Face f in comp)
+            {
+                var pf = f as PlanarFace;
+                if (pf == null) continue;
+
+                XYZ dir = null; double best = 0;
+                try
+                {
+                    foreach (EdgeArray loop in f.EdgeLoops)
+                        foreach (Edge e in loop)
+                        {
+                            Curve c = e.AsCurve();
+                            if (c == null) continue;
+                            XYZ d = c.GetEndPoint(1) - c.GetEndPoint(0);
+                            double L = d.GetLength();
+                            if (L > best) { best = L; dir = d / L; }
+                        }
+                }
+                catch { }
+                if (dir == null || best < 1e-6) continue;
+
+                if (dir.X < 0 || (Math.Abs(dir.X) < 1e-9 && (dir.Y < 0 ||
+                    (Math.Abs(dir.Y) < 1e-9 && dir.Z < 0)))) dir = dir.Negate();   // canonical sign
+
+                // Bin the direction (~2 deg) and the perpendicular offset (~4 in) so parallel
+                // pipes on the same axis line don't merge.
+                XYZ ctr;
+                try { ctr = f.Evaluate(new UV(0.5, 0.5)); } catch { continue; }
+                XYZ perp = ctr - dir * ctr.DotProduct(dir);
+                string key = $"{Math.Round(dir.X, 2)},{Math.Round(dir.Y, 2)},{Math.Round(dir.Z, 2)}|" +
+                             $"{Math.Round(perp.X / 0.33)},{Math.Round(perp.Y / 0.33)},{Math.Round(perp.Z / 0.33)}";
+                List<Face> g;
+                if (!buckets.TryGetValue(key, out g)) { g = new List<Face>(); buckets[key] = g; }
+                g.Add(f);
+            }
+            return buckets.Values.ToList();
         }
 
         private static void SegmentationProbe(Document doc, GeometryElement geom, StringBuilder sb)
@@ -354,62 +472,48 @@ namespace SgRevitAddin.Commands.Coordination
             }
             sb.AppendLine($"  SplitVolumes total pieces: {totalSplit}   (useful: {splitWorked})");
 
-            // ── face-adjacency connected components ──
+            // ── face-adjacency connected components (geometric edge keys) ──
             var comps = new List<List<Face>>();
-            int danglingEdges = 0;
+            int edgesSeen = 0, edgesShared = 0;
             foreach (Solid s in solids)
             {
-                var idx = new Dictionary<Face, int>(new RefEq());
-                var faces = new List<Face>();
-                foreach (Face f in s.Faces) { idx[f] = faces.Count; faces.Add(f); }
-
-                int[] parent = new int[faces.Count];
-                for (int i = 0; i < parent.Length; i++) parent[i] = i;
-                Func<int, int> Find = null;
-                Find = x => { while (parent[x] != x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
-
-                foreach (Edge e in s.Edges)
-                {
-                    try
-                    {
-                        Face fa = e.GetFace(0), fb = e.GetFace(1);
-                        int ia, ib;
-                        if (fa == null || fb == null || !idx.TryGetValue(fa, out ia) || !idx.TryGetValue(fb, out ib))
-                        { danglingEdges++; continue; }
-                        int ra = Find(ia), rb = Find(ib);
-                        if (ra != rb) parent[ra] = rb;
-                    }
-                    catch { danglingEdges++; }
-                }
-
-                var groups = new Dictionary<int, List<Face>>();
-                for (int i = 0; i < faces.Count; i++)
-                {
-                    int r = Find(i);
-                    List<Face> g;
-                    if (!groups.TryGetValue(r, out g)) { g = new List<Face>(); groups[r] = g; }
-                    g.Add(faces[i]);
-                }
-                comps.AddRange(groups.Values);
+                int es, sh;
+                comps.AddRange(Components(s, out es, out sh));
+                edgesSeen += es; edgesShared += sh;
             }
 
             sb.AppendLine();
-            sb.AppendLine($"  face-adjacency components: {comps.Count}   (edges that didn't resolve to 2 known faces: {danglingEdges})");
+            sb.AppendLine($"  face-adjacency components: {comps.Count}   " +
+                          $"(edge uses {edgesSeen}, matched pairs {edgesShared})");
+            if (edgesShared == 0)
+                sb.AppendLine("  !! no shared edges matched — faces are not welded; try the SplitVolumes pieces instead.");
             var bySize = comps.GroupBy(c => Bucket(c.Count)).OrderBy(g => g.Key).ToList();
             sb.AppendLine("  component size histogram (faces per component):");
             foreach (var g in bySize) sb.AppendLine($"     {g.Key,-14} x{g.Count()}");
 
-            // ── fit the components and see whether they land on real pipe sizes ──
+            // ── a connected component is a whole welded RUN; split it into single pipes ──
+            var clusters = new List<List<Face>>();
+            foreach (var c in comps.OrderByDescending(c => c.Count).Take(400))
+            {
+                var ac = AxisClusters(c);
+                if (ac.Count <= 1) clusters.Add(c); else clusters.AddRange(ac);
+            }
+            sb.AppendLine();
+            sb.AppendLine($"  axis clusters within those components: {clusters.Count}");
+            foreach (var g in clusters.GroupBy(c => Bucket(c.Count)).OrderBy(g => g.Key))
+                sb.AppendLine($"     {g.Key,-14} x{g.Count()}");
+
+            // ── fit: components first, then the finer axis clusters ──
             var fits = new List<Cyl>();
             int fitFail = 0;
-            foreach (var c in comps.OrderByDescending(c => c.Count).Take(600))
+            foreach (var c in clusters.OrderByDescending(c => c.Count).Take(800))
             {
                 Cyl cy = FitComponent(c);
                 if (cy == null) fitFail++; else fits.Add(cy);
             }
 
             sb.AppendLine();
-            sb.AppendLine($"  --- CYLINDER FIT on {Math.Min(600, comps.Count)} largest components " +
+            sb.AppendLine($"  --- CYLINDER FIT on {Math.Min(800, clusters.Count)} largest clusters " +
                           $"({fits.Count} fit, {fitFail} rejected) ---");
             if (fits.Count > 0)
             {
@@ -680,7 +784,7 @@ namespace SgRevitAddin.Commands.Coordination
 
         private class Stats
         {
-            public int Solids, SolidsWithVolume, Meshes, Curves, Instances, Other, Triangles;
+            public int Solids, SolidsWithVolume, NegativeVolume, Meshes, Curves, Instances, Other, Triangles;
             public int Faces, CylFaces, PlanarFaces, ConicalFaces, RevolvedFaces, OtherFaces;
             public readonly HashSet<string> Layers = new HashSet<string>();
             public readonly List<Cyl> Cylinders = new List<Cyl>();
@@ -695,7 +799,7 @@ namespace SgRevitAddin.Commands.Coordination
 
             public void Merge(Stats o)
             {
-                Solids += o.Solids; SolidsWithVolume += o.SolidsWithVolume; Meshes += o.Meshes;
+                Solids += o.Solids; SolidsWithVolume += o.SolidsWithVolume; NegativeVolume += o.NegativeVolume; Meshes += o.Meshes;
                 Curves += o.Curves; Instances += o.Instances; Other += o.Other; Triangles += o.Triangles;
                 Faces += o.Faces; CylFaces += o.CylFaces; PlanarFaces += o.PlanarFaces;
                 ConicalFaces += o.ConicalFaces; RevolvedFaces += o.RevolvedFaces; OtherFaces += o.OtherFaces;
