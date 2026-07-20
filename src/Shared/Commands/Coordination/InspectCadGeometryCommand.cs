@@ -513,9 +513,57 @@ namespace SgRevitAddin.Commands.Coordination
             return Math.Abs(p.DotProduct(u) * nu + p.DotProduct(v) * nv - (cu * nu + cv * nv) - d);
         }
 
+        /// <summary>Axis seed from the smallest eigenvector of a LOCAL PATCH's area-weighted
+        /// normal covariance.
+        ///
+        /// Deriving the axis from a single adjacent pair via n1 x n2 is fragile. Picking the
+        /// largest |dot| below the coplanar cutoff (which was needed to avoid seeding on an
+        /// end cap) preferentially selects the two NEARLY-coplanar triangles of one quad — and
+        /// the cross product of two near-parallel normals is numerical noise that can point
+        /// anywhere, including 90 deg off the true axis. Real FBX / 3ds Max output has exactly
+        /// that near-coplanarity, and the signature is unmistakable: the reported "length"
+        /// collapses to the pipe DIAMETER and the reported "OD" becomes
+        /// sqrt(segmentLength^2 + diameter^2). On the real model that read as 8-13.7 in ODs
+        /// with 0.30-0.45 ft lengths and not one level run.
+        ///
+        /// A ~24-face patch averages the noise away, and the eigenvalue ratio doubles as a
+        /// tube test: a genuine cylinder has one near-zero eigenvalue, a plate or corner
+        /// does not.</summary>
+        private static XYZ SeedAxisCov(FaceGraph g, int seed, HashSet<int> used)
+        {
+            var patch = new List<int>();
+            var q = new Queue<int>();
+            var vis = new HashSet<int> { seed };
+            q.Enqueue(seed);
+            while (q.Count > 0 && patch.Count < 24)
+            {
+                int cur = q.Dequeue();
+                if (used.Contains(cur) || g.N[cur] == null) continue;
+                patch.Add(cur);
+                foreach (int nb in g.Adj[cur]) if (vis.Add(nb)) q.Enqueue(nb);
+            }
+            if (patch.Count < 6) return null;
+
+            double[,] m = new double[3, 3];
+            foreach (int i in patch)
+            {
+                XYZ n = g.N[i];
+                double a = g.A[i];
+                if (n == null || a <= 1e-12) continue;
+                double[] e = { n.X, n.Y, n.Z };
+                for (int r = 0; r < 3; r++) for (int c = 0; c < 3; c++) m[r, c] += a * e[r] * e[c];
+            }
+            double[] val; double[][] vec;
+            Jacobi(m, out val, out vec);
+            int k = 0;
+            for (int i = 1; i < 3; i++) if (val[i] < val[k]) k = i;
+            var sorted = val.OrderBy(x => x).ToArray();
+            if (sorted[1] < 1e-15 || sorted[0] / sorted[1] > 0.05) return null;   // not a tube
+            return new XYZ(vec[0][k], vec[1][k], vec[2][k]).Normalize();
+        }
+
         private static List<List<int>> Cylinders(FaceGraph g, List<int> comp)
         {
-            const double Coplanar = 0.9995;   // two triangles of one flat facet
             const double PerpTol = 0.06;      // |n . axis| for "this face wraps that axis" (~3.4 deg)
             const double LineTol = 0.02;      // 1/4 in from the fitted axis line
 
@@ -526,22 +574,7 @@ namespace SgRevitAddin.Commands.Coordination
             {
                 if (used.Contains(seed) || g.N[seed] == null) continue;
 
-                // Pick the neighbour with the SMALLEST dihedral, not merely the first
-                // non-coplanar one. An adjacent side facet of a 16-sided cylinder is only
-                // 22.5 deg away, but an END-CAP neighbour is 90 deg away AND its normal is
-                // parallel to the true axis — so seeding on a cap yields n x n_cap that is
-                // PERPENDICULAR to the real axis, and the region then grows sideways in a
-                // narrow band. (Measured: cylinders fragmenting into 3 pieces of 40-70 deg.)
-                XYZ axis = null; double bestDot = -1;
-                foreach (int nb in g.Adj[seed])
-                {
-                    if (g.N[nb] == null || used.Contains(nb)) continue;
-                    double dp = Math.Abs(g.N[seed].DotProduct(g.N[nb]));
-                    if (dp > Coplanar) continue;
-                    XYZ cr = g.N[seed].CrossProduct(g.N[nb]);
-                    if (cr.GetLength() < 1e-9) continue;
-                    if (dp > bestDot) { bestDot = dp; axis = cr.Normalize(); }
-                }
+                XYZ axis = SeedAxisCov(g, seed, used);
                 if (axis == null) continue;   // flat plate region, not a tube
 
                 XYZ tmp = Math.Abs(axis.Z) < 0.9 ? XYZ.BasisZ : XYZ.BasisX;
@@ -692,8 +725,8 @@ namespace SgRevitAddin.Commands.Coordination
 
             sb.AppendLine();
             sb.AppendLine($"  --- CYLINDER FIT ({fits.Count} fit, {fitFail} rejected) ---");
-            var solid360 = fits.Where(f => f.CoverageDeg >= 300 && f.RmsMil < 50).ToList();
-            sb.AppendLine($"  well-conditioned (>=300 deg wrap AND <50 mil RMS): {solid360.Count}/{fits.Count}");
+            var solid360 = fits.Where(f => f.CoverageDeg >= 270 && f.RmsMil < 50).ToList();
+            sb.AppendLine($"  well-conditioned (>=270 deg wrap AND <50 mil RMS): {solid360.Count}/{fits.Count}");
             sb.AppendLine("  NOTE: a fit on a partial arc over-reads the radius; trust the well-conditioned ones.");
             if (solid360.Count > 0) fits = solid360;
             if (fits.Count > 0)
