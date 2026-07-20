@@ -64,8 +64,10 @@ namespace SgRevitAddin.Commands.Coordination
                 sb.AppendLine(new string('=', 78));
 
                 var all = new Stats();
+                var raw = new StringBuilder();
+                RawHeader(doc, raw);
                 foreach (Element imp in imports)
-                    DumpImport(doc, imp, all, sb);
+                    DumpImport(doc, imp, all, sb, raw);
 
                 sb.AppendLine();
                 sb.AppendLine(new string('=', 78));
@@ -73,7 +75,7 @@ namespace SgRevitAddin.Commands.Coordination
                 sb.AppendLine(new string('=', 78));
                 Verdict(all, sb);
 
-                ShowReport(sb.ToString());
+                ShowReport(sb.ToString(), raw.ToString());
                 return Result.Succeeded;
             }
             catch (Autodesk.Revit.Exceptions.OperationCanceledException) { return Result.Cancelled; }
@@ -93,7 +95,80 @@ namespace SgRevitAddin.Commands.Coordination
                 .ToList();
         }
 
-        private static void DumpImport(Document doc, Element imp, Stats all, StringBuilder sb)
+        // ── Raw geometry dump ────────────────────────────────────────────────────────
+        // Writes the EXACT faces the Revit API hands us, so the segmentation work can be
+        // developed offline against real data and ported back verbatim. Everything
+        // downstream (adjacency, region growing, fitting) is derived from a face's normal
+        // and its outer loop, so that is all this needs to carry.
+        //
+        //   S <index> <faceCount> <volume> <surfaceArea>     — one per solid
+        //   F <normalX> <normalY> <normalZ> <area> <nVerts> <x y z>*   — one per face
+        //
+        // Lengths are Revit internal units (decimal feet), 6 dp.
+
+        private static void RawHeader(Document doc, StringBuilder raw)
+        {
+            raw.AppendLine("# SG Inspect CAD Geometry — raw face dump v1");
+            raw.AppendLine("# units: decimal FEET (Revit internal)");
+            raw.AppendLine("# S <solidIdx> <faceCount> <volume> <surfaceArea>");
+            raw.AppendLine("# F <nx> <ny> <nz> <area> <nVerts> then nVerts * (x y z)");
+            raw.AppendLine("# doc " + doc.Title);
+        }
+
+        private static string F6(double d)
+        {
+            return d.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        private static void RawDumpSolids(List<Solid> solids, StringBuilder raw)
+        {
+            for (int i = 0; i < solids.Count; i++)
+            {
+                Solid s = solids[i];
+                double vol = 0, area = 0;
+                try { vol = s.Volume; } catch { }
+                try { area = s.SurfaceArea; } catch { }
+                raw.AppendLine("S " + i + " " + s.Faces.Size + " " + F6(vol) + " " + F6(area));
+
+                foreach (Face f in s.Faces)
+                {
+                    var pf = f as PlanarFace;
+                    XYZ n = pf != null ? pf.FaceNormal : null;
+                    double a = 0; try { a = f.Area; } catch { }
+
+                    // Outer loop vertices, in order. Adjacency, normals and area are all
+                    // recoverable from these, so the offline copy sees exactly what we see.
+                    var verts = new List<XYZ>();
+                    try
+                    {
+                        EdgeArrayArray loops = f.EdgeLoops;
+                        if (loops != null && loops.Size > 0)
+                        {
+                            EdgeArray outer = null;
+                            foreach (EdgeArray ea in loops) { outer = ea; break; }
+                            if (outer != null)
+                                foreach (Edge e in outer)
+                                {
+                                    Curve c = e.AsCurve();
+                                    if (c != null) verts.Add(c.GetEndPoint(0));
+                                }
+                        }
+                    }
+                    catch { }
+                    if (verts.Count < 3) continue;
+
+                    var line = new StringBuilder();
+                    line.Append("F ");
+                    line.Append(n != null ? F6(n.X) + " " + F6(n.Y) + " " + F6(n.Z) : "0 0 0");
+                    line.Append(' ').Append(F6(a)).Append(' ').Append(verts.Count);
+                    foreach (XYZ v in verts)
+                        line.Append(' ').Append(F6(v.X)).Append(' ').Append(F6(v.Y)).Append(' ').Append(F6(v.Z));
+                    raw.AppendLine(line.ToString());
+                }
+            }
+        }
+
+        private static void DumpImport(Document doc, Element imp, Stats all, StringBuilder sb, StringBuilder raw)
         {
             sb.AppendLine();
             sb.AppendLine($"IMPORT: {SafeName(imp)}   (id {imp.Id.IntegerValue})");
@@ -169,7 +244,7 @@ namespace SgRevitAddin.Commands.Coordination
             sb.AppendLine($"  farthest coordinate from origin: {far:0.#} ft  " +
                           $"-> float32 ulp there ~= {(far * Math.Pow(2, -23)) * 12000:0.#} mil");
 
-            try { SegmentationProbe(doc, geom, sb); }
+            try { SegmentationProbe(doc, geom, sb, raw); }
             catch (Exception ex) { sb.AppendLine($"  !! segmentation probe threw: {ex.Message}"); }
 
             all.Merge(s);
@@ -618,11 +693,13 @@ namespace SgRevitAddin.Commands.Coordination
             return result;
         }
 
-        private static void SegmentationProbe(Document doc, GeometryElement geom, StringBuilder sb)
+        private static void SegmentationProbe(Document doc, GeometryElement geom, StringBuilder sb, StringBuilder raw)
         {
             var solids = new List<Solid>();
             CollectSolids(geom, solids, 0);
             if (solids.Count == 0) return;
+
+            if (raw != null) { try { RawDumpSolids(solids, raw); } catch { } }
 
             sb.AppendLine();
             sb.AppendLine("  ================ SEGMENTATION PROBE ================");
@@ -1065,7 +1142,7 @@ namespace SgRevitAddin.Commands.Coordination
             try { return string.IsNullOrEmpty(e.Name) ? "(unnamed)" : e.Name; } catch { return "(unnamed)"; }
         }
 
-        private static void ShowReport(string text)
+        private static void ShowReport(string text, string raw)
         {
             using (var f = new DpiAwareForm())
             {
@@ -1085,8 +1162,31 @@ namespace SgRevitAddin.Commands.Coordination
                 var panel = new WinForms.Panel { Dock = WinForms.DockStyle.Bottom, Height = 44 };
                 var btnCopy = new WinForms.Button { Text = "Copy to clipboard", Location = new System.Drawing.Point(10, 8), Size = new System.Drawing.Size(150, 28) };
                 btnCopy.Click += (s, ev) => { try { WinForms.Clipboard.SetText(text); } catch { } };
-                var btnClose = new WinForms.Button { Text = "Close", DialogResult = WinForms.DialogResult.OK, Location = new System.Drawing.Point(170, 8), Size = new System.Drawing.Size(90, 28) };
+                // Raw dump: lets the segmentation work be developed offline against the real
+                // faces, instead of guessing from summary statistics one round trip at a time.
+                var btnRaw = new WinForms.Button { Text = "Save raw geometry…", Location = new System.Drawing.Point(170, 8), Size = new System.Drawing.Size(160, 28) };
+                btnRaw.Enabled = !string.IsNullOrEmpty(raw);
+                btnRaw.Click += (s, ev) =>
+                {
+                    try
+                    {
+                        using (var dlg = new WinForms.SaveFileDialog())
+                        {
+                            dlg.Title = "Save raw CAD geometry";
+                            dlg.Filter = "Geometry dump (*.txt)|*.txt|All files (*.*)|*.*";
+                            dlg.FileName = "cad-geometry-dump.txt";
+                            if (dlg.ShowDialog() != WinForms.DialogResult.OK) return;
+                            System.IO.File.WriteAllText(dlg.FileName, raw);
+                            long kb = new System.IO.FileInfo(dlg.FileName).Length / 1024;
+                            WinForms.MessageBox.Show($"Wrote {kb:n0} KB to\n{dlg.FileName}", "Saved");
+                        }
+                    }
+                    catch (Exception ex) { WinForms.MessageBox.Show(ex.Message, "Save failed"); }
+                };
+
+                var btnClose = new WinForms.Button { Text = "Close", DialogResult = WinForms.DialogResult.OK, Location = new System.Drawing.Point(340, 8), Size = new System.Drawing.Size(90, 28) };
                 panel.Controls.Add(btnCopy);
+                panel.Controls.Add(btnRaw);
                 panel.Controls.Add(btnClose);
                 f.Controls.Add(tb);
                 f.Controls.Add(panel);
