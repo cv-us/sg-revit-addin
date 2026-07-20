@@ -35,6 +35,10 @@ namespace SgRevitAddin
                 "SgRevitAddin.Commands.PipeRouting.SprinklerDropCommand",
                 "sprinkler-drop-32.png", "sprinkler-drop-16.png",
                 "Place hard-pipe up-over-down drops to pendent heads, ending in a REAL elbow at the drop base (a stub forces the turn so the BOM lists an elbow, not a union), with a flex hose from the elbow to the head. Select heads + a branch line. (Under development — needs field testing.)");
+            AddLargeButton(pipingPanel, "TraceCadPipe", "Trace CAD\nPipe", asmPath,
+                "SgRevitAddin.Commands.PipeRouting.TraceCadPipeCommand",
+                "sprinkler-drop-32.png", "sprinkler-drop-16.png",
+                "Trace the pipe in a linked/imported CAD (e.g. a coordination model round-tripped NWC to FBX to 3ds Max to DWG) and build real Revit pipe from it. Finds each mesh tube run, fits its centerline, length, diameter and slope, and places pipe on a chosen type/system/level with sizes snapped to nominal. Pipes are placed but NOT connected — no fittings are inserted. (Under development — needs field testing.)");
             // DISABLED (temporarily) — Re-Level Sprinklers under rework; button hidden.
             // AddLargeButton(pipingPanel, "RelevelSprinklers", "Re-Level\nSprinklers", asmPath,
             //     "SgRevitAddin.Commands.PipeRouting.RelevelSprinklersCommand",
