@@ -48,11 +48,32 @@ split back into individual pipes. The probe attacks it three ways and prints all
    (an early version did exactly that and every one of 42,089 edges failed to resolve,
    leaving each face as its own component). The report prints `edge uses` and
    `matched pairs` so a matching failure is visible rather than silent.
-4. **Axis clusters within each component.** A connected component is a whole welded
-   *run*, not a single pipe, so fitting it directly fails on mixed axes. A tessellated
-   cylinder's side facets are long thin quads whose **long edge is parallel to the axis**,
-   so every face votes for a direction; faces are then binned by that direction plus their
-   offset perpendicular to it, which also separates parallel pipes on the same heading.
+4. **Region growing into single pipes.** A connected component is a whole welded *run*,
+   not one pipe, so fitting it directly fails on mixed axes. For two **adjacent** faces on
+   the same cylinder both normals are perpendicular to the axis, so **n₁ × n₂ *is* the
+   axis** — exactly, whatever the triangulation. Seed on such a pair, then flood outward
+   taking every face whose normal is perpendicular to that axis; growth stops by itself at
+   a joint. The seed uses the neighbour with the **smallest dihedral**: an adjacent side
+   facet is ~22° away, but an end **cap** is 90° away *and* parallel to the axis, so
+   seeding on a cap yields an axis at right angles to the real one.
+
+   (An earlier version instead assumed "a side facet's longest edge is parallel to the
+   axis". That fails on triangulated input — and the real model *is* triangulated,
+   2E/F = 3.21 — because the longest edge of a split facet is the **diagonal**, 5.2°
+   off-axis and tilting opposite ways on alternating triangles. It shattered 26,217 faces
+   into 22,270 fragments.)
+
+### Arc coverage
+
+Fitting a circle to a partial **arc** massively over-reads the radius: 4-face fragments of
+real pipe came back as "9–13 in OD". Every fit therefore reports **wrap** and the circle-fit
+**RMS residual**, and the summary counts only the well-conditioned ones (≥300° wrap and
+&lt;50 mil RMS).
+
+Wrap is `360 − largest angular gap` between consecutive facet normals, *not* a count of
+filled bins: an n-facet cylinder has only n distinct normals, so a full 16-facet ring could
+never fill more than 16 of 36 bins (160°) and every real pipe would fail a "≥300°" test. By
+the gap measure a full 16-facet ring scores 337.5° and a 90° arc scores 90°.
 
 ### Reading `volume`
 

@@ -339,23 +339,34 @@ namespace SgRevitAddin.Commands.Coordination
             }
         }
 
-        /// <summary>Faces of one solid grouped into connected components by shared edges.</summary>
-        private static List<List<Face>> Components(Solid s, out int edgesSeen, out int shared)
+        /// <summary>Faces of a solid with their normals, areas and shared-edge adjacency.</summary>
+        private class FaceGraph
         {
-            var faces = new List<Face>();
-            foreach (Face f in s.Faces) faces.Add(f);
+            public readonly List<Face> F = new List<Face>();
+            public readonly List<XYZ> N = new List<XYZ>();       // null for non-planar
+            public readonly List<double> A = new List<double>();
+            public readonly List<List<int>> Adj = new List<List<int>>();
+        }
 
-            int[] parent = new int[faces.Count];
-            for (int i = 0; i < parent.Length; i++) parent[i] = i;
-            Func<int, int> Find = null;
-            Find = x => { while (parent[x] != x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+        private static FaceGraph BuildGraph(Solid s, out int edgeUses, out int matched)
+        {
+            var g = new FaceGraph();
+            foreach (Face f in s.Faces)
+            {
+                var pf = f as PlanarFace;
+                g.F.Add(f);
+                g.N.Add(pf != null ? pf.FaceNormal : null);
+                double a = 0; try { a = f.Area; } catch { }
+                g.A.Add(a);
+                g.Adj.Add(new List<int>());
+            }
 
             var byKey = new Dictionary<long, int>();
-            edgesSeen = 0; shared = 0;
-            for (int i = 0; i < faces.Count; i++)
+            edgeUses = 0; matched = 0;
+            for (int i = 0; i < g.F.Count; i++)
             {
                 EdgeArrayArray loops;
-                try { loops = faces[i].EdgeLoops; } catch { continue; }
+                try { loops = g.F[i].EdgeLoops; } catch { continue; }
                 if (loops == null) continue;
                 foreach (EdgeArray loop in loops)
                     foreach (Edge e in loop)
@@ -364,72 +375,97 @@ namespace SgRevitAddin.Commands.Coordination
                         try { c = e.AsCurve(); } catch { continue; }
                         if (c == null) continue;
                         long k = EdgeKey(c.GetEndPoint(0), c.GetEndPoint(1));
-                        edgesSeen++;
+                        edgeUses++;
                         int other;
                         if (byKey.TryGetValue(k, out other))
-                        {
-                            shared++;
-                            int ra = Find(i), rb = Find(other);
-                            if (ra != rb) parent[ra] = rb;
-                        }
+                        { matched++; g.Adj[i].Add(other); g.Adj[other].Add(i); }
                         else byKey[k] = i;
                     }
             }
-
-            var groups = new Dictionary<int, List<Face>>();
-            for (int i = 0; i < faces.Count; i++)
-            {
-                int r = Find(i);
-                List<Face> g;
-                if (!groups.TryGetValue(r, out g)) { g = new List<Face>(); groups[r] = g; }
-                g.Add(faces[i]);
-            }
-            return groups.Values.ToList();
+            return g;
         }
 
-        /// <summary>Split one connected component into individual straight pipes. A tessellated
-        /// cylinder's side facets are long thin quads whose LONG edge runs parallel to the axis,
-        /// so each face votes for an axis direction; faces are then binned by that direction and,
-        /// within a direction, by position perpendicular to it (which separates parallel pipes).</summary>
-        private static List<List<Face>> AxisClusters(List<Face> comp)
+        /// <summary>Connected components over the shared-edge adjacency.</summary>
+        private static List<List<int>> Components(FaceGraph g)
         {
-            var buckets = new Dictionary<string, List<Face>>();
-            foreach (Face f in comp)
+            var comps = new List<List<int>>();
+            var seen = new bool[g.F.Count];
+            for (int i = 0; i < g.F.Count; i++)
             {
-                var pf = f as PlanarFace;
-                if (pf == null) continue;
-
-                XYZ dir = null; double best = 0;
-                try
+                if (seen[i]) continue;
+                var comp = new List<int>();
+                var q = new Queue<int>();
+                q.Enqueue(i); seen[i] = true;
+                while (q.Count > 0)
                 {
-                    foreach (EdgeArray loop in f.EdgeLoops)
-                        foreach (Edge e in loop)
-                        {
-                            Curve c = e.AsCurve();
-                            if (c == null) continue;
-                            XYZ d = c.GetEndPoint(1) - c.GetEndPoint(0);
-                            double L = d.GetLength();
-                            if (L > best) { best = L; dir = d / L; }
-                        }
+                    int cur = q.Dequeue();
+                    comp.Add(cur);
+                    foreach (int nb in g.Adj[cur]) if (!seen[nb]) { seen[nb] = true; q.Enqueue(nb); }
                 }
-                catch { }
-                if (dir == null || best < 1e-6) continue;
-
-                if (dir.X < 0 || (Math.Abs(dir.X) < 1e-9 && (dir.Y < 0 ||
-                    (Math.Abs(dir.Y) < 1e-9 && dir.Z < 0)))) dir = dir.Negate();   // canonical sign
-
-                // Bin the direction (~2 deg) and the perpendicular offset (~4 in) so parallel
-                // pipes on the same axis line don't merge.
-                XYZ ctr;
-                try { ctr = f.Evaluate(new UV(0.5, 0.5)); } catch { continue; }
-                XYZ perp = ctr - dir * ctr.DotProduct(dir);
-                string key = $"{Math.Round(dir.X, 2)},{Math.Round(dir.Y, 2)},{Math.Round(dir.Z, 2)}|" +
-                             $"{Math.Round(perp.X / 0.33)},{Math.Round(perp.Y / 0.33)},{Math.Round(perp.Z / 0.33)}";
-                List<Face> g;
-                if (!buckets.TryGetValue(key, out g)) { g = new List<Face>(); buckets[key] = g; }
-                g.Add(f);
+                comps.Add(comp);
             }
-            return buckets.Values.ToList();
+            return comps;
+        }
+
+        /// <summary>Split one welded run into individual straight pipes by REGION GROWING on
+        /// an exact axis.
+        ///
+        /// The v1 heuristic ("a side facet's longest edge is parallel to the axis") is wrong
+        /// here: this geometry is TRIANGULATED (2E/F = 3.21), so the longest edge of a split
+        /// facet is the DIAGONAL — 5.2 deg off-axis, tilting opposite ways on alternating
+        /// triangles. Binning on that, plus on perpendicular offset, shattered every cylinder
+        /// into 1-4 face fragments (26,217 faces -> 22,270 "clusters").
+        ///
+        /// Instead: for two ADJACENT faces on the same cylinder the normals are both
+        /// perpendicular to the axis, so n1 x n2 IS the axis — exactly, whatever the
+        /// triangulation. Seed on such a pair, then flood outward taking every face whose
+        /// normal is perpendicular to that axis. Growth stops naturally at a joint, where the
+        /// faces belong to a different axis.</summary>
+        private static List<List<int>> Cylinders(FaceGraph g, List<int> comp)
+        {
+            const double Coplanar = 0.9995;   // two triangles of one flat facet
+            const double PerpTol = 0.06;      // |n . axis| for "this face wraps that axis" (~3.4 deg)
+
+            var result = new List<List<int>>();
+            var used = new HashSet<int>();
+
+            foreach (int seed in comp)
+            {
+                if (used.Contains(seed) || g.N[seed] == null) continue;
+
+                // Pick the neighbour with the SMALLEST dihedral, not merely the first
+                // non-coplanar one. An adjacent side facet of a 16-sided cylinder is only
+                // 22.5 deg away, but an END-CAP neighbour is 90 deg away AND its normal is
+                // parallel to the true axis — so seeding on a cap yields n x n_cap that is
+                // PERPENDICULAR to the real axis, and the region then grows sideways in a
+                // narrow band. (Measured: cylinders fragmenting into 3 pieces of 40-70 deg.)
+                XYZ axis = null; double bestDot = -1;
+                foreach (int nb in g.Adj[seed])
+                {
+                    if (g.N[nb] == null || used.Contains(nb)) continue;
+                    double dp = Math.Abs(g.N[seed].DotProduct(g.N[nb]));
+                    if (dp > Coplanar) continue;
+                    XYZ cr = g.N[seed].CrossProduct(g.N[nb]);
+                    if (cr.GetLength() < 1e-9) continue;
+                    if (dp > bestDot) { bestDot = dp; axis = cr.Normalize(); }
+                }
+                if (axis == null) continue;   // flat plate region, not a tube
+
+                var region = new List<int>();
+                var q = new Queue<int>();
+                var visited = new HashSet<int> { seed };
+                q.Enqueue(seed);
+                while (q.Count > 0)
+                {
+                    int cur = q.Dequeue();
+                    if (used.Contains(cur) || g.N[cur] == null) continue;
+                    if (Math.Abs(g.N[cur].DotProduct(axis)) > PerpTol) continue;   // different axis
+                    region.Add(cur); used.Add(cur);
+                    foreach (int nb in g.Adj[cur]) if (visited.Add(nb)) q.Enqueue(nb);
+                }
+                if (region.Count >= 3) result.Add(region);
+            }
+            return result;
         }
 
         private static void SegmentationProbe(Document doc, GeometryElement geom, StringBuilder sb)
@@ -472,49 +508,55 @@ namespace SgRevitAddin.Commands.Coordination
             }
             sb.AppendLine($"  SplitVolumes total pieces: {totalSplit}   (useful: {splitWorked})");
 
-            // ── face-adjacency connected components (geometric edge keys) ──
-            var comps = new List<List<Face>>();
-            int edgesSeen = 0, edgesShared = 0;
+            // ── face-adjacency components, then region-grown cylinders ──
+            var fits = new List<Cyl>();
+            int edgeUses = 0, edgesShared = 0, compCount = 0, cylCount = 0, fitFail = 0;
+            var compSizes = new List<int>();
+            var cylSizes = new List<int>();
+
             foreach (Solid s in solids)
             {
-                int es, sh;
-                comps.AddRange(Components(s, out es, out sh));
-                edgesSeen += es; edgesShared += sh;
+                int eu, sh;
+                FaceGraph g = BuildGraph(s, out eu, out sh);
+                edgeUses += eu; edgesShared += sh;
+
+                var comps = Components(g);
+                compCount += comps.Count;
+                compSizes.AddRange(comps.Select(c => c.Count));
+
+                foreach (var c in comps.OrderByDescending(c => c.Count))
+                {
+                    foreach (var cyl in Cylinders(g, c))
+                    {
+                        cylCount++;
+                        cylSizes.Add(cyl.Count);
+                        if (fits.Count + fitFail >= 4000) continue;   // cap the detail work
+                        Cyl cy = FitComponent(g, cyl);
+                        if (cy == null) fitFail++; else fits.Add(cy);
+                    }
+                }
             }
 
             sb.AppendLine();
-            sb.AppendLine($"  face-adjacency components: {comps.Count}   " +
-                          $"(edge uses {edgesSeen}, matched pairs {edgesShared})");
+            sb.AppendLine($"  face-adjacency components: {compCount}   (edge uses {edgeUses}, matched pairs {edgesShared})");
             if (edgesShared == 0)
-                sb.AppendLine("  !! no shared edges matched — faces are not welded; try the SplitVolumes pieces instead.");
-            var bySize = comps.GroupBy(c => Bucket(c.Count)).OrderBy(g => g.Key).ToList();
+                sb.AppendLine("  !! no shared edges matched — faces are not welded; use the SplitVolumes pieces instead.");
             sb.AppendLine("  component size histogram (faces per component):");
-            foreach (var g in bySize) sb.AppendLine($"     {g.Key,-14} x{g.Count()}");
-
-            // ── a connected component is a whole welded RUN; split it into single pipes ──
-            var clusters = new List<List<Face>>();
-            foreach (var c in comps.OrderByDescending(c => c.Count).Take(400))
-            {
-                var ac = AxisClusters(c);
-                if (ac.Count <= 1) clusters.Add(c); else clusters.AddRange(ac);
-            }
-            sb.AppendLine();
-            sb.AppendLine($"  axis clusters within those components: {clusters.Count}");
-            foreach (var g in clusters.GroupBy(c => Bucket(c.Count)).OrderBy(g => g.Key))
+            foreach (var g in compSizes.GroupBy(Bucket).OrderBy(g => g.Key))
                 sb.AppendLine($"     {g.Key,-14} x{g.Count()}");
 
-            // ── fit: components first, then the finer axis clusters ──
-            var fits = new List<Cyl>();
-            int fitFail = 0;
-            foreach (var c in clusters.OrderByDescending(c => c.Count).Take(800))
-            {
-                Cyl cy = FitComponent(c);
-                if (cy == null) fitFail++; else fits.Add(cy);
-            }
+            sb.AppendLine();
+            sb.AppendLine($"  region-grown cylinders: {cylCount}");
+            sb.AppendLine("  cylinder size histogram (faces per cylinder):");
+            foreach (var g in cylSizes.GroupBy(Bucket).OrderBy(g => g.Key))
+                sb.AppendLine($"     {g.Key,-14} x{g.Count()}");
 
             sb.AppendLine();
-            sb.AppendLine($"  --- CYLINDER FIT on {Math.Min(800, clusters.Count)} largest clusters " +
-                          $"({fits.Count} fit, {fitFail} rejected) ---");
+            sb.AppendLine($"  --- CYLINDER FIT ({fits.Count} fit, {fitFail} rejected) ---");
+            var solid360 = fits.Where(f => f.CoverageDeg >= 300 && f.RmsMil < 50).ToList();
+            sb.AppendLine($"  well-conditioned (>=300 deg wrap AND <50 mil RMS): {solid360.Count}/{fits.Count}");
+            sb.AppendLine("  NOTE: a fit on a partial arc over-reads the radius; trust the well-conditioned ones.");
+            if (solid360.Count > 0) fits = solid360;
             if (fits.Count > 0)
             {
                 sb.AppendLine("  fitted OD -> nominal size:");
@@ -535,9 +577,9 @@ namespace SgRevitAddin.Commands.Coordination
                     sb.AppendLine($"  sloped pitches: min={pitched.First():0.###}  median={pitched[pitched.Count / 2]:0.###}  " +
                                   $"max={pitched.Last():0.###} in/10ft");
 
-                sb.AppendLine("  sample (first 25):    OD(in)  len(ft)  slope(in/10ft)  faces");
+                sb.AppendLine("  sample (first 25):    OD(in)  len(ft)  slope(in/10ft)  faces   wrap(deg)  rms(mil)");
                 foreach (var f in fits.Take(25))
-                    sb.AppendLine($"      {f.RadiusIn * 2,10:0.###}  {f.LengthFt,7:0.##}  {f.SlopeIn10,13:0.####}  {f.FaceCount,6}");
+                    sb.AppendLine($"      {f.RadiusIn * 2,10:0.###}  {f.LengthFt,7:0.##}  {f.SlopeIn10,13:0.####}  {f.FaceCount,6}  {f.CoverageDeg,9:0}  {f.RmsMil,8:0.#}");
             }
         }
 
@@ -556,21 +598,18 @@ namespace SgRevitAddin.Commands.Coordination
         /// <summary>Fit one connected face group as a cylinder: axis from the area-weighted
         /// normal covariance (smallest eigenvector), radius from a circle fit on the
         /// perpendicular plane with cap facets excluded. Returns null if it isn't cylinder-like.</summary>
-        private static Cyl FitComponent(List<Face> faces)
+        private static Cyl FitComponent(FaceGraph g, List<int> idxs)
         {
             try
             {
                 // Axis: minimize sum (a . n)^2 over area-weighted face normals.
                 double[,] m = new double[3, 3];
                 var normals = new List<KeyValuePair<XYZ, double>>();
-                foreach (Face f in faces)
+                foreach (int i0 in idxs)
                 {
-                    var pf = f as PlanarFace;
-                    if (pf == null) continue;
-                    double a = 0;
-                    try { a = f.Area; } catch { }
-                    if (a <= 1e-12) continue;
-                    XYZ n = pf.FaceNormal;
+                    XYZ n = g.N[i0];
+                    double a = g.A[i0];
+                    if (n == null || a <= 1e-12) continue;
                     normals.Add(new KeyValuePair<XYZ, double>(n, a));
                     double[] e = { n.X, n.Y, n.Z };
                     for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) m[i, j] += a * e[i] * e[j];
@@ -588,18 +627,43 @@ namespace SgRevitAddin.Commands.Coordination
                 double totArea = normals.Sum(p => p.Value);
                 if (totArea <= 0 || sideArea / totArea < 0.5) return null;   // not a tube
 
-                // Radius: circle fit on side-facet vertices only (cap fans bias it low).
                 XYZ tmp = Math.Abs(axis.Z) < 0.9 ? XYZ.BasisZ : XYZ.BasisX;
                 XYZ u = axis.CrossProduct(tmp).Normalize();
                 XYZ v = axis.CrossProduct(u).Normalize();
+
+                // ARC COVERAGE: how much of the circumference do these facets actually wrap?
+                // A circle fitted to a partial arc is wildly optimistic about its radius — that
+                // is exactly how 4-face fragments of real pipe came back as "9-13 in OD".
+                //
+                // Measured as 360 minus the LARGEST ANGULAR GAP between consecutive facet
+                // normals. Counting filled bins does not work: an n-facet cylinder only has n
+                // distinct normals, so a full 16-facet ring could never fill more than 16 of 36
+                // bins (160 deg) and every real pipe failed a ">= 300 deg" test. By the gap
+                // measure a full 16-facet ring scores 337.5 deg and a 90 deg arc scores 90.
+                var angs = new List<double>();
+                foreach (var p in normals)
+                {
+                    if (Math.Abs(p.Key.DotProduct(axis)) > 0.35) continue;
+                    angs.Add(Math.Atan2(p.Key.DotProduct(v), p.Key.DotProduct(u)));
+                }
+                double coverageDeg = 0;
+                if (angs.Count >= 2)
+                {
+                    angs.Sort();
+                    double maxGap = angs[0] + 2 * Math.PI - angs[angs.Count - 1];
+                    for (int i = 1; i < angs.Count; i++) maxGap = Math.Max(maxGap, angs[i] - angs[i - 1]);
+                    coverageDeg = 360.0 - maxGap * 180.0 / Math.PI;
+                }
+
+                // Radius: circle fit on side-facet vertices only (cap fans bias it low).
                 double Sx = 0, Sy = 0, Sxx = 0, Syy = 0, Sxy = 0, Sxz = 0, Syz = 0, Sz = 0;
                 double lo = double.MaxValue, hi = double.MinValue;
                 int N = 0;
-                foreach (Face f in faces)
+                var px = new List<double>(); var py = new List<double>();
+                foreach (int i0 in idxs)
                 {
-                    var pf = f as PlanarFace;
-                    if (pf == null || Math.Abs(pf.FaceNormal.DotProduct(axis)) > 0.35) continue;
-                    Mesh msh = f.Triangulate();
+                    if (g.N[i0] == null || Math.Abs(g.N[i0].DotProduct(axis)) > 0.35) continue;
+                    Mesh msh = g.F[i0].Triangulate();
                     if (msh == null) continue;
                     for (int i = 0; i < msh.Vertices.Count; i++)
                     {
@@ -608,6 +672,7 @@ namespace SgRevitAddin.Commands.Coordination
                         double z = x * x + y * y;
                         Sx += x; Sy += y; Sxx += x * x; Syy += y * y; Sxy += x * y;
                         Sxz += x * z; Syz += y * z; Sz += z; N++;
+                        px.Add(x); py.Add(y);
                         if (d < lo) lo = d;
                         if (d > hi) hi = d;
                     }
@@ -644,6 +709,16 @@ namespace SgRevitAddin.Commands.Coordination
                 double rad = Math.Sqrt(Math.Max(0, cx * cx + cy * cy - sol[2]));
                 if (rad <= 1e-6 || rad > 3.0) return null;   // >72in dia: not pipe
 
+                // Residual: how well the vertices actually sit on that circle. A partial-arc
+                // or non-circular cluster shows up here even when the fit "succeeded".
+                double sse = 0;
+                for (int i = 0; i < px.Count; i++)
+                {
+                    double dr = Math.Sqrt((px[i] - cx) * (px[i] - cx) + (py[i] - cy) * (py[i] - cy)) - rad;
+                    sse += dr * dr;
+                }
+                double rms = Math.Sqrt(sse / px.Count);
+
                 XYZ ax = axis.Z < 0 ? axis.Negate() : axis;
                 double run = Math.Sqrt(ax.X * ax.X + ax.Y * ax.Y);
                 return new Cyl
@@ -652,7 +727,9 @@ namespace SgRevitAddin.Commands.Coordination
                     LengthFt = hi > lo ? hi - lo : 0.0,
                     Axis = ax,
                     SlopeIn10 = run < 1e-9 ? 0.0 : ax.Z / run * 120.0,
-                    FaceCount = faces.Count
+                    FaceCount = idxs.Count,
+                    CoverageDeg = coverageDeg,
+                    RmsMil = rms * 12000.0
                 };
             }
             catch { return null; }
@@ -780,6 +857,8 @@ namespace SgRevitAddin.Commands.Coordination
             public XYZ Axis;
             public double SlopeIn10;
             public int FaceCount;
+            public double CoverageDeg;   // how much of the circumference the facets wrap
+            public double RmsMil;        // circle-fit residual
         }
 
         private class Stats
