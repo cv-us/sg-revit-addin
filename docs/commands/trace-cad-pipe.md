@@ -36,20 +36,51 @@ Revit makes its own when pipes are connected.
    end triangles would drag a mean.
 4. Snap to the nearest nominal steel OD, and create pipe with `Pipe.Create`.
 
+## Sizing: OD vs nominal, and material
+
+Two distinct things, and getting either wrong mislabels every pipe.
+
+**What is measured is the OUTSIDE diameter. What Revit's diameter parameter wants is the
+NOMINAL size.** They are not the same number — 10" steel has a 10.750" OD. Handing Revit
+the OD produces "10-3/4"" pipe, which is Revit faithfully displaying the nominal size it
+was given.
+
+**The OD for a given nominal depends on the MATERIAL.** Measured against a real
+underground model:
+
+| catalog | mean error | worst |
+|---|---|---|
+| Steel / IPS | 375 mil | 538 mil |
+| **Ductile iron** (AWWA C151) | **36 mil** | 188 mil |
+| PVC C900 (cast-iron OD) | 36 mil | 188 mil |
+
+The clusters landed dead-on ductile iron — 6.90" -> DI 6" (0 mil), 11.10" -> DI 10"
+(0 mil, 39 runs). Underground DI/C900 against a steel table is off by a whole size step.
+
+So the size table is read from **the chosen pipe type's own segments** (`Segment.GetSizes()`
+gives both `NominalDiameter` and `OuterDiameter`), which is self-consistent with whatever
+material was picked. Built-in Steel / Ductile iron / PVC C900 catalogs are selectable as a
+fallback, each shown with its measured fit in mils so the right one is obvious.
+
+The report states which table was used, the mean fit, and warns if it is loose. It also
+reports the size Revit **actually** took — a pipe type's size list can refuse a value.
+
 ## Dialog options
 
 | Field | Description |
 |---|---|
 | *(header)* | Reports what was found before anything is placed — run count, total length, and the fitted size histogram. **Sanity-check these against the model before placing.** |
 | Pipe type / System / Level | What the created pipe is made of and hosted on. |
-| Sizing | **Snap to nearest nominal** (recommended), **use the measured diameter exactly**, or **force one size** for everything. |
+| Match against | The pipe type's own size table (recommended), or an explicit Steel / Ductile iron / PVC C900 catalog. Each is listed with its measured fit in mils. |
+| Sizing | **Snap to nearest nominal** (recommended), **use the measured OD exactly** (rarely wanted), or **force one nominal size** for everything. |
 | Skip runs shorter than | Ignores short stubs. Default 2 ft. |
 | Flatten to level | Ignores the traced slope and places each run dead level at its mid-height. |
+| Join run ends | Extends pipes to where their axes cross and inserts fittings. Traced runs stop SHORT of each other because the fitting body occupies the gap, so their connectors can't simply be joined — this closes that gap first. |
 
 ## Notes
 
-- Pipes are placed but **NOT connected** — no fittings are inserted, no systems are
-  built. Check the alignment against the link before doing anything else with them.
+- With **Join run ends** off, pipes are placed unconnected and no fittings are inserted.
+  Check the alignment against the link before doing anything else with them.
 - Slope comes straight off the fitted axis and is reliable when the model sits near the
   origin. Far-from-origin geometry (state-plane coordinates) plus a float32 FBX leg
   injects vertex jitter, and **slope is the first casualty** — a level pipe can read as

@@ -79,9 +79,17 @@ namespace SgRevitAddin.Commands.PipeRouting
                     return Result.Cancelled;
                 }
 
+                // Best-fitting built-in catalog, for the dialog's up-front preview.
+                var cats = new (string name, SizeEntry[] table)[]
+                { ("Steel / IPS", Steel), ("Ductile iron", DuctileIron), ("PVC C900", PvcC900) };
+                var bestCat = cats.OrderBy(c => TableError(c.table, runs)).First();
+
                 using (var dlg = new TraceCadPipeDialog(pipeTypes, systems,
                                      levels.Select(l => l.Name).ToList(), runs.Count,
-                                     runs.Sum(r => r.LengthFt), SizeSummary(runs)))
+                                     runs.Sum(r => r.LengthFt),
+                                     SizeSummary(bestCat.table, runs),
+                                     bestCat.name, TableError(bestCat.table, runs) * 1000.0,
+                                     cats.Select(c => c.name + $"  (fit {TableError(c.table, runs) * 1000:0} mil)").ToList()))
                 {
                     if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK) return Result.Cancelled;
 
@@ -93,15 +101,37 @@ namespace SgRevitAddin.Commands.PipeRouting
                         return Result.Cancelled;
                     }
 
-                    var rpt = new Report { Considered = runs.Count, Skipped = runs.Count - keep.Count };
+                    // Which size table to resolve OD -> nominal against.
+                    SizeEntry[] table = null;
+                    string tableName;
+                    if (dlg.CatalogIndex < 0)   // "from the pipe type"
+                    {
+                        table = TableFromPipeType(doc, new ElementId(dlg.PipeTypeId));
+                        tableName = table != null ? "the pipe type's own size table" : null;
+                        if (table == null)
+                        { table = bestCat.table; tableName = bestCat.name + " (the pipe type carries no sizes)"; }
+                    }
+                    else
+                    { table = cats[dlg.CatalogIndex].table; tableName = cats[dlg.CatalogIndex].name; }
+
+                    var rpt = new Report
+                    {
+                        Considered = runs.Count,
+                        Skipped = runs.Count - keep.Count,
+                        TableName = tableName,
+                        FitMil = TableError(table, keep) * 1000.0
+                    };
+
                     using (var tx = new Transaction(doc, "Trace CAD Pipe"))
                     {
                         tx.Start();
+                        var placed = new List<Pipe>();
                         foreach (Run r in keep)
                         {
-                            double dia = dlg.ForceSizeIn > 0 ? dlg.ForceSizeIn / 12.0
-                                       : dlg.SnapToNominal ? Nominal(r.DiameterIn) / 12.0
-                                       : r.DiameterIn / 12.0;
+                            // NOMINAL, not OD — that distinction is the whole bug behind "10-3/4 in".
+                            double nomIn = dlg.ForceSizeIn > 0 ? dlg.ForceSizeIn
+                                         : dlg.UseMeasured ? r.DiameterIn
+                                         : Match(table, r.DiameterIn).NominalIn;
 
                             XYZ a = r.Start, b = r.End;
                             if (dlg.FlattenSlope)
@@ -116,11 +146,26 @@ namespace SgRevitAddin.Commands.PipeRouting
                             catch { }
                             if (p == null) { rpt.Fail++; continue; }
 
-                            SetDiameter(p, dia);
+                            SetDiameter(p, nomIn / 12.0);
+                            placed.Add(p);
                             rpt.Placed++;
                             rpt.LengthFt += r.LengthFt;
-                            rpt.Sizes[Nominal(dia * 12.0)] = rpt.Sizes.TryGetValue(Nominal(dia * 12.0), out int n) ? n + 1 : 1;
+
+                            // report the size Revit ACTUALLY took, not the one we asked for —
+                            // the pipe type's size list can refuse a value.
+                            double actual = nomIn;
+                            try
+                            {
+                                var prm = p.get_Parameter(BuiltInParameter.RBS_PIPE_DIAMETER_PARAM);
+                                if (prm != null) actual = prm.AsDouble() * 12.0;
+                            }
+                            catch { }
+                            string lbl = Frac(actual) + "\"";
+                            rpt.Sizes[lbl] = rpt.Sizes.TryGetValue(lbl, out int nn) ? nn + 1 : 1;
+                            if (Math.Abs(actual - nomIn) > 0.02) rpt.SizeRefused++;
                         }
+
+                        if (dlg.ConnectEnds) ConnectRuns(doc, placed, rpt);
                         tx.Commit();
                     }
 
@@ -315,38 +360,230 @@ namespace SgRevitAddin.Commands.PipeRouting
             vec = v;
         }
 
-        // ── nominal sizes ───────────────────────────────────────────────────────────
+        // ── size tables ─────────────────────────────────────────────────────────────
+        //
+        // What we MEASURE off the mesh is the OUTSIDE diameter. What Revit's diameter
+        // parameter wants is the NOMINAL size. Those are not the same number, and
+        // conflating them is what produced "10-3/4 in" pipe: 10.750 is the OD of 10 in
+        // steel, handed to Revit as though it were the nominal.
+        //
+        // The OD for a given nominal also depends on the MATERIAL, so matching against the
+        // wrong catalog mislabels everything. Measured against a real underground model:
+        //     steel / IPS   mean error 375 mil
+        //     ductile iron  mean error  36 mil   <- 6.90 -> DI 6", 11.10 -> DI 10", exact
+        //     PVC C900      mean error  36 mil   (same ODs as DI in these sizes)
+        //
+        // So the table is read from the chosen PIPE TYPE's own segments where possible —
+        // that is self-consistent with whatever material the user picked — and falls back
+        // to these catalogs only if the type carries no sizes.
 
-        private static readonly double[] NomOd =
-            { 1.315, 1.660, 1.900, 2.375, 2.875, 3.500, 4.000, 4.500, 5.563, 6.625, 8.625, 10.750, 12.750 };
-        private static readonly string[] NomName =
-            { "1\"", "1-1/4\"", "1-1/2\"", "2\"", "2-1/2\"", "3\"", "3-1/2\"", "4\"", "5\"", "6\"", "8\"", "10\"", "12\"" };
-
-        private static double Nominal(double odIn)
+        private class SizeEntry
         {
-            int best = 0; double be = double.MaxValue;
-            for (int i = 0; i < NomOd.Length; i++)
-            { double e = Math.Abs(NomOd[i] - odIn); if (e < be) { be = e; best = i; } }
-            return NomOd[best];
+            public double NominalIn;
+            public double OdIn;
+            public string Label;
         }
 
-        private static string NominalName(double odIn)
+        private static readonly SizeEntry[] Steel = Build(
+            new[] { 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 12.0 },
+            new[] { 1.315, 1.660, 1.900, 2.375, 2.875, 3.500, 4.500, 5.563, 6.625, 8.625, 10.750, 12.750 });
+
+        private static readonly SizeEntry[] DuctileIron = Build(          // AWWA C151
+            new[] { 3.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 24.0 },
+            new[] { 3.96, 4.80, 6.90, 9.05, 11.10, 13.20, 15.30, 17.40, 19.50, 21.60, 25.80 });
+
+        private static readonly SizeEntry[] PvcC900 = Build(             // cast-iron OD
+            new[] { 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0 },
+            new[] { 4.80, 6.90, 9.05, 11.10, 13.20, 15.30, 17.40 });
+
+        private static SizeEntry[] Build(double[] nom, double[] od)
         {
-            int best = 0; double be = double.MaxValue;
-            for (int i = 0; i < NomOd.Length; i++)
-            { double e = Math.Abs(NomOd[i] - odIn); if (e < be) { be = e; best = i; } }
-            return NomName[best];
+            var list = new SizeEntry[nom.Length];
+            for (int i = 0; i < nom.Length; i++)
+                list[i] = new SizeEntry { NominalIn = nom[i], OdIn = od[i], Label = Frac(nom[i]) + "\"" };
+            return list;
         }
 
-        private static string SizeSummary(List<Run> runs)
+        private static string Frac(double inches)
+        {
+            int whole = (int)Math.Floor(inches + 1e-6);
+            double f = inches - whole;
+            string fr = f < 0.0625 ? "" : f < 0.3125 ? "-1/4" : f < 0.4375 ? "-1/3"
+                      : f < 0.5625 ? "-1/2" : f < 0.8125 ? "-3/4" : "";
+            if (fr == "" && f >= 0.5625) { whole += 1; }
+            return whole + fr;
+        }
+
+        /// <summary>The size table of the chosen pipe type, read from its routing-preference
+        /// segments. Both nominal and outside diameter come straight from Revit, so a ductile
+        /// iron or PVC type resolves correctly without needing to know which it is.</summary>
+        private static SizeEntry[] TableFromPipeType(Document doc, ElementId pipeTypeId)
+        {
+            try
+            {
+                var pt = doc.GetElement(pipeTypeId) as PipeType;
+                if (pt == null) return null;
+                RoutingPreferenceManager rpm = pt.RoutingPreferenceManager;
+                if (rpm == null) return null;
+
+                var found = new Dictionary<double, SizeEntry>();
+                int n = rpm.GetNumberOfRules(RoutingPreferenceRuleGroupType.Segments);
+                for (int i = 0; i < n; i++)
+                {
+                    RoutingPreferenceRule rule = rpm.GetRule(RoutingPreferenceRuleGroupType.Segments, i);
+                    if (rule == null) continue;
+                    var seg = doc.GetElement(rule.MEPPartId) as Segment;
+                    if (seg == null) continue;
+                    foreach (MEPSize s in seg.GetSizes())
+                    {
+                        double nomIn = s.NominalDiameter * 12.0;
+                        double odIn = s.OuterDiameter * 12.0;
+                        if (odIn <= 0.01) continue;
+                        if (!found.ContainsKey(nomIn))
+                            found[nomIn] = new SizeEntry { NominalIn = nomIn, OdIn = odIn, Label = Frac(nomIn) + "\"" };
+                    }
+                }
+                return found.Count > 0 ? found.Values.OrderBy(e => e.NominalIn).ToArray() : null;
+            }
+            catch { return null; }
+        }
+
+        private static SizeEntry Match(SizeEntry[] table, double measuredOdIn)
+        {
+            SizeEntry best = table[0]; double be = double.MaxValue;
+            foreach (SizeEntry e in table)
+            { double err = Math.Abs(e.OdIn - measuredOdIn); if (err < be) { be = err; best = e; } }
+            return best;
+        }
+
+        /// <summary>Mean |OD error| of a table against the measured runs — used to pick the
+        /// best-fitting catalog automatically and to warn when nothing fits well.</summary>
+        private static double TableError(SizeEntry[] table, List<Run> runs)
+        {
+            if (table == null || table.Length == 0 || runs.Count == 0) return double.MaxValue;
+            double tot = 0;
+            foreach (Run r in runs) tot += Math.Abs(Match(table, r.DiameterIn).OdIn - r.DiameterIn);
+            return tot / runs.Count;
+        }
+
+        private static string SizeSummary(SizeEntry[] table, List<Run> runs)
         {
             var by = new Dictionary<string, int>();
             foreach (Run r in runs)
             {
-                string k = NominalName(r.DiameterIn);
+                string k = Match(table, r.DiameterIn).Label;
                 by[k] = by.TryGetValue(k, out int n) ? n + 1 : 1;
             }
             return string.Join(",  ", by.OrderByDescending(kv => kv.Value).Select(kv => kv.Key + " x" + kv.Value));
+        }
+
+        // ── fittings ────────────────────────────────────────────────────────────────
+        //
+        // Traced runs stop SHORT of each other, because in the source model the fitting body
+        // occupies the gap (every one of the 87 solids sat within 0.8 ft of a run end). So the
+        // ends are near each other but not coincident, and their connectors cannot simply be
+        // joined. Instead: find ends that are close, extend both pipes to where their axes
+        // actually cross, then let Revit build the fitting from its routing preferences.
+
+        private const double JoinRadiusFt = 3.0;   // how far apart two run ends may be to pair up
+
+        private static Connector EndNear(Pipe p, XYZ pt)
+        {
+            try
+            {
+                Connector best = null; double bd = double.MaxValue;
+                foreach (Connector c in p.ConnectorManager.Connectors)
+                {
+                    if (c.ConnectorType != ConnectorType.End || c.IsConnected) continue;
+                    double d = c.Origin.DistanceTo(pt);
+                    if (d < bd) { bd = d; best = c; }
+                }
+                return best;
+            }
+            catch { return null; }
+        }
+
+        /// <summary>Closest approach of two infinite lines. Returns false if near-parallel.</summary>
+        private static bool AxesCross(XYZ p1, XYZ d1, XYZ p2, XYZ d2, out XYZ meet)
+        {
+            meet = null;
+            XYZ w = p1 - p2;
+            double a = d1.DotProduct(d1), b = d1.DotProduct(d2), c = d2.DotProduct(d2);
+            double d = d1.DotProduct(w), e = d2.DotProduct(w);
+            double den = a * c - b * b;
+            if (Math.Abs(den) < 1e-9) return false;          // parallel: no unique crossing
+            double s = (b * e - c * d) / den, t = (a * e - b * d) / den;
+            XYZ q1 = p1 + d1.Multiply(s), q2 = p2 + d2.Multiply(t);
+            if (q1.DistanceTo(q2) > 1.5) return false;       // skew lines that never really meet
+            meet = (q1 + q2).Multiply(0.5);
+            return true;
+        }
+
+        private static void ConnectRuns(Document doc, List<Pipe> pipes, Report rpt)
+        {
+            // gather every free end
+            var ends = new List<(Pipe pipe, XYZ pt, XYZ dir)>();
+            foreach (Pipe p in pipes)
+            {
+                var lc = p.Location as LocationCurve;
+                if (lc == null) continue;
+                Curve cv = lc.Curve;
+                XYZ a = cv.GetEndPoint(0), b = cv.GetEndPoint(1);
+                XYZ dir = (b - a).Normalize();
+                ends.Add((p, a, dir));
+                ends.Add((p, b, dir));
+            }
+
+            var used = new bool[ends.Count];
+            for (int i = 0; i < ends.Count; i++)
+            {
+                if (used[i]) continue;
+                // nearest unused end belonging to a DIFFERENT pipe
+                int bestJ = -1; double bd = JoinRadiusFt;
+                for (int j = 0; j < ends.Count; j++)
+                {
+                    if (used[j] || j == i || ends[j].pipe.Id == ends[i].pipe.Id) continue;
+                    double d = ends[i].pt.DistanceTo(ends[j].pt);
+                    if (d < bd) { bd = d; bestJ = j; }
+                }
+                if (bestJ < 0) continue;
+
+                XYZ meet;
+                if (!AxesCross(ends[i].pt, ends[i].dir, ends[bestJ].pt, ends[bestJ].dir, out meet))
+                { rpt.JoinSkipped++; continue; }
+
+                // extend both pipes to the crossing point
+                if (!ExtendTo(ends[i].pipe, ends[i].pt, meet) || !ExtendTo(ends[bestJ].pipe, ends[bestJ].pt, meet))
+                { rpt.JoinFail++; continue; }
+
+                Connector ca = EndNear(ends[i].pipe, meet), cb = EndNear(ends[bestJ].pipe, meet);
+                if (ca == null || cb == null) { rpt.JoinFail++; continue; }
+
+                try { doc.Create.NewElbowFitting(ca, cb); rpt.Elbows++; used[i] = used[bestJ] = true; }
+                catch
+                {
+                    try { ca.ConnectTo(cb); rpt.PlainJoins++; used[i] = used[bestJ] = true; }
+                    catch { rpt.JoinFail++; }
+                }
+            }
+        }
+
+        /// <summary>Move the endpoint of a pipe nearest <paramref name="from"/> to <paramref name="to"/>.</summary>
+        private static bool ExtendTo(Pipe p, XYZ from, XYZ to)
+        {
+            try
+            {
+                var lc = p.Location as LocationCurve;
+                if (lc == null) return false;
+                Curve cv = lc.Curve;
+                XYZ a = cv.GetEndPoint(0), b = cv.GetEndPoint(1);
+                bool movingA = a.DistanceTo(from) <= b.DistanceTo(from);
+                XYZ na = movingA ? to : a, nb = movingA ? b : to;
+                if (na.DistanceTo(nb) < 0.05) return false;
+                lc.Curve = Line.CreateBound(na, nb);
+                return true;
+            }
+            catch { return false; }
         }
 
         private static void SetDiameter(MEPCurve curve, double sizeFt)
@@ -362,9 +599,11 @@ namespace SgRevitAddin.Commands.PipeRouting
 
         private class Report
         {
-            public int Considered, Placed, Skipped, Fail;
-            public double LengthFt;
-            public readonly Dictionary<double, int> Sizes = new Dictionary<double, int>();
+            public int Considered, Placed, Skipped, Fail, SizeRefused;
+            public int Elbows, PlainJoins, JoinFail, JoinSkipped;
+            public double LengthFt, FitMil;
+            public string TableName;
+            public readonly Dictionary<string, int> Sizes = new Dictionary<string, int>();
 
             public override string ToString()
             {
@@ -375,16 +614,37 @@ namespace SgRevitAddin.Commands.PipeRouting
                 sb.AppendLine($"Pipes placed: {Placed}   ({LengthFt:0} linear ft)");
                 if (Skipped > 0) sb.AppendLine($"Skipped (under the minimum length): {Skipped}");
                 if (Fail > 0) sb.AppendLine($"Failed to create: {Fail}");
+
                 if (Sizes.Count > 0)
                 {
                     sb.AppendLine();
-                    sb.AppendLine("Sizes placed:");
+                    sb.AppendLine($"Sizes (matched against {TableName}, mean fit {FitMil:0} mil):");
                     foreach (var kv in Sizes.OrderByDescending(kv => kv.Value))
-                        sb.AppendLine($"   {NominalName(kv.Key)}  x{kv.Value}");
+                        sb.AppendLine($"   {kv.Key}  x{kv.Value}");
+                    if (FitMil > 150)
+                        sb.AppendLine("   NOTE: that is a loose fit — the pipe may be a different material " +
+                                      "than the table assumes. Try another catalog in the dialog.");
+                    if (SizeRefused > 0)
+                        sb.AppendLine($"   {SizeRefused} pipe(s) came out a different size than asked — " +
+                                      "the pipe type's size list does not carry that size.");
                 }
+
+                if (Elbows + PlainJoins + JoinFail + JoinSkipped > 0)
+                {
+                    sb.AppendLine();
+                    sb.AppendLine($"Ends joined: {Elbows} with a fitting" +
+                                  (PlainJoins > 0 ? $", {PlainJoins} connected without one" : ""));
+                    if (JoinSkipped > 0) sb.AppendLine($"   {JoinSkipped} skipped (ends parallel or never meeting)");
+                    if (JoinFail > 0) sb.AppendLine($"   {JoinFail} could not be joined");
+                }
+                else
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("Pipes are NOT connected — no fittings inserted.");
+                }
+
                 sb.AppendLine();
-                sb.AppendLine("The pipes are placed but NOT connected — fittings are not inserted. " +
-                              "Check the alignment against the link before doing anything else with them.");
+                sb.AppendLine("Check the alignment against the link before doing anything else with these.");
                 return sb.ToString();
             }
         }
