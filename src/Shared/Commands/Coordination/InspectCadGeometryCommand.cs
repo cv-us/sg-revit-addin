@@ -108,11 +108,45 @@ namespace SgRevitAddin.Commands.Coordination
 
         private static void RawHeader(Document doc, StringBuilder raw)
         {
-            raw.AppendLine("# SG Inspect CAD Geometry — raw face dump v1");
+            raw.AppendLine("# SG Inspect CAD Geometry — raw geometry dump v2");
             raw.AppendLine("# units: decimal FEET (Revit internal)");
             raw.AppendLine("# S <solidIdx> <faceCount> <volume> <surfaceArea>");
-            raw.AppendLine("# F <nx> <ny> <nz> <area> <nVerts> then nVerts * (x y z)");
+            raw.AppendLine("# F <nx> <ny> <nz> <area> <nTris> then nTris * (x y z x y z x y z)");
+            raw.AppendLine("# M <meshIdx> <numTriangles>");
+            raw.AppendLine("# T x y z x y z x y z");
             raw.AppendLine("# doc " + doc.Title);
+        }
+
+        /// <summary>Every Mesh in the geometry. v1 of this dump only walked Solids, so a
+        /// separate Mesh object went unexamined — which is where the piping actually was.</summary>
+        private static void CollectMeshes(GeometryElement geom, List<Mesh> outp, int depth)
+        {
+            if (geom == null || depth > 8) return;
+            foreach (GeometryObject obj in geom)
+            {
+                var inst = obj as GeometryInstance;
+                if (inst != null) { CollectMeshes(inst.GetInstanceGeometry(), outp, depth + 1); continue; }
+                var m = obj as Mesh;
+                if (m != null && m.NumTriangles > 0) outp.Add(m);
+            }
+        }
+
+        private static void RawDumpMeshes(List<Mesh> meshes, StringBuilder raw)
+        {
+            for (int i = 0; i < meshes.Count; i++)
+            {
+                Mesh m = meshes[i];
+                raw.AppendLine("M " + i + " " + m.NumTriangles);
+                for (int t = 0; t < m.NumTriangles; t++)
+                {
+                    MeshTriangle tri;
+                    try { tri = m.get_Triangle(t); } catch { continue; }
+                    XYZ a = tri.get_Vertex(0), b = tri.get_Vertex(1), c = tri.get_Vertex(2);
+                    raw.AppendLine("T " + F6(a.X) + " " + F6(a.Y) + " " + F6(a.Z)
+                                     + " " + F6(b.X) + " " + F6(b.Y) + " " + F6(b.Z)
+                                     + " " + F6(c.X) + " " + F6(c.Y) + " " + F6(c.Z));
+                }
+            }
         }
 
         private static string F6(double d)
@@ -136,33 +170,29 @@ namespace SgRevitAddin.Commands.Coordination
                     XYZ n = pf != null ? pf.FaceNormal : null;
                     double a = 0; try { a = f.Area; } catch { }
 
-                    // Outer loop vertices, in order. Adjacency, normals and area are all
-                    // recoverable from these, so the offline copy sees exactly what we see.
-                    var verts = new List<XYZ>();
-                    try
-                    {
-                        EdgeArrayArray loops = f.EdgeLoops;
-                        if (loops != null && loops.Size > 0)
-                        {
-                            EdgeArray outer = null;
-                            foreach (EdgeArray ea in loops) { outer = ea; break; }
-                            if (outer != null)
-                                foreach (Edge e in outer)
-                                {
-                                    Curve c = e.AsCurve();
-                                    if (c != null) verts.Add(c.GetEndPoint(0));
-                                }
-                        }
-                    }
-                    catch { }
-                    if (verts.Count < 3) continue;
+                    // TRIANGULATION, not the edge loops. v1 walked EdgeLoops taking
+                    // AsCurve().GetEndPoint(0) per edge — but Revit returns each edge in its
+                    // OWN natural direction, not the loop's, so mixed orientations yielded the
+                    // same corner twice and dropped the third: 87% of dumped faces came out
+                    // with only 2 distinct vertices. Face.Triangulate() has no such ambiguity.
+                    Mesh fm = null;
+                    try { fm = f.Triangulate(); } catch { }
+                    if (fm == null || fm.NumTriangles == 0) continue;
 
                     var line = new StringBuilder();
                     line.Append("F ");
                     line.Append(n != null ? F6(n.X) + " " + F6(n.Y) + " " + F6(n.Z) : "0 0 0");
-                    line.Append(' ').Append(F6(a)).Append(' ').Append(verts.Count);
-                    foreach (XYZ v in verts)
-                        line.Append(' ').Append(F6(v.X)).Append(' ').Append(F6(v.Y)).Append(' ').Append(F6(v.Z));
+                    line.Append(' ').Append(F6(a)).Append(' ').Append(fm.NumTriangles);
+                    for (int t = 0; t < fm.NumTriangles; t++)
+                    {
+                        MeshTriangle mt;
+                        try { mt = fm.get_Triangle(t); } catch { continue; }
+                        for (int k = 0; k < 3; k++)
+                        {
+                            XYZ v = mt.get_Vertex(k);
+                            line.Append(' ').Append(F6(v.X)).Append(' ').Append(F6(v.Y)).Append(' ').Append(F6(v.Z));
+                        }
+                    }
                     raw.AppendLine(line.ToString());
                 }
             }
@@ -699,7 +729,38 @@ namespace SgRevitAddin.Commands.Coordination
             CollectSolids(geom, solids, 0);
             if (solids.Count == 0) return;
 
-            if (raw != null) { try { RawDumpSolids(solids, raw); } catch { } }
+            if (raw != null)
+            {
+                try { RawDumpSolids(solids, raw); } catch { }
+                try
+                {
+                    var meshes = new List<Mesh>();
+                    CollectMeshes(geom, meshes, 0);
+                    RawDumpMeshes(meshes, raw);
+
+                    // Meshes are reported separately because v1 of this probe never looked at
+                    // them, and that is where the piping turned out to live.
+                    if (meshes.Count > 0)
+                    {
+                        int tris = meshes.Sum(m => m.NumTriangles);
+                        double xmn = double.MaxValue, ymn = double.MaxValue, zmn = double.MaxValue;
+                        double xmx = double.MinValue, ymx = double.MinValue, zmx = double.MinValue;
+                        foreach (Mesh m in meshes)
+                            for (int i = 0; i < m.Vertices.Count; i++)
+                            {
+                                XYZ v = m.Vertices[i];
+                                xmn = Math.Min(xmn, v.X); ymn = Math.Min(ymn, v.Y); zmn = Math.Min(zmn, v.Z);
+                                xmx = Math.Max(xmx, v.X); ymx = Math.Max(ymx, v.Y); zmx = Math.Max(zmx, v.Z);
+                            }
+                        sb.AppendLine();
+                        sb.AppendLine($"  MESH geometry: {meshes.Count} mesh(es), {tris} triangles");
+                        sb.AppendLine($"     extent X [{xmn:0.#} .. {xmx:0.#}]  Y [{ymn:0.#} .. {ymx:0.#}]  Z [{zmn:0.#} .. {zmx:0.#}] (ft)");
+                        sb.AppendLine($"     span {xmx - xmn:0.#} x {ymx - ymn:0.#} x {zmx - zmn:0.#} ft" +
+                                      "   <- long spans here mean this is the piping");
+                    }
+                }
+                catch { }
+            }
 
             sb.AppendLine();
             sb.AppendLine("  ================ SEGMENTATION PROBE ================");
