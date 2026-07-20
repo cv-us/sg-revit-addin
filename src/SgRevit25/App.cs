@@ -206,6 +206,10 @@ namespace SgRevitAddin
                 "SgRevitAddin.Commands.Coordination.InspectMaterialsCommand",
                 "modelcheck-32.png", "modelcheck-16.png",
                 "Read-only diagnostic: pick elements to see their type/instance material parameters and the actual material(s) on their geometry faces (what Navisworks reads). Use it to find why a flex pipe / fitting won't colorize for NWC.");
+            AddLargeButton(coordPanel, "InspectCadGeometry", "Inspect\nCAD Geom", asmPath,
+                "SgRevitAddin.Commands.Coordination.InspectCadGeometryCommand",
+                "modelcheck-32.png", "modelcheck-16.png",
+                "Read-only diagnostic for tracing a linked CAD/coordination model into real pipe: reports whether the geometry arrives as solids with analytic cylindrical faces (exact axis + radius, no fitting) or as triangle mesh, how it's segmented, the cylinder radii matched to nominal pipe sizes, per-run slope, and whether the coordinates sit far enough from the origin for float32 jitter to fake a slope.");
 
             // ── Annotation panel ──
             RibbonPanel annotPanel = application.CreateRibbonPanel(tabName, "Annotation");
