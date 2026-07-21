@@ -75,7 +75,7 @@ reports the size Revit **actually** took — a pipe type's size list can refuse 
 | Sizing | **Snap to nearest nominal** (recommended), **use the measured OD exactly** (rarely wanted), or **force one nominal size** for everything. |
 | Skip runs shorter than | Ignores short stubs. Default 2 ft. |
 | Flatten to level | Ignores the traced slope and places each run dead level at its mid-height. |
-| Join run ends | Extends pipes to where their axes cross and inserts fittings. Traced runs stop SHORT of each other because the fitting body occupies the gap, so their connectors can't simply be joined — this closes that gap first. |
+| Join run ends | Inserts an elbow at each **genuine angled corner**, extending the two pipes a bounded amount to where their axes cross. Inline reducers/straight joins, tees/crosses, and any corner whose crossing isn't provably local are **left exactly as placed** — no pipe is moved or deleted. |
 
 ## Notes
 

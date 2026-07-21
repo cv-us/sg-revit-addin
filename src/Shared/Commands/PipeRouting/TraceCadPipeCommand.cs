@@ -480,12 +480,27 @@ namespace SgRevitAddin.Commands.PipeRouting
         // ── fittings ────────────────────────────────────────────────────────────────
         //
         // Traced runs stop SHORT of each other, because in the source model the fitting body
-        // occupies the gap (every one of the 87 solids sat within 0.8 ft of a run end). So the
-        // ends are near each other but not coincident, and their connectors cannot simply be
-        // joined. Instead: find ends that are close, extend both pipes to where their axes
-        // actually cross, then let Revit build the fitting from its routing preferences.
+        // occupies the gap (every one of the 87 solids sat within 0.8 ft of a run end).
+        //
+        // ONLY genuine angled ELBOWS are built, and only when the corner is provably local.
+        // Everything else is left EXACTLY as placed — no pipe is moved or deleted:
+        //   • inline / reducer joins (two near-collinear ends) — left alone. This is the fix
+        //     for "pipe beyond a reducer vanished": on the real model those near-parallel
+        //     axes computed a crossing point up to 8.7 ft away, and extending the small
+        //     continuation pipe to it dragged it off into nothing. A reducer also wants a
+        //     transition fitting, not an elbow.
+        //   • tees / crosses (3+ ends at one point) — left alone; we don't fabricate a
+        //     two-way elbow where a branch belongs.
+        //   • any corner whose crossing is not close to BOTH ends — left alone.
+        // Measured on the real runs: genuine elbows cross within 1.1 ft of both ends with a
+        // sub-0.1 ft closest approach; the bounds below keep all of those and drop the rest.
 
-        private const double JoinRadiusFt = 3.0;   // how far apart two run ends may be to pair up
+        private const double ClusterFt = 2.5;      // ends this close are treated as one junction
+        private const double CornerBoundFt = 2.0;  // the crossing must be within this of both ends
+        private const double ApproachGapFt = 0.5;  // the two axis lines must pass this close
+        private const double CollinearDot = 0.90;  // |axis . axis| above this = inline, not an elbow
+
+        private class PEnd { public Pipe Pipe; public int Run; public XYZ Pt; public XYZ Axis; }
 
         private static Connector EndNear(Pipe p, XYZ pt)
         {
@@ -503,72 +518,96 @@ namespace SgRevitAddin.Commands.PipeRouting
             catch { return null; }
         }
 
-        /// <summary>Closest approach of two infinite lines. Returns false if near-parallel.</summary>
-        private static bool AxesCross(XYZ p1, XYZ d1, XYZ p2, XYZ d2, out XYZ meet)
+        /// <summary>Closest approach of two infinite lines. Returns the midpoint of the closest
+        /// approach and the gap between the lines there; false if too near-parallel to trust.</summary>
+        private static bool ClosestApproach(XYZ p1, XYZ d1, XYZ p2, XYZ d2, out XYZ meet, out double gap)
         {
-            meet = null;
+            meet = null; gap = double.MaxValue;
             XYZ w = p1 - p2;
             double a = d1.DotProduct(d1), b = d1.DotProduct(d2), c = d2.DotProduct(d2);
             double d = d1.DotProduct(w), e = d2.DotProduct(w);
             double den = a * c - b * b;
-            if (Math.Abs(den) < 1e-9) return false;          // parallel: no unique crossing
+            if (Math.Abs(den) < 0.02) return false;          // near-parallel: crossing is unstable
             double s = (b * e - c * d) / den, t = (a * e - b * d) / den;
             XYZ q1 = p1 + d1.Multiply(s), q2 = p2 + d2.Multiply(t);
-            if (q1.DistanceTo(q2) > 1.5) return false;       // skew lines that never really meet
+            gap = q1.DistanceTo(q2);
             meet = (q1 + q2).Multiply(0.5);
             return true;
         }
 
         private static void ConnectRuns(Document doc, List<Pipe> pipes, Report rpt)
         {
-            // gather every free end
-            var ends = new List<(Pipe pipe, XYZ pt, XYZ dir)>();
-            foreach (Pipe p in pipes)
+            // every free end, with the pipe's own axis
+            var ends = new List<PEnd>();
+            for (int r = 0; r < pipes.Count; r++)
             {
-                var lc = p.Location as LocationCurve;
+                var lc = pipes[r].Location as LocationCurve;
                 if (lc == null) continue;
                 Curve cv = lc.Curve;
                 XYZ a = cv.GetEndPoint(0), b = cv.GetEndPoint(1);
-                XYZ dir = (b - a).Normalize();
-                ends.Add((p, a, dir));
-                ends.Add((p, b, dir));
+                XYZ axis = (b - a).Normalize();
+                ends.Add(new PEnd { Pipe = pipes[r], Run = r, Pt = a, Axis = axis });
+                ends.Add(new PEnd { Pipe = pipes[r], Run = r, Pt = b, Axis = axis });
             }
 
-            var used = new bool[ends.Count];
-            for (int i = 0; i < ends.Count; i++)
+            // cluster ends by proximity (union-find)
+            int n = ends.Count;
+            var parent = new int[n];
+            for (int i = 0; i < n; i++) parent[i] = i;
+            Func<int, int> find = null;
+            find = x => { while (parent[x] != x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+            double c2 = ClusterFt * ClusterFt;
+            for (int i = 0; i < n; i++)
+                for (int j = i + 1; j < n; j++)
+                {
+                    XYZ dv = ends[i].Pt - ends[j].Pt;
+                    if (dv.DotProduct(dv) <= c2) { int ra = find(i), rb = find(j); if (ra != rb) parent[ra] = rb; }
+                }
+            var groups = new Dictionary<int, List<int>>();
+            for (int i = 0; i < n; i++)
             {
-                if (used[i]) continue;
-                // nearest unused end belonging to a DIFFERENT pipe
-                int bestJ = -1; double bd = JoinRadiusFt;
-                for (int j = 0; j < ends.Count; j++)
-                {
-                    if (used[j] || j == i || ends[j].pipe.Id == ends[i].pipe.Id) continue;
-                    double d = ends[i].pt.DistanceTo(ends[j].pt);
-                    if (d < bd) { bd = d; bestJ = j; }
-                }
-                if (bestJ < 0) continue;
+                int r = find(i);
+                List<int> g;
+                if (!groups.TryGetValue(r, out g)) { g = new List<int>(); groups[r] = g; }
+                g.Add(i);
+            }
 
-                XYZ meet;
-                if (!AxesCross(ends[i].pt, ends[i].dir, ends[bestJ].pt, ends[bestJ].dir, out meet))
-                { rpt.JoinSkipped++; continue; }
+            foreach (var g in groups.Values)
+            {
+                if (g.Count == 1) continue;                       // open / dead end
+                if (g.Count >= 3) { rpt.LeftMultiway++; continue; } // tee / cross — don't fabricate
 
-                // extend both pipes to the crossing point
-                if (!ExtendTo(ends[i].pipe, ends[i].pt, meet) || !ExtendTo(ends[bestJ].pipe, ends[bestJ].pt, meet))
-                { rpt.JoinFail++; continue; }
+                PEnd e0 = ends[g[0]], e1 = ends[g[1]];
+                if (e0.Run == e1.Run) continue;                   // both ends of one tiny run
 
-                Connector ca = EndNear(ends[i].pipe, meet), cb = EndNear(ends[bestJ].pipe, meet);
-                if (ca == null || cb == null) { rpt.JoinFail++; continue; }
+                double axisDot = Math.Abs(e0.Axis.DotProduct(e1.Axis));
+                if (axisDot > CollinearDot) { rpt.LeftInline++; continue; }   // reducer / straight — leave alone
 
-                try { doc.Create.NewElbowFitting(ca, cb); rpt.Elbows++; used[i] = used[bestJ] = true; }
-                catch
-                {
-                    try { ca.ConnectTo(cb); rpt.PlainJoins++; used[i] = used[bestJ] = true; }
-                    catch { rpt.JoinFail++; }
-                }
+                XYZ meet; double gap;
+                if (!ClosestApproach(e0.Pt, e0.Axis, e1.Pt, e1.Axis, out meet, out gap)
+                    || gap > ApproachGapFt
+                    || meet.DistanceTo(e0.Pt) > CornerBoundFt
+                    || meet.DistanceTo(e1.Pt) > CornerBoundFt)
+                { rpt.CornerSkipped++; continue; }
+
+                // Both extends are bounded and non-flipping; if either refuses, nothing moved.
+                if (!ExtendTo(e0.Pipe, e0.Pt, meet) || !ExtendTo(e1.Pipe, e1.Pt, meet))
+                { rpt.CornerSkipped++; continue; }
+
+                doc.Regenerate();
+                Connector ca = EndNear(e0.Pipe, meet), cb = EndNear(e1.Pipe, meet);
+                if (ca == null || cb == null) { rpt.CornerSkipped++; continue; }
+
+                // The pipes already meet at the corner; if the fitting can't be made, leave
+                // them touching (still correct geometry) rather than force a bad connect.
+                try { doc.Create.NewElbowFitting(ca, cb); rpt.Elbows++; }
+                catch { rpt.CornerSkipped++; }
             }
         }
 
-        /// <summary>Move the endpoint of a pipe nearest <paramref name="from"/> to <paramref name="to"/>.</summary>
+        /// <summary>Move the pipe endpoint nearest <paramref name="from"/> to <paramref name="to"/>,
+        /// but only if the move is small and doesn't flip or collapse the pipe. Returns false —
+        /// changing nothing — otherwise. This is what makes the join pass unable to lose pipe.</summary>
         private static bool ExtendTo(Pipe p, XYZ from, XYZ to)
         {
             try
@@ -578,8 +617,15 @@ namespace SgRevitAddin.Commands.PipeRouting
                 Curve cv = lc.Curve;
                 XYZ a = cv.GetEndPoint(0), b = cv.GetEndPoint(1);
                 bool movingA = a.DistanceTo(from) <= b.DistanceTo(from);
+                XYZ moving = movingA ? a : b, fixedEnd = movingA ? b : a;
+
+                if (moving.DistanceTo(to) > CornerBoundFt) return false;       // never drag far
+                double oldLen = a.DistanceTo(b), newLen = fixedEnd.DistanceTo(to);
+                if (newLen < 0.05 || newLen < 0.3 * oldLen || newLen > 3.0 * oldLen) return false;
+                // no flip: the pipe must still point the same general way
+                if ((to - fixedEnd).Normalize().DotProduct((moving - fixedEnd).Normalize()) < 0.5) return false;
+
                 XYZ na = movingA ? to : a, nb = movingA ? b : to;
-                if (na.DistanceTo(nb) < 0.05) return false;
                 lc.Curve = Line.CreateBound(na, nb);
                 return true;
             }
@@ -600,7 +646,7 @@ namespace SgRevitAddin.Commands.PipeRouting
         private class Report
         {
             public int Considered, Placed, Skipped, Fail, SizeRefused;
-            public int Elbows, PlainJoins, JoinFail, JoinSkipped;
+            public int Elbows, LeftInline, LeftMultiway, CornerSkipped;
             public double LengthFt, FitMil;
             public string TableName;
             public readonly Dictionary<string, int> Sizes = new Dictionary<string, int>();
@@ -629,13 +675,18 @@ namespace SgRevitAddin.Commands.PipeRouting
                                       "the pipe type's size list does not carry that size.");
                 }
 
-                if (Elbows + PlainJoins + JoinFail + JoinSkipped > 0)
+                if (Elbows + LeftInline + LeftMultiway + CornerSkipped > 0)
                 {
                     sb.AppendLine();
-                    sb.AppendLine($"Ends joined: {Elbows} with a fitting" +
-                                  (PlainJoins > 0 ? $", {PlainJoins} connected without one" : ""));
-                    if (JoinSkipped > 0) sb.AppendLine($"   {JoinSkipped} skipped (ends parallel or never meeting)");
-                    if (JoinFail > 0) sb.AppendLine($"   {JoinFail} could not be joined");
+                    sb.AppendLine($"Elbows inserted at angled corners: {Elbows}");
+                    if (LeftInline > 0)
+                        sb.AppendLine($"Inline joins (reducers / straight runs) left as-is: {LeftInline} " +
+                                      "— these need a reducer, not an elbow, so the pipe is left untouched.");
+                    if (LeftMultiway > 0)
+                        sb.AppendLine($"Tees / crosses left as-is: {LeftMultiway} — a branch fitting isn't fabricated.");
+                    if (CornerSkipped > 0)
+                        sb.AppendLine($"Corners skipped (crossing not local enough to trust): {CornerSkipped}");
+                    sb.AppendLine("Nothing but the angled elbows was moved — every other run is exactly where it was placed.");
                 }
                 else
                 {
