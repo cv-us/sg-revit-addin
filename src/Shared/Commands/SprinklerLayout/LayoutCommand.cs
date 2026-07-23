@@ -404,11 +404,13 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             var branchM = mOffsets.Select(o => mMin + o).ToList();
 
             double branchSlope = Math.Abs(dlg.SlopeFtPerFt);        // magnitude; both sides fall to the main
-            // A SIDE-OUTLET branch ties straight into the main's side at the main's elevation,
-            // so it runs FLAT — no drainage V, no crossing flat-zone kink. That lets the outlet
-            // fitting form on collinear branch runs with no leftover branch stub at the main.
-            // Only the riser-nipple styles keep the sloped V (the nipple needs the drop).
-            double branchSlopeEff = ctx.SideOutlet ? 0.0 : branchSlope;
+            // NOTE: v0.4.4 tried building side-outlet branches FLAT so the outlet would form on
+            // collinear runs — but the crossing flat-zone segment is what the cross/tee outlet
+            // fitting actually grabs onto, and removing it made the GOL stop forming (left two
+            // loose stubs). That short piece is load-bearing, so side-outlet branches keep the
+            // sloped V and its flat-zone crossing (the outlet forms; the extra piece can be
+            // deleted by hand). branchSlopeEff stays == branchSlope.
+            double branchSlopeEff = branchSlope;
             double branchLowZ = ctx.Level.Elevation + dlg.StartElevFt;   // the ENTERED branch low elevation
 
             // Head stations: the sequence tiled ONCE across the whole line (same rhythm on both

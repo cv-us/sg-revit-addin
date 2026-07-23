@@ -79,18 +79,18 @@ Both main modes offer a **Branch tie-in** style (default *riser nipple above the
   the branch low at the main's **HIGH end**; each branch pitches down from there with
   the main (so the nipple is the same length at every crossing).
 - **Side outlet at main elevation** — the branch sits **at the main's centerline
-  elevation** and ties straight into the side of the main, with no nipple. A
-  side-outlet branch runs **flat** at the main's elevation (no drainage V), so it stays
-  **collinear** straight through the tap — that lets the outlet fitting form on both
-  branch halves with **no leftover branch stub** at the main. Where a branch crosses an
-  interior main on both sides it becomes a **4-way outlet** (main both ways + branch both
-  ways); at a main **end**, or a **two-mains** tap where the branch is on one side, it's
-  a **tee**. The **Branch outlet on main** family is used for both. If that family (or the
-  pipe type's routing preferences) has no cross for the interior 4-way case, the junction
-  is connected without a fitting and the count is reported — pick a cross-capable outlet
-  family, or add a cross to the pipe type's routing preferences, if you need the fitting
-  itself. (Because the branch follows the main's elevation, its **Start elev** is grayed
-  out — the note reads *follows the main*.)
+  elevation** and ties straight into the side of the main, with no nipple. Where a
+  branch crosses an interior main on both sides it becomes a **4-way outlet** (main both
+  ways + branch both ways); at a main **end**, or a **two-mains** tap where the branch is
+  on one side, it's a **tee**. The **Branch outlet on main** family is used for both. The
+  outlet fitting forms on the short flat run at the crossing, which usually leaves a small
+  **extra piece of pipe** in the same spot as the outlet — delete it and reconnect the
+  branch to the outlet by hand (a cleaner tap that avoids the extra piece is on the
+  roadmap). If the outlet family (or the pipe type's routing preferences) has no cross for
+  the interior 4-way case, the junction is connected without a fitting and the count is
+  reported — pick a cross-capable outlet family, or add a cross to the pipe type's routing
+  preferences. (Because the branch follows the main's elevation, its **Start elev** is
+  grayed out — the note reads *follows the main*.)
 
 ## Workflow
 
