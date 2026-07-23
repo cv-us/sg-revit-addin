@@ -193,7 +193,8 @@ namespace SgRevitAddin.Commands.SprinklerLayout
         private class Report
         {
             public int Lines, Segs, Heads, Sprigs, Nipples, Tees, Elbows, Caps,
-                       HeadConn, PlainConn, Outlet, ShortNipple, Fail, ChosenFit, DefaultFit, Joints;
+                       HeadConn, PlainConn, Outlet, ShortNipple, Fail, ChosenFit, DefaultFit, Joints,
+                       HalfOutlet;   // side-outlet crossings teed on one half, other half left open
             public double MainShiftFt;      // how far the main had to slide off a head
             public double ClearFloored;     // effective head clearance when it had to exceed the dialog's
             public bool ClearFlooredSlope;  // ...because of the sloped crossing's flat run (vs the min pipe piece)
@@ -213,6 +214,10 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                     r += $"Junction fittings: {ChosenFit} chosen (GOL / Firelock)" +
                          (DefaultFit > 0 ? $", {DefaultFit} fell back to the routing-preference default" : "") + "\n";
                 if (Joints > 0) r += $"Slope-transition couplings: {Joints}\n";
+                if (HalfOutlet > 0)
+                    r += $"Side-outlet crossings fitted with ONE outlet tee (the outlet family can't be a 4-way " +
+                         $"cross): {HalfOutlet} — the opposite branch half is left open at the main; add its second " +
+                         "outlet by hand or pick a cross-capable outlet family.\n";
                 if (MainShiftFt > 0.005)
                     r += $"Main shifted {MainShiftFt * 12.0:0.#}\" off the picked point to clear the nearest " +
                          "head (head spacing kept).\n";
@@ -1017,22 +1022,33 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             bool mainBoth = mainA != null && mainB != null;
             bool runBoth = runA != null && runB != null;
 
-            // interior crossing: main both ways + branch both ways -> 4-way cross
+            // Interior crossing: main both ways + branch both ways. A true 4-way cross is
+            // preferred, but the typical GOL is a 3-connector TEE-type family — NewCrossFitting
+            // refuses it, and if the pipe type has no cross in its routing preferences either,
+            // the old code fell all the way to a bare connect and NO outlet appeared at all.
+            // So after the cross attempts fail, place the chosen outlet as a TEE on the main
+            // taking ONE branch half — the exact call that works in nipple mode — then try to
+            // hook the other half to a spare open connector on the placed outlet (families with
+            // an optional second/rear outlet); if there is none, that half is left open at the
+            // main for a hand-placed second outlet, and the report counts it.
             if (mainBoth && runBoth)
             {
-                try
+                if (chosen != null)
                 {
-                    if (chosen != null)
+                    try
+                    {
                         WithForcedJunctionFitting(forceType, chosen.Id, () => doc.Create.NewCrossFitting(mainA, mainB, runA, runB));
-                    else doc.Create.NewCrossFitting(mainA, mainB, runA, runB);
-                    rpt.Tees++; if (chosen != null) rpt.ChosenFit++; else rpt.DefaultFit++;
-                    return;
+                        rpt.Tees++; rpt.ChosenFit++; return;
+                    }
+                    catch { }
+                    if (TeeOneHalf(ctx, chosen, forceType, mainA, mainB, runA, runB, rpt)) return;
                 }
-                catch
-                {
-                    try { doc.Create.NewCrossFitting(mainA, mainB, runA, runB); rpt.Tees++; rpt.DefaultFit++; return; }
-                    catch { try { mainA.ConnectTo(mainB); runA.ConnectTo(runB); runA.ConnectTo(mainA); rpt.PlainConn++; return; } catch { rpt.Fail++; return; } }
-                }
+                try { doc.Create.NewCrossFitting(mainA, mainB, runA, runB); rpt.Tees++; rpt.DefaultFit++; return; }
+                catch { }
+                if (chosen == null && TeeOneHalf(ctx, null, forceType, mainA, mainB, runA, runB, rpt)) return;
+                try { mainA.ConnectTo(mainB); runA.ConnectTo(runB); runA.ConnectTo(mainA); rpt.PlainConn++; }
+                catch { rpt.Fail++; }
+                return;
             }
 
             // main both ways + one branch side (two-mains tap, or a tailback-off branch) -> tee on the main
@@ -1066,6 +1082,53 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 try { doc.Create.NewElbowFitting(mm, rr); rpt.Elbows++; }
                 catch { try { mm.ConnectTo(rr); rpt.PlainConn++; } catch { rpt.Fail++; } }
             }
+        }
+
+        /// <summary>Interior side-outlet fallback for tee-type outlet families (a GOL can't
+        /// be a 4-way cross): force the outlet as a TEE on the main taking one branch half —
+        /// the same placement the riser-nipple mode uses, so it forms reliably. If the placed
+        /// outlet exposes a spare open connector at the junction (an optional second / rear
+        /// outlet in the family), the other branch half is connected to it; otherwise that
+        /// half is left open at the main to get its own hand-placed outlet (reported).
+        /// Tries the halves in both orders. Returns false if no tee could be placed.</summary>
+        private bool TeeOneHalf(Ctx ctx, FamilySymbol chosen, PipeType forceType,
+                                Connector mainA, Connector mainB, Connector runA, Connector runB, Report rpt)
+        {
+            Document doc = ctx.Doc;
+            for (int attempt = 0; attempt < 2; attempt++)
+            {
+                Connector first = attempt == 0 ? runA : runB;
+                Connector other = attempt == 0 ? runB : runA;
+                FamilyInstance fit = null;
+                try
+                {
+                    if (chosen != null)
+                        WithForcedJunctionFitting(forceType, chosen.Id, () => fit = doc.Create.NewTeeFitting(mainA, mainB, first));
+                    else
+                        fit = doc.Create.NewTeeFitting(mainA, mainB, first);
+                }
+                catch { continue; }
+                if (fit == null) continue;
+                rpt.Tees++; if (chosen != null) rpt.ChosenFit++; else rpt.DefaultFit++;
+
+                // Optional second outlet: a still-open connector on the fitting at the
+                // junction (within 9") — hook the other branch half straight to it.
+                bool hooked = false;
+                try
+                {
+                    doc.Regenerate();
+                    foreach (Connector c in fit.MEPModel.ConnectorManager.Connectors)
+                    {
+                        if (c.ConnectorType != ConnectorType.End || c.IsConnected) continue;
+                        if (c.Origin.DistanceTo(other.Origin) > 0.75) continue;
+                        try { c.ConnectTo(other); hooked = true; break; } catch { }
+                    }
+                }
+                catch { }
+                if (!hooked) rpt.HalfOutlet++;
+                return true;
+            }
+            return false;
         }
 
         /// <summary>Tee the branch's two through halves + the nipple top at the crossing

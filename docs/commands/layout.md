@@ -80,17 +80,17 @@ Both main modes offer a **Branch tie-in** style (default *riser nipple above the
   the main (so the nipple is the same length at every crossing).
 - **Side outlet at main elevation** — the branch sits **at the main's centerline
   elevation** and ties straight into the side of the main, with no nipple. Where a
-  branch crosses an interior main on both sides it becomes a **4-way outlet** (main both
-  ways + branch both ways); at a main **end**, or a **two-mains** tap where the branch is
-  on one side, it's a **tee**. The **Branch outlet on main** family is used for both. The
-  outlet fitting forms on the short flat run at the crossing, which usually leaves a small
-  **extra piece of pipe** in the same spot as the outlet — delete it and reconnect the
-  branch to the outlet by hand (a cleaner tap that avoids the extra piece is on the
-  roadmap). If the outlet family (or the pipe type's routing preferences) has no cross for
-  the interior 4-way case, the junction is connected without a fitting and the count is
-  reported — pick a cross-capable outlet family, or add a cross to the pipe type's routing
-  preferences. (Because the branch follows the main's elevation, its **Start elev** is
-  grayed out — the note reads *follows the main*.)
+  branch crosses an interior main on both sides, the command first tries a true
+  **4-way cross** with the chosen outlet family; since the typical GOL is a
+  3-connector **tee**-type family that can't be a cross, it then places the outlet
+  as a **tee on the main taking one branch half** (the same placement the nipple
+  styles use, so it forms reliably). If the placed outlet has a spare open connector
+  at the junction — a family with an optional **second / rear outlet** — the other
+  branch half is hooked straight to it; otherwise that half is **left open at the
+  main** to get its own hand-placed outlet, and the summary counts those crossings.
+  At a main **end**, or a **two-mains** tap where the branch is on one side, it's a
+  plain **tee** with the outlet family. (Because the branch follows the main's
+  elevation, its **Start elev** is grayed out — the note reads *follows the main*.)
 
 ## Workflow
 
