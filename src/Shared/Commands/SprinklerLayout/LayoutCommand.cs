@@ -141,7 +141,8 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 ExtendToCapFt = dlg.ExtendToCapFt,
                 HeadClearFt = dlg.MainHeadClearFt,
                 Tailback = dlg.Tailback,
-                SideOutlet = dlg.SideOutlet
+                SideOutlet = dlg.SideOutlet,
+                ParallelMain = dlg.ParallelMain
             };
 
             double[] lineGaps = dlg.LineSequence.Select(c => dlg.LineSlotFt[c - '1']).ToArray();
@@ -180,6 +181,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             public double HeadClearFt;   // min centerline gap main -> nearest head (the main shifts, heads never move)
             public bool Tailback;   // two-mains: tee + stub (vs elbow) at each main tie-in
             public bool SideOutlet; // branch at the main's elevation, tapping its side (vs a riser nipple above)
+            public bool ParallelMain; // nipple mode: branch parallels the sloped main (constant nipple) vs flat
 
             /// <summary>Map (along-u, along-m, z) into world XY per the branch direction.</summary>
             public XYZ Pt(double u, double m, double z)
@@ -395,7 +397,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             var branchM = mOffsets.Select(o => mMin + o).ToList();
 
             double branchSlope = Math.Abs(dlg.SlopeFtPerFt);        // magnitude; both sides fall to the main
-            double branchLowZ = ctx.Level.Elevation + dlg.StartElevFt;
+            double branchLowZ = ctx.Level.Elevation + dlg.StartElevFt;   // the ENTERED branch low elevation
 
             // Heads tile ONCE across the whole line (same rhythm on both sides of the main),
             // then the main slides off any head it lands on. Every line shares these
@@ -435,6 +437,17 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 return mainElev - mainSlope * distFromHigh;
             };
 
+            // The branch LOW elevation at crossing m, per the tie-in style:
+            //  • side outlet  → at the main (the branch follows the slope; Start elev ignored)
+            //  • parallel     → a CONSTANT height above the main (constant nipple), so the branch
+            //                   parallels the sloped main; the entered elevation is the branch low
+            //                   at the HIGH end, and it pitches down from there with the main
+            //  • flat (default) → the entered elevation everywhere; nipples lengthen to the sloped main
+            Func<double, double> branchLowAt = m =>
+                ctx.SideOutlet ? mainZ(m)
+                : ctx.ParallelMain ? mainZ(m) + (branchLowZ - mainElev)
+                : branchLowZ;
+
             if (!Confirmed(mOffsets.Count, headGaps.Length == 0 ? 0 : (int)((uMax - uMin) / Math.Max(0.5, headGaps.Min())))) return Result.Cancelled;
 
             using (var tx = new Transaction(doc, "Layout"))
@@ -449,8 +462,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 var branches = new List<LineWork>();
                 foreach (double m in branchM)
                 {
-                    double blz = ctx.SideOutlet ? mainZ(m) : branchLowZ;
-                    var work = BuildBranchV(ctx, headU, uMain, m, blz, branchSlope, rpt);
+                    var work = BuildBranchV(ctx, headU, uMain, m, branchLowAt(m), branchSlope, rpt);
                     branches.Add(work);
                     rpt.Lines++;
                 }
@@ -517,10 +529,13 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                         continue;
                     }
 
-                    // Riser nipple down to the main + tee on the main.
-                    if (cross != null && branchLowZ - mZ > SprigMinFt)
+                    // Riser nipple down to the main + tee on the main. The branch top is at its
+                    // own low elevation (flat, or parallel-to-main), so the nipple length is the
+                    // gap to the main there — constant in parallel mode, varying in flat mode.
+                    double bTopZ = branchLowAt(branchM[i]);
+                    if (cross != null && bTopZ - mZ > SprigMinFt)
                     {
-                        XYZ topPt = ctx.Pt(uMain, branchM[i], branchLowZ);
+                        XYZ topPt = ctx.Pt(uMain, branchM[i], bTopZ);
                         XYZ botPt = ctx.Pt(uMain, branchM[i], mZ);
                         Pipe nipple = CreatePipe(ctx, topPt, botPt, ctx.RiserSizeFt, ctx.MainPipeTypeId, rpt);
                         if (nipple != null)

@@ -69,7 +69,7 @@ junction falls back to the routing-preference default and the count is reported.
 ### Branch tie-in — riser nipple vs side outlet
 Both main modes offer a **Branch tie-in** style (default *riser nipple above the main*):
 
-- **Riser nipple above the main** — the branch runs above the main; a vertical riser
+- **Riser nipple — branches flat** — the branch runs above the main; a vertical riser
   nipple drops from the branch to the main, tapped with the **Branch outlet on main**
   fitting, and the branch halves meet at the **Riser tee** on top of the nipple. This
   is the drain-to-main dry / pre-action arrangement.

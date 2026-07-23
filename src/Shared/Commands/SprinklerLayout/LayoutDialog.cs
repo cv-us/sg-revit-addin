@@ -97,6 +97,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
         public bool MainSlopeReversed { get; private set; }
         public bool Tailback { get; private set; } = true;      // two-mains: tee + stub (vs elbow) at each main
         public bool SideOutlet { get; private set; }            // branch at main elevation, side tap (vs riser nipple)
+        public bool ParallelMain { get; private set; }          // nipple mode: branch parallels the sloped main
         public int OutletFittingId { get; private set; } = -1;  // -1 = routing-preference default
         public int RiserTeeFittingId { get; private set; } = -1;
 
@@ -173,11 +174,14 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             grpPipe.Controls.Add(_lblStartElevRef);
             var setip = new ToolTip();
             setip.SetToolTip(_txtElevFt,
-                "Where this elevation is measured on the branch line:\n" +
-                " • Area + central main: the branch's LOW point, at the main — it slopes UP from here to both ends.\n" +
-                " • Fill area: the near (first-picked-corner) end — it slopes toward the far end.\n" +
-                " • Two mains: the branch is flat at this elevation.\n" +
-                "The Z on the branch image marks this point.");
+                "Where this elevation is measured (the green Z on the branch image marks it):\n" +
+                " • Central main, riser nipple flat: the branch LOW point — every branch at this one\n" +
+                "   elevation; nipples lengthen down the sloped main.\n" +
+                " • Central main, parallel the main: the branch low at the HIGH end; the branch then\n" +
+                "   pitches down parallel to the main (constant nipple length).\n" +
+                " • Central main, side outlet: driven by the main — this field is disabled.\n" +
+                " • Fill area: the near (first-corner) end; slopes to the far end.\n" +
+                " • Two mains: flat at this elevation.");
             gy += 27;
             grpPipe.Controls.Add(new Label { Text = "Slope:", Location = new Point(10, gy + 3), AutoSize = true });
             _txtSlope = new TextBox { Location = new Point(80, gy), Size = new Size(48, 22), Text = DialogMemory.Get(MemKey, "BrSlope", "0.5") };
@@ -251,15 +255,19 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             // (dry / pre-action, branches drain to the main), OR the branch sits at the
             // main's elevation and ties straight into its side with the outlet fitting.
             _grpMain.Controls.Add(new Label { Text = "Branch tie-in:", Location = new Point(10, gy + 3), AutoSize = true });
-            _cmbTieIn = AddCombo(_grpMain, new Point(90, gy), 248,
-                new[] { "Riser nipple above the main", "Side outlet at main elevation" },
-                DialogMemory.GetInt(MemKey, "TieIn", 0) == 1 ? "Side outlet at main elevation" : "Riser nipple above the main");
+            var tieItems = new[] { "Riser nipple — branches flat", "Riser nipple — parallel the main", "Side outlet at main elevation" };
+            int tieIdx = Math.Max(0, Math.Min(2, DialogMemory.GetInt(MemKey, "TieIn", 0)));
+            _cmbTieIn = AddCombo(_grpMain, new Point(90, gy), 248, tieItems, tieItems[tieIdx]);
             var titip = new ToolTip();
             titip.SetToolTip(_cmbTieIn,
-                "Riser nipple: the branch runs above the main and a vertical nipple drops to it.\n" +
-                "Side outlet: the branch sits at the main's elevation and ties into its side —\n" +
-                "no nipple. Interior crossings become a 4-way outlet; ends and two-mains taps a tee.");
+                "How the branch lines tie into the main:\n" +
+                " • Riser nipple — branches flat: branches all at one Start elev; nipples lengthen down the sloped main.\n" +
+                " • Riser nipple — parallel the main: branches follow the main's slope at a constant nipple length\n" +
+                "   (Start elev = the branch low at the HIGH end, pitching down from there).\n" +
+                " • Side outlet: branch sits at the main's elevation, no nipple — Start elev is driven by the main.\n" +
+                "   Interior crossings become a 4-way outlet; ends and two-mains taps a tee.");
             _grpMain.Controls.Add(_cmbTieIn);
+            _cmbTieIn.SelectedIndexChanged += (s, e) => UpdateElevRefs();
             gy += 30;
 
             // Clickable main image: shows the main ⊥ to the branches. In 3-pt mode it
@@ -467,16 +475,29 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             g.FillPolygon(b, pts);
         }
 
-        /// <summary>Refresh the "where is this elevation measured" notes for the current mode.</summary>
+        /// <summary>Refresh the "where is this elevation measured" notes for the current mode and
+        /// tie-in, and gray the Start elev field when the main drives it (side-outlet).</summary>
         private void UpdateElevRefs()
         {
             int mode = _cmbPickMode != null ? _cmbPickMode.SelectedIndex : 0;
+            int tie = _cmbTieIn != null ? _cmbTieIn.SelectedIndex : 0;
+            bool mainMode = mode == (int)PickModeKind.AreaMain;
+            bool twoMains = mode == (int)PickModeKind.TwoMains;
+            bool sideOutlet = (mainMode || twoMains) && tie == 2;
+
+            // Side outlet: the branch follows the main, so Start elev does nothing — gray it.
+            bool startUsed = !sideOutlet;
+            if (_txtElevFt != null) _txtElevFt.Enabled = startUsed;
+            if (_txtElevIn != null) _txtElevIn.Enabled = startUsed;
+
             if (_lblStartElevRef != null)
-                _lblStartElevRef.Text = mode == (int)PickModeKind.AreaMain ? "at main · low (Z)"
-                                      : mode == (int)PickModeKind.TwoMains ? "flat"
+                _lblStartElevRef.Text = sideOutlet ? "follows the main"
+                                      : mainMode && tie == 1 ? "high-end low (Z)"
+                                      : mainMode ? "at main · low (Z)"
+                                      : twoMains ? "flat"
                                       : "at start end (Z)";
             if (_lblMainElevRef != null)
-                _lblMainElevRef.Text = mode == (int)PickModeKind.TwoMains ? "flat" : "HIGH end (Z)";
+                _lblMainElevRef.Text = twoMains ? "flat" : "HIGH end (Z)";
         }
 
         /// <summary>A bold green "Z" over a short datum tick — marks where the entered
@@ -719,7 +740,8 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             MainHeadClearFt = Math.Max(0.0, ParseNum(_txtHeadClear) / 12.0);
             MainSlopeReversed = _mainReversed;
             Tailback = _chkTailback.Checked;
-            SideOutlet = _cmbTieIn.SelectedIndex == 1;
+            SideOutlet = _cmbTieIn.SelectedIndex == 2;
+            ParallelMain = _cmbTieIn.SelectedIndex == 1;
             OutletFittingId = FittingIdAt(_cmbOutlet);
             RiserTeeFittingId = FittingIdAt(_cmbRiserTee);
 
@@ -766,7 +788,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             DialogMemory.Set(MemKey, "HeadClear", _txtHeadClear.Text);
             DialogMemory.SetBool(MemKey, "MainReverse", MainSlopeReversed);
             DialogMemory.SetBool(MemKey, "Tailback", Tailback);
-            DialogMemory.SetInt(MemKey, "TieIn", SideOutlet ? 1 : 0);
+            DialogMemory.SetInt(MemKey, "TieIn", _cmbTieIn.SelectedIndex);
             DialogMemory.Set(MemKey, "Outlet", (string)_cmbOutlet.SelectedItem ?? DefaultLabel);
             DialogMemory.Set(MemKey, "RiserTee", (string)_cmbRiserTee.SelectedItem ?? DefaultLabel);
             DialogMemory.Flush();
