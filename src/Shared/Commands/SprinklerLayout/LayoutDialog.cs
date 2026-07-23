@@ -46,6 +46,8 @@ namespace SgRevitAddin.Commands.SprinklerLayout
         private bool _mainReversed;
         private CheckBox _chkTailback;
         private ComboBox _cmbTieIn;         // riser nipple above main vs side outlet at main elevation
+        private Label _lblStartElevRef;     // dynamic note: where the branch Start elev is measured
+        private Label _lblMainElevRef;      // dynamic note: where the Main elev is measured
         private Label _lblGuidance;
         private Button _btnPlace;
         private RadioButton _rbOutlets, _rbSprigs, _rbTermElev, _rbSprigLen;
@@ -167,7 +169,15 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             gy += 27;
             grpPipe.Controls.Add(new Label { Text = "Start elev:", Location = new Point(10, gy + 3), AutoSize = true });
             AddFtIn(grpPipe, 80, gy, "ElevFt", "ElevIn", "10", "0", out _txtElevFt, out _txtElevIn);
-            grpPipe.Controls.Add(new Label { Text = "above level", Location = new Point(210, gy + 3), AutoSize = true });
+            _lblStartElevRef = new Label { Text = "above level", Location = new Point(210, gy + 3), Size = new Size(132, 16), AutoEllipsis = true, ForeColor = SystemColors.GrayText };
+            grpPipe.Controls.Add(_lblStartElevRef);
+            var setip = new ToolTip();
+            setip.SetToolTip(_txtElevFt,
+                "Where this elevation is measured on the branch line:\n" +
+                " • Area + central main: the branch's LOW point, at the main — it slopes UP from here to both ends.\n" +
+                " • Fill area: the near (first-picked-corner) end — it slopes toward the far end.\n" +
+                " • Two mains: the branch is flat at this elevation.\n" +
+                "The Z on the branch image marks this point.");
             gy += 27;
             grpPipe.Controls.Add(new Label { Text = "Slope:", Location = new Point(10, gy + 3), AutoSize = true });
             _txtSlope = new TextBox { Location = new Point(80, gy), Size = new Size(48, 22), Text = DialogMemory.Get(MemKey, "BrSlope", "0.5") };
@@ -199,7 +209,14 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             gy += 27;
             _grpMain.Controls.Add(new Label { Text = "Main elev:", Location = new Point(10, gy + 3), AutoSize = true });
             AddFtIn(_grpMain, 80, gy, "MainElevFt", "MainElevIn", "9", "0", out _txtMainElevFt, out _txtMainElevIn);
-            _grpMain.Controls.Add(new Label { Text = "above level", Location = new Point(210, gy + 3), AutoSize = true });
+            _lblMainElevRef = new Label { Text = "above level", Location = new Point(210, gy + 3), Size = new Size(132, 16), AutoEllipsis = true, ForeColor = SystemColors.GrayText };
+            _grpMain.Controls.Add(_lblMainElevRef);
+            var metip = new ToolTip();
+            metip.SetToolTip(_txtMainElevFt,
+                "Where this elevation is measured on the main:\n" +
+                " • Area + central main: the HIGH end — the main slopes DOWN from here to the riser (low) end.\n" +
+                " • Two mains: the mains are flat at this elevation.\n" +
+                "The Z on the main image marks the HIGH end. Click the image to flip which physical end is high.");
             gy += 27;
             _lblMainSlope = new Label { Text = "Main slope:", Location = new Point(10, gy + 3), AutoSize = true };
             _grpMain.Controls.Add(_lblMainSlope);
@@ -354,6 +371,8 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 _lblMainSlope.Enabled = _txtMainSlope.Enabled = main;   // slope is 3-pt only; two-mains is flat
                 _chkTailback.Enabled = two;
                 _mainToggle.Invalidate();
+                _dirToggle?.Invalidate();   // the branch "Z" anchor depends on the mode
+                UpdateElevRefs();
             };
             _cmbPickMode.SelectedIndexChanged += modeChanged;
             modeChanged(null, EventArgs.Empty);
@@ -423,6 +442,20 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             }
             TextRenderer.DrawText(g, _linesAlongX ? "X" : "Y", Font,
                 new Point(rc.Width / 2 - 6, rc.Height / 2 - 20), Color.Gray);
+
+            // "Z" marks where the branch Start elev is measured:
+            //  • central-main mode: the low point where the branch crosses the main (centre)
+            //  • fill mode: the near (first-corner) end
+            //  • two-mains: flat, no anchor to mark
+            int mode = _cmbPickMode != null ? _cmbPickMode.SelectedIndex : 0;
+            var zcol = Color.FromArgb(20, 130, 60);
+            if (mode == (int)PickModeKind.AreaMain)
+                DrawZ(g, zcol, new Point(rc.Width / 2 + 4, rc.Height / 2 - 2));
+            else if (mode == (int)PickModeKind.FillArea)
+            {
+                if (_linesAlongX) DrawZ(g, zcol, new Point(6, rc.Height / 2 - 2));
+                else DrawZ(g, zcol, new Point(rc.Width / 2 + 4, 2));
+            }
         }
 
         private static void FillArrowHead(Graphics g, Brush b, Point tip, bool horizontal, int dir)
@@ -432,6 +465,30 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 ? new[] { tip, new Point(tip.X - dir * s, tip.Y - s), new Point(tip.X - dir * s, tip.Y + s) }
                 : new[] { tip, new Point(tip.X - s, tip.Y - dir * s), new Point(tip.X + s, tip.Y - dir * s) };
             g.FillPolygon(b, pts);
+        }
+
+        /// <summary>Refresh the "where is this elevation measured" notes for the current mode.</summary>
+        private void UpdateElevRefs()
+        {
+            int mode = _cmbPickMode != null ? _cmbPickMode.SelectedIndex : 0;
+            if (_lblStartElevRef != null)
+                _lblStartElevRef.Text = mode == (int)PickModeKind.AreaMain ? "at main · low (Z)"
+                                      : mode == (int)PickModeKind.TwoMains ? "flat"
+                                      : "at start end (Z)";
+            if (_lblMainElevRef != null)
+                _lblMainElevRef.Text = mode == (int)PickModeKind.TwoMains ? "flat" : "HIGH end (Z)";
+        }
+
+        /// <summary>A bold green "Z" over a short datum tick — marks where the entered
+        /// elevation is measured on a pipe image.</summary>
+        private void DrawZ(Graphics g, Color col, Point at)
+        {
+            using (var f = new Font(Font.FontFamily, 9f, FontStyle.Bold))
+            using (var pen = new Pen(col, 1.5f))
+            {
+                TextRenderer.DrawText(g, "Z", f, at, col);
+                g.DrawLine(pen, at.X, at.Y + 15, at.X + 14, at.Y + 15);
+            }
         }
 
         /// <summary>Paint the main image: the main runs perpendicular to the branch lines.
@@ -468,7 +525,9 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                     return;
                 }
 
-                // single sloped main with HIGH / LOW ends (3-pt mode)
+                // single sloped main with HIGH / LOW ends (3-pt mode). The "Z" marks the HIGH
+                // end — that is where the Main elev is measured; the main slopes down to LOW.
+                var zcol = Color.FromArgb(20, 130, 60);
                 if (mainAlongY)
                 {
                     int x = cx, y0 = 14, y1 = rc.Height - 14;
@@ -478,6 +537,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                     FillArrowHead(g, brush, lo, false, lo.Y > hi.Y ? +1 : -1);
                     TextRenderer.DrawText(g, "HIGH", Font, new Point(x + 6, hi.Y - 7), col);
                     TextRenderer.DrawText(g, "LOW", Font, new Point(x + 6, lo.Y - 7), col);
+                    DrawZ(g, zcol, new Point(x - 20, hi.Y - 7));
                 }
                 else
                 {
@@ -488,6 +548,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                     FillArrowHead(g, brush, lo, true, lo.X > hi.X ? +1 : -1);
                     TextRenderer.DrawText(g, "HIGH", Font, new Point(hi.X - (hi.X > cx ? 34 : 2), y - 20), col);
                     TextRenderer.DrawText(g, "LOW", Font, new Point(lo.X - (lo.X > cx ? 30 : 0), y + 5), col);
+                    DrawZ(g, zcol, new Point(hi.X - (hi.X > cx ? 12 : 0), y + 6));
                 }
             }
         }
