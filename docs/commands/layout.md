@@ -60,11 +60,28 @@ the far main, that main slides **outward** to make room (the head stays put). Th
 mains break at every crossing (GOL) and are left **open** at their ends (6″ stubs)
 to tie in. Unsloped.
 
-The **Main outlet** and **Riser tee** fittings are selectable (defaulting to a
-GOL and a Firelock tee found by name). They're forced by temporarily injecting a
+The **Branch outlet on main** and **Riser tee** fittings are selectable (defaulting
+to a GOL and a Firelock tee found by name). They're forced by temporarily injecting a
 top-priority routing-preference rule for the one placement, then removing it, so
 the pipe type is left untouched; if a chosen family can't be placed, that
 junction falls back to the routing-preference default and the count is reported.
+
+### Branch tie-in — riser nipple vs side outlet
+Both main modes offer a **Branch tie-in** style (default *riser nipple above the main*):
+
+- **Riser nipple above the main** — the branch runs above the main; a vertical riser
+  nipple drops from the branch to the main, tapped with the **Branch outlet on main**
+  fitting, and the branch halves meet at the **Riser tee** on top of the nipple. This
+  is the drain-to-main dry / pre-action arrangement.
+- **Side outlet at main elevation** — the branch sits **at the main's centerline
+  elevation** and ties straight into the side of the main, with no nipple. Where a
+  branch crosses an interior main on both sides it becomes a **4-way outlet** (main
+  both ways + branch both ways); at a main **end**, or a **two-mains** tap where the
+  branch is on one side, it's a **tee**. The **Branch outlet on main** family is used
+  for both. If that family (or the pipe type's routing preferences) has no cross for
+  the interior 4-way case, the junction is connected without a fitting and the count
+  is reported — pick a cross-capable outlet family, or add a cross to the pipe type's
+  routing preferences, if you need the fitting itself.
 
 ## Workflow
 

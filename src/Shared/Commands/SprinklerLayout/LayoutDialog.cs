@@ -45,6 +45,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
         private Panel _mainToggle;          // clickable main image: orientation + HIGH/LOW slope
         private bool _mainReversed;
         private CheckBox _chkTailback;
+        private ComboBox _cmbTieIn;         // riser nipple above main vs side outlet at main elevation
         private Label _lblGuidance;
         private Button _btnPlace;
         private RadioButton _rbOutlets, _rbSprigs, _rbTermElev, _rbSprigLen;
@@ -93,6 +94,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
         public double MainHeadClearFt { get; private set; }     // min centerline gap main -> nearest head; the main shifts over
         public bool MainSlopeReversed { get; private set; }
         public bool Tailback { get; private set; } = true;      // two-mains: tee + stub (vs elbow) at each main
+        public bool SideOutlet { get; private set; }            // branch at main elevation, side tap (vs riser nipple)
         public int OutletFittingId { get; private set; } = -1;  // -1 = routing-preference default
         public int RiserTeeFittingId { get; private set; } = -1;
 
@@ -182,7 +184,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             Controls.Add(grpPipe);
 
             // ── Main(s) — enabled in Area + central main (3-pt) and Two mains (4-pt) ──
-            _grpMain = new GroupBox { Text = "Cross-main(s)", Location = new Point(M + 360, y), Size = new Size(350, 299) };
+            _grpMain = new GroupBox { Text = "Cross-main(s)", Location = new Point(M + 360, y), Size = new Size(350, 326) };
             gy = 22;
             _grpMain.Controls.Add(new Label { Text = "Main type:", Location = new Point(10, gy + 3), AutoSize = true });
             _cmbMainType = AddCombo(_grpMain, new Point(80, gy), 258,
@@ -207,9 +209,12 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             gy += 27;
             var fitNames = new List<string> { DefaultLabel };
             fitNames.AddRange(_fittings.Select(f => f.name));
-            _grpMain.Controls.Add(new Label { Text = "Main outlet:", Location = new Point(10, gy + 3), AutoSize = true });
-            _cmbOutlet = AddCombo(_grpMain, new Point(80, gy), 258, fitNames,
+            _grpMain.Controls.Add(new Label { Text = "Branch outlet on main:", Location = new Point(10, gy + 3), AutoSize = true });
+            _cmbOutlet = AddCombo(_grpMain, new Point(130, gy), 208, fitNames,
                 DialogMemory.Get(MemKey, "Outlet", _defaultOutlet ?? DefaultLabel));
+            var otip = new ToolTip();
+            otip.SetToolTip(_cmbOutlet, "The fitting the branch lines tie into the main with " +
+                "(a GOL / grooved outlet by default). Used for both tie-in styles below.");
             gy += 27;
             _grpMain.Controls.Add(new Label { Text = "Riser tee:", Location = new Point(10, gy + 3), AutoSize = true });
             _cmbRiserTee = AddCombo(_grpMain, new Point(80, gy), 258, fitNames,
@@ -223,6 +228,21 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 "Head spacing never changes — the main shifts over to make room.");
             _grpMain.Controls.Add(_txtHeadClear);
             _grpMain.Controls.Add(new Label { Text = "in   min main → head (main shifts)", Location = new Point(134, gy + 3), AutoSize = true });
+            gy += 27;
+
+            // Branch tie-in style: a riser nipple up from the main to the branch above it
+            // (dry / pre-action, branches drain to the main), OR the branch sits at the
+            // main's elevation and ties straight into its side with the outlet fitting.
+            _grpMain.Controls.Add(new Label { Text = "Branch tie-in:", Location = new Point(10, gy + 3), AutoSize = true });
+            _cmbTieIn = AddCombo(_grpMain, new Point(90, gy), 248,
+                new[] { "Riser nipple above the main", "Side outlet at main elevation" },
+                DialogMemory.GetInt(MemKey, "TieIn", 0) == 1 ? "Side outlet at main elevation" : "Riser nipple above the main");
+            var titip = new ToolTip();
+            titip.SetToolTip(_cmbTieIn,
+                "Riser nipple: the branch runs above the main and a vertical nipple drops to it.\n" +
+                "Side outlet: the branch sits at the main's elevation and ties into its side —\n" +
+                "no nipple. Interior crossings become a 4-way outlet; ends and two-mains taps a tee.");
+            _grpMain.Controls.Add(_cmbTieIn);
             gy += 30;
 
             // Clickable main image: shows the main ⊥ to the branches. In 3-pt mode it
@@ -247,7 +267,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             _grpMain.Controls.Add(_chkTailback);
             Controls.Add(_grpMain);
 
-            y += 307;
+            y += 334;
 
             // ── Sprinklers (full width) ──
             var grpSprk = new GroupBox { Text = "Sprinklers", Location = new Point(M, y), Size = new Size(710, 150) };
@@ -638,6 +658,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             MainHeadClearFt = Math.Max(0.0, ParseNum(_txtHeadClear) / 12.0);
             MainSlopeReversed = _mainReversed;
             Tailback = _chkTailback.Checked;
+            SideOutlet = _cmbTieIn.SelectedIndex == 1;
             OutletFittingId = FittingIdAt(_cmbOutlet);
             RiserTeeFittingId = FittingIdAt(_cmbRiserTee);
 
@@ -684,6 +705,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             DialogMemory.Set(MemKey, "HeadClear", _txtHeadClear.Text);
             DialogMemory.SetBool(MemKey, "MainReverse", MainSlopeReversed);
             DialogMemory.SetBool(MemKey, "Tailback", Tailback);
+            DialogMemory.SetInt(MemKey, "TieIn", SideOutlet ? 1 : 0);
             DialogMemory.Set(MemKey, "Outlet", (string)_cmbOutlet.SelectedItem ?? DefaultLabel);
             DialogMemory.Set(MemKey, "RiserTee", (string)_cmbRiserTee.SelectedItem ?? DefaultLabel);
             DialogMemory.Flush();

@@ -140,7 +140,8 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 CapEnds = dlg.CapEnds,
                 ExtendToCapFt = dlg.ExtendToCapFt,
                 HeadClearFt = dlg.MainHeadClearFt,
-                Tailback = dlg.Tailback
+                Tailback = dlg.Tailback,
+                SideOutlet = dlg.SideOutlet
             };
 
             double[] lineGaps = dlg.LineSequence.Select(c => dlg.LineSlotFt[c - '1']).ToArray();
@@ -178,6 +179,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             public double ExtendToCapFt;
             public double HeadClearFt;   // min centerline gap main -> nearest head (the main shifts, heads never move)
             public bool Tailback;   // two-mains: tee + stub (vs elbow) at each main tie-in
+            public bool SideOutlet; // branch at the main's elevation, tapping its side (vs a riser nipple above)
 
             /// <summary>Map (along-u, along-m, z) into world XY per the branch direction.</summary>
             public XYZ Pt(double u, double m, double z)
@@ -441,11 +443,14 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 tx.Start();
                 Activate(ctx);
 
-                // Branch V nodes per line.
+                // Branch V nodes per line. With a side outlet the branch bottoms out AT the
+                // main (its own elevation at this crossing), so it ties straight into the side
+                // — no nipple; otherwise it bottoms at branchLowZ and a nipple drops to the main.
                 var branches = new List<LineWork>();
                 foreach (double m in branchM)
                 {
-                    var work = BuildBranchV(ctx, headU, uMain, m, branchLowZ, branchSlope, rpt);
+                    double blz = ctx.SideOutlet ? mainZ(m) : branchLowZ;
+                    var work = BuildBranchV(ctx, headU, uMain, m, blz, branchSlope, rpt);
                     branches.Add(work);
                     rpt.Lines++;
                 }
@@ -489,8 +494,30 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                     ConnectLine(ctx, work, rpt);
                     Station cross = work.Stations.FirstOrDefault(s => s.Kind == StationKind.Crossing);
 
-                    // Riser nipple down to the main + tee on the main.
                     double mZ = mainZ(branchM[i]);
+
+                    // Side outlet: branch is AT the main elevation — tie the two branch halves
+                    // straight into the main (4-way cross interior, tee at a main end). No nipple.
+                    if (ctx.SideOutlet && cross != null)
+                    {
+                        XYZ jp = ctx.Pt(uMain, branchM[i], mZ);
+                        Pipe mBefore0 = i - 1 >= 0 && i - 1 < mainSegs.Count ? mainSegs[i - 1] : null;
+                        Pipe mAfter0 = i < mainSegs.Count ? mainSegs[i] : null;
+                        if (i == hiIndex && mainStub != null) { if (dlg.MainSlopeReversed) mBefore0 = mainStub; else mAfter0 = mainStub; }
+                        if (i == loIndex && mainStubLo != null) { if (dlg.MainSlopeReversed) mAfter0 = mainStubLo; else mBefore0 = mainStubLo; }
+                        Connector mA0 = mBefore0 != null ? FreeEndNear(mBefore0, jp) : null;
+                        Connector mB0 = mAfter0 != null ? FreeEndNear(mAfter0, jp) : null;
+                        JoinSideOutlet(ctx, mA0, mB0, cross.RunA, cross.RunB, rpt);
+
+                        if (ctx.CapEnds && ctx.CapSym != null)
+                        {
+                            if (work.HasLeftCap && work.Segs.Count > 0) CapEnd(ctx, work.Segs[0], work.LeftCapPt, rpt);
+                            if (work.HasRightCap && work.Segs.Count > 0) CapEnd(ctx, work.Segs[work.Segs.Count - 1], work.RightCapPt, rpt);
+                        }
+                        continue;
+                    }
+
+                    // Riser nipple down to the main + tee on the main.
                     if (cross != null && branchLowZ - mZ > SprigMinFt)
                     {
                         XYZ topPt = ctx.Pt(uMain, branchM[i], branchLowZ);
@@ -605,8 +632,9 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 { rpt.MainShiftFt = clearFt - (uHi - lastHead); uHi = lastHead + clearFt; }
             }
 
-            double branchZ = ctx.Level.Elevation + dlg.StartElevFt;      // flat
             double mainZ = ctx.Level.Elevation + dlg.MainElevFt;         // flat
+            // Side outlet: the branch sits AT the main elevation and taps its side (no nipple).
+            double branchZ = ctx.SideOutlet ? mainZ : ctx.Level.Elevation + dlg.StartElevFt;   // flat
             double tailFt = ctx.ExtendToCapFt > 0.02 ? ctx.ExtendToCapFt : MainStubFt;
 
             if (!Confirmed(mOffsets.Count, headGaps.Length == 0 ? 0 : (int)((uHi - uLo) / Math.Max(0.5, headGaps.Min())))) return Result.Cancelled;
@@ -655,6 +683,19 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                     foreach (var cross in work.Stations.Where(s => s.Kind == StationKind.Crossing))
                     {
                         MainRun main = mains[Math.Max(0, cross.MainIdx)];
+
+                        // Side outlet: branch at the main elevation taps the main's side directly.
+                        // The branch is on one side of each main here, so this is a tee (or a
+                        // cross if a tailback carries the branch through past the main).
+                        if (ctx.SideOutlet)
+                        {
+                            XYZ jp = ctx.Pt(main.U, m, mainZ);
+                            Connector mA = FreeEndNear(main.Before(bi), jp);
+                            Connector mB = FreeEndNear(main.After(bi), jp);
+                            JoinSideOutlet(ctx, mA, mB, cross.RunA, cross.RunB, rpt);
+                            continue;
+                        }
+
                         if (branchZ - mainZ > SprigMinFt)
                         {
                             XYZ topPt = ctx.Pt(main.U, m, branchZ);
@@ -922,6 +963,73 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 Connector m = mainA ?? mainB;
                 try { doc.Create.NewElbowFitting(m, branch); rpt.Elbows++; }
                 catch { try { m.ConnectTo(branch); rpt.PlainConn++; } catch { rpt.Fail++; } }
+            }
+        }
+
+        /// <summary>Side-outlet tie-in (no nipple): the branch sits at the main's elevation
+        /// and ties straight into it. A branch crossing an interior main on BOTH sides is a
+        /// 4-way outlet (main both ways + branch both ways); at a main end, or a two-mains
+        /// tap where the branch is on one side, it's a tee. The chosen outlet family is forced;
+        /// if it can't make the junction (e.g. a tee family asked to be a cross) it falls back
+        /// to the routing-preference default, then to a plain connect so nothing is left split.</summary>
+        private void JoinSideOutlet(Ctx ctx, Connector mainA, Connector mainB, Connector runA, Connector runB, Report rpt)
+        {
+            Document doc = ctx.Doc;
+            FamilySymbol chosen = Resolve(doc, ctx.OutletSymId);
+            if (chosen != null && !chosen.IsActive) { chosen.Activate(); doc.Regenerate(); }
+            PipeType forceType = ctx.MainPipeType ?? ctx.PipeType;
+
+            bool mainBoth = mainA != null && mainB != null;
+            bool runBoth = runA != null && runB != null;
+
+            // interior crossing: main both ways + branch both ways -> 4-way cross
+            if (mainBoth && runBoth)
+            {
+                try
+                {
+                    if (chosen != null)
+                        WithForcedJunctionFitting(forceType, chosen.Id, () => doc.Create.NewCrossFitting(mainA, mainB, runA, runB));
+                    else doc.Create.NewCrossFitting(mainA, mainB, runA, runB);
+                    rpt.Tees++; if (chosen != null) rpt.ChosenFit++; else rpt.DefaultFit++;
+                    return;
+                }
+                catch
+                {
+                    try { doc.Create.NewCrossFitting(mainA, mainB, runA, runB); rpt.Tees++; rpt.DefaultFit++; return; }
+                    catch { try { mainA.ConnectTo(mainB); runA.ConnectTo(runB); runA.ConnectTo(mainA); rpt.PlainConn++; return; } catch { rpt.Fail++; return; } }
+                }
+            }
+
+            // main both ways + one branch side (two-mains tap, or a tailback-off branch) -> tee on the main
+            if (mainBoth && (runA != null || runB != null))
+            {
+                Connector run = runA ?? runB;
+                try
+                {
+                    if (chosen != null)
+                        WithForcedJunctionFitting(forceType, chosen.Id, () => doc.Create.NewTeeFitting(mainA, mainB, run));
+                    else doc.Create.NewTeeFitting(mainA, mainB, run);
+                    rpt.Tees++; if (chosen != null) rpt.ChosenFit++; else rpt.DefaultFit++;
+                }
+                catch { try { mainA.ConnectTo(mainB); run.ConnectTo(mainA); rpt.PlainConn++; } catch { rpt.Fail++; } }
+                return;
+            }
+
+            // main on one side (a main END) + branch both ways -> tee on the branch
+            if (!mainBoth && (mainA != null || mainB != null) && runBoth)
+            {
+                Connector m = mainA ?? mainB;
+                try { doc.Create.NewTeeFitting(runA, runB, m); rpt.Tees++; }
+                catch { try { runA.ConnectTo(runB); m.ConnectTo(runA); rpt.PlainConn++; } catch { rpt.Fail++; } }
+                return;
+            }
+
+            // degenerate (main end + one branch side) -> elbow / connect
+            Connector mm = mainA ?? mainB, rr = runA ?? runB;
+            if (mm != null && rr != null)
+            {
+                try { doc.Create.NewElbowFitting(mm, rr); rpt.Elbows++; }
+                catch { try { mm.ConnectTo(rr); rpt.PlainConn++; } catch { rpt.Fail++; } }
             }
         }
 
