@@ -11,7 +11,7 @@
     <Product>SG Revit Addin</Product>
     <Company>SG Fire Protection</Company>
     <AssemblyTitle>SG Revit Addin Setup</AssemblyTitle>
-    <Version>0.4.4</Version>
+    <Version>0.4.5</Version>
     <Deterministic>true</Deterministic>
     <!-- Keep the version clean ("0.3.16") — don't append the +git-hash to the
          informational/product version (it would show in Add/Remove Programs). -->
