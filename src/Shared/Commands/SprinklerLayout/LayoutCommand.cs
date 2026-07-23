@@ -142,7 +142,8 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 HeadClearFt = dlg.MainHeadClearFt,
                 Tailback = dlg.Tailback,
                 SideOutlet = dlg.SideOutlet,
-                ParallelMain = dlg.ParallelMain
+                ParallelMain = dlg.ParallelMain,
+                SlopeSpaceHeads = dlg.SlopeSpaceHeads
             };
 
             double[] lineGaps = dlg.LineSequence.Select(c => dlg.LineSlotFt[c - '1']).ToArray();
@@ -182,6 +183,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             public bool Tailback;   // two-mains: tee + stub (vs elbow) at each main tie-in
             public bool SideOutlet; // branch at the main's elevation, tapping its side (vs a riser nipple above)
             public bool ParallelMain; // nipple mode: branch parallels the sloped main (constant nipple) vs flat
+            public bool SlopeSpaceHeads; // head spacing measured along the sloped pipe (plan gap = gap·cosθ) for sloped ceilings
 
             /// <summary>Map (along-u, along-m, z) into world XY per the branch direction.</summary>
             public XYZ Pt(double u, double m, double z)
@@ -261,9 +263,14 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             double endOff = dlg.EndOffsetFt, capExt = ctx.ExtendToCapFt;
             int stationCount;
 
-            if (endOff <= 1e-6 || headGaps == null || headGaps.Length == 0)
+            // "Space heads along the slope": the entered head gap is measured along the sloped
+            // pipe, so the PLAN gap is gap·cos θ — heads then track sloped framing (e.g. purlins
+            // up the roof) instead of drifting. Line spacing (across the width) is unaffected.
+            double[] headGapsPlan = ScaleGaps(headGaps, HeadPlanScale(ctx.SlopeSpaceHeads, Math.Abs(dlg.SlopeFtPerFt)));
+
+            if (endOff <= 1e-6 || headGapsPlan == null || headGapsPlan.Length == 0)
             {
-                List<double> st = Tile(headGaps, lengthSpan);
+                List<double> st = Tile(headGapsPlan, lengthSpan);
                 stationCount = st.Count;
                 nodes.Add((0.0, false));
                 foreach (var s in st) nodes.Add((s, true));
@@ -284,7 +291,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 double d0 = capEdge + dir * endOff;                            // last sprinkler d
 
                 var st = new List<double>();
-                if (headGaps != null && headGaps.Length > 0)
+                if (headGapsPlan != null && headGapsPlan.Length > 0)
                 {
                     double cum = 0;
                     for (int i = 0, guard = 0; guard < 100000; i++, guard++)
@@ -292,7 +299,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                         double d = d0 + dir * cum;
                         if (d < -0.02 || d > lengthSpan + 0.02) break;
                         st.Add(d);
-                        double gap = headGaps[i % headGaps.Length]; if (gap <= 1e-6) break;
+                        double gap = headGapsPlan[i % headGapsPlan.Length]; if (gap <= 1e-6) break;
                         cum += gap;
                     }
                 }
@@ -397,19 +404,27 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             var branchM = mOffsets.Select(o => mMin + o).ToList();
 
             double branchSlope = Math.Abs(dlg.SlopeFtPerFt);        // magnitude; both sides fall to the main
+            // A SIDE-OUTLET branch ties straight into the main's side at the main's elevation,
+            // so it runs FLAT — no drainage V, no crossing flat-zone kink. That lets the outlet
+            // fitting form on collinear branch runs with no leftover branch stub at the main.
+            // Only the riser-nipple styles keep the sloped V (the nipple needs the drop).
+            double branchSlopeEff = ctx.SideOutlet ? 0.0 : branchSlope;
             double branchLowZ = ctx.Level.Elevation + dlg.StartElevFt;   // the ENTERED branch low elevation
 
-            // Heads tile ONCE across the whole line (same rhythm on both sides of the main),
-            // then the main slides off any head it lands on. Every line shares these
-            // stations, so the shift is one decision for the whole run.
-            var headU = HeadStations(uMin, uMax, headGaps);
-            double clearFloor = MainClearFloor(branchSlope);
+            // Head stations: the sequence tiled ONCE across the whole line (same rhythm on both
+            // sides of the main), then the main slides off any head it lands on. "Space heads
+            // along the slope" tightens the plan gap by cos θ so heads track sloped framing;
+            // an End offset holds the head nearest the first corner that far off the wall.
+            bool cFromMin = FromMinU(ctx, c1, uMin, uMax);
+            double[] headGapsPlan = ScaleGaps(headGaps, HeadPlanScale(ctx.SlopeSpaceHeads, branchSlopeEff));
+            var headU = HeadStationsAnchored(uMin, uMax, headGapsPlan, dlg.EndOffsetFt, cFromMin);
+            double clearFloor = MainClearFloor(branchSlopeEff);
             double clearFt = Math.Max(ctx.HeadClearFt, clearFloor);
             double mainShift;
             uMain = ShiftMainClear(uMain, headU, clearFt, uMin, uMax, out mainShift);
             rpt.MainShiftFt = mainShift;
             rpt.ClearFloored = clearFt > ctx.HeadClearFt + 1e-9 ? clearFt : 0.0;
-            rpt.ClearFlooredSlope = branchSlope > 1e-9;
+            rpt.ClearFlooredSlope = branchSlopeEff > 1e-9;
 
             // Below the floor a head would sit inside the crossing's flat zone: the slope
             // break would land on that head's tee (which must be collinear) and its node
@@ -421,7 +436,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                     "The head spacing is too tight to fit the cross-main between two heads.\n\n" +
                     $"The main needs at least {clearFloor * 12.0:0.#}\" of centerline clearance to the nearest " +
                     $"head, but the roomiest spot in the picked area is {got * 12.0:0.#}\".\n\n" +
-                    (branchSlope > 1e-9
+                    (branchSlopeEff > 1e-9
                         ? $"A sloped branch runs flat for {CrossFlatFt * 12.0:0.#}\" through the crossing so the " +
                           "riser tee stays straight — widen the head spacing, or set the branch slope to 0."
                         : "Widen the head spacing."));
@@ -462,7 +477,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
                 var branches = new List<LineWork>();
                 foreach (double m in branchM)
                 {
-                    var work = BuildBranchV(ctx, headU, uMain, m, branchLowAt(m), branchSlope, rpt);
+                    var work = BuildBranchV(ctx, headU, uMain, m, branchLowAt(m), branchSlopeEff, rpt);
                     branches.Add(work);
                     rpt.Lines++;
                 }
@@ -638,8 +653,11 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             // Heads tile continuously from the primary main. If the last one crowds the
             // secondary main, THAT main slides outward — the head rhythm never changes.
             // (The stations are anchored at uLo, so only uHi can move without moving them.)
+            // An End offset holds the first head that far off the primary main; the branches
+            // are flat here, so "space heads along the slope" has no effect.
             double clearFt = Math.Max(ctx.HeadClearFt, MainClearFloor(0.0));   // two-mains branches are flat
-            var headU = HeadStations(uLo, uHi, headGaps).Where(u => u - uLo >= clearFt - 1e-9).ToList();
+            var headU = HeadStationsAnchored(uLo, uHi, headGaps, dlg.EndOffsetFt, true)
+                .Where(u => u - uLo >= clearFt - 1e-9).ToList();
             if (headU.Count > 0)
             {
                 double lastHead = headU[headU.Count - 1];
@@ -1381,6 +1399,40 @@ namespace SgRevitAddin.Commands.SprinklerLayout
         private static List<double> HeadStations(double uMin, double uMax, double[] headGaps)
             => Tile(headGaps, uMax - uMin).Select(o => uMin + o).ToList();
 
+        /// <summary>Along-slope → plan scale for head spacing. When "space heads along the
+        /// slope" is on, the entered head gap is measured along the sloped pipe, so the PLAN
+        /// gap is gap·cosθ = gap / √(1+slope²) — the heads then track sloped framing (e.g.
+        /// purlins 4 ft o.c. up the roof) instead of drifting. Off (or a flat branch) → 1.</summary>
+        private static double HeadPlanScale(bool on, double slopeFtPerFt)
+            => on ? 1.0 / Math.Sqrt(1.0 + slopeFtPerFt * slopeFtPerFt) : 1.0;
+
+        private static double[] ScaleGaps(double[] gaps, double scale)
+            => scale == 1.0 || gaps == null ? gaps : gaps.Select(g => g * scale).ToArray();
+
+        /// <summary>Head u-stations anchored so the END head nearest the first-picked corner's
+        /// edge sits exactly <paramref name="endOff"/> off it, tiling the sequence away toward
+        /// the far edge (so you can align the heads to a wall / beam line). endOff ≤ 0 falls
+        /// back to the plain rhythm (first head one full spacing in from uMin).</summary>
+        private static List<double> HeadStationsAnchored(double uMin, double uMax, double[] headGaps,
+                                                         double endOff, bool cFromMin)
+        {
+            if (endOff <= 1e-6 || headGaps == null || headGaps.Length == 0)
+                return HeadStations(uMin, uMax, headGaps);
+            double edge = cFromMin ? uMin : uMax;
+            double dir = cFromMin ? 1.0 : -1.0;
+            var list = new List<double>();
+            double u = edge + dir * endOff;
+            for (int i = 0, guard = 0; guard < 100000; i++, guard++)
+            {
+                if (u < uMin - 0.02 || u > uMax + 0.02) break;
+                list.Add(u);
+                double gap = headGaps[i % headGaps.Length]; if (gap <= 1e-6) break;
+                u += dir * gap;
+            }
+            if (dir < 0) list.Reverse();
+            return list;
+        }
+
         /// <summary>Smallest main-to-head clearance the branch geometry can actually take.
         /// A sloped branch is flat for CrossFlatFt/2 either side of the crossing so the riser
         /// tee's run connectors stay collinear; the slope break then sits on a Joint, which is
@@ -1480,6 +1532,14 @@ namespace SgRevitAddin.Commands.SprinklerLayout
         {
             double c1m = ctx.LinesAlongX ? c1.Y : c1.X;
             return Math.Abs(c1m - mMin) <= Math.Abs(c1m - mMax);
+        }
+
+        /// <summary>Is the first-picked corner's edge on the low (uMin) side of the line axis?
+        /// (The u-axis runs ALONG the branch lines — perpendicular to <see cref="FromMin"/>.)</summary>
+        private static bool FromMinU(Ctx ctx, XYZ c1, double uMin, double uMax)
+        {
+            double c1u = ctx.LinesAlongX ? c1.X : c1.Y;
+            return Math.Abs(c1u - uMin) <= Math.Abs(c1u - uMax);
         }
 
         private static void SetDiameter(MEPCurve curve, double sizeFt)

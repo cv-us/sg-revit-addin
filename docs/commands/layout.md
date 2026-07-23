@@ -72,16 +72,25 @@ Both main modes offer a **Branch tie-in** style (default *riser nipple above the
 - **Riser nipple — branches flat** — the branch runs above the main; a vertical riser
   nipple drops from the branch to the main, tapped with the **Branch outlet on main**
   fitting, and the branch halves meet at the **Riser tee** on top of the nipple. This
-  is the drain-to-main dry / pre-action arrangement.
+  is the drain-to-main dry / pre-action arrangement. Every branch sits at the one
+  **Start elev**, so the nipples **lengthen** as the main slopes down away from them.
+- **Riser nipple — parallel the main** — same nipple + tee arrangement, but the branch
+  **parallels the sloped main** at a **constant nipple length**. The **Start elev** is
+  the branch low at the main's **HIGH end**; each branch pitches down from there with
+  the main (so the nipple is the same length at every crossing).
 - **Side outlet at main elevation** — the branch sits **at the main's centerline
-  elevation** and ties straight into the side of the main, with no nipple. Where a
-  branch crosses an interior main on both sides it becomes a **4-way outlet** (main
-  both ways + branch both ways); at a main **end**, or a **two-mains** tap where the
-  branch is on one side, it's a **tee**. The **Branch outlet on main** family is used
-  for both. If that family (or the pipe type's routing preferences) has no cross for
-  the interior 4-way case, the junction is connected without a fitting and the count
-  is reported — pick a cross-capable outlet family, or add a cross to the pipe type's
-  routing preferences, if you need the fitting itself.
+  elevation** and ties straight into the side of the main, with no nipple. A
+  side-outlet branch runs **flat** at the main's elevation (no drainage V), so it stays
+  **collinear** straight through the tap — that lets the outlet fitting form on both
+  branch halves with **no leftover branch stub** at the main. Where a branch crosses an
+  interior main on both sides it becomes a **4-way outlet** (main both ways + branch both
+  ways); at a main **end**, or a **two-mains** tap where the branch is on one side, it's
+  a **tee**. The **Branch outlet on main** family is used for both. If that family (or the
+  pipe type's routing preferences) has no cross for the interior 4-way case, the junction
+  is connected without a fitting and the count is reported — pick a cross-capable outlet
+  family, or add a cross to the pipe type's routing preferences, if you need the fitting
+  itself. (Because the branch follows the main's elevation, its **Start elev** is grayed
+  out — the note reads *follows the main*.)
 
 ## Workflow
 
@@ -109,7 +118,8 @@ Both main modes offer a **Branch tie-in** style (default *riser nipple above the
 | Level / Start elevation | Reference level and the branch centerline elevation above it. **Where it's measured is shown by the green "Z" on the branch-direction image and the note beside the field:** in *Area + central main* it's the branch's **low point at the main** (it slopes **up** to both ends); in *Fill area* it's the **near (first-corner) end**; in *Two mains* the branch is **flat** at this elevation. |
 | Slope | Branch slope, **inches per 10 ft**. In main mode this is the downhill toward the main (both sides). |
 | Start offset | Distance from the **first-picked corner** to the **first branch line**, before the line sequence repeats. E.g. set 2′-3″ to hold the first line 2′-3″ off a beam you click as the first corner. `0` keeps the original behavior (first line one spacing in). |
-| End offset | *(Fill-area mode)* Distance from that **same first corner** to the **last sprinkler** along the line — that corner is treated as the branch lines' capped/dead end. The pipe runs one cap-length (Extend to cap) further to the cap **toward** that corner, and heads tile away toward the far (open) end. So one corner click sets both the first-line and the last-head dimension. `0` = original behavior (heads from the near edge, cap at the far end). |
+| End offset | Holds the **end head** nearest the first-picked corner that far off it, tiling the rest away toward the far edge — so you can line the heads up to a wall or a beam line. In **Fill area** that corner is the capped/dead end (the pipe runs one cap-length past the last sprinkler toward it, and heads tile toward the far open end). In **Area + central main** / **Two mains** it holds the **first head** that far off the corner's edge (or off the primary main). `0` = original behavior (heads one full spacing in from the edge). Works in **all three** pick modes. |
+| Space heads along the slope | For a **sloped ceiling that follows the roof**. When ON, the head spacing you enter is measured **along the sloped pipe** (like purlins that are 4 ft o.c. *up the roof*), so the **plan** gap comes out a bit tighter — `gap × cos θ` — and the heads track the sloped framing instead of drifting across it. When OFF (default), the spacing is the plan / horizontal distance. Only head-to-head spacing is affected (never the line spacing), and it does nothing on a flat branch. |
 | Cap branch-line ends / Extend to cap | Place the pipe type's routing-preference cap a set distance past the last head. |
 | Cross-main: Main size / Riser size | The cross-main's diameter and the riser-nipple diameter (off the main to the branches). |
 | Main elevation / slope | The cross-main's centerline elevation above the level and its slope (in/10 ft) toward the riser. The elevation is measured at the **HIGH end** — marked by the green **"Z"** on the main image — and the main slopes **down** from there to the riser (low) end. Click the main image to flip which physical end is high. |
@@ -137,7 +147,14 @@ Both main modes offer a **Branch tie-in** style (default *riser nipple above the
 - In main mode the head sequence is anchored at the **first line edge** and tiles
   straight across, so any leftover shorter-than-a-gap remainder lands at the far
   edge — not at the main. (Older builds tiled inward from *both* edges, which put
-  the odd gap right at the crossing.)
+  the odd gap right at the crossing.) Set an **End offset** to re-anchor it — the
+  first head then sits that far off the first-picked corner (handy for aligning to a
+  wall or a beam line).
+- Head spacing is a **plan / horizontal** distance by default, so on a slope the pipe
+  runs a little longer between heads and the plan spacing is preserved. If your ceiling
+  follows the roof and your framing is dimensioned **up the slope** (e.g. purlins 4 ft
+  o.c. along the roof, whose *plan* spacing is `4 ft × cos θ`), turn on **Space heads
+  along the slope** so the heads track the framing instead of drifting.
 - In main mode, if the **Main elevation** is at or above the branch low point the
   nipple can't drop — that crossing is skipped and reported (raise the branch or
   lower the main).

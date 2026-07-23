@@ -45,6 +45,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
         private Panel _mainToggle;          // clickable main image: orientation + HIGH/LOW slope
         private bool _mainReversed;
         private CheckBox _chkTailback;
+        private CheckBox _chkSlopeHeads;    // measure head spacing along the sloped pipe (plan gap = gap·cosθ)
         private ComboBox _cmbTieIn;         // riser nipple above main vs side outlet at main elevation
         private Label _lblStartElevRef;     // dynamic note: where the branch Start elev is measured
         private Label _lblMainElevRef;      // dynamic note: where the Main elev is measured
@@ -98,6 +99,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
         public bool Tailback { get; private set; } = true;      // two-mains: tee + stub (vs elbow) at each main
         public bool SideOutlet { get; private set; }            // branch at main elevation, side tap (vs riser nipple)
         public bool ParallelMain { get; private set; }          // nipple mode: branch parallels the sloped main
+        public bool SlopeSpaceHeads { get; private set; }       // head spacing measured along the sloped pipe (plan gap = gap·cosθ)
         public int OutletFittingId { get; private set; } = -1;  // -1 = routing-preference default
         public int RiserTeeFittingId { get; private set; } = -1;
 
@@ -151,7 +153,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             int y = 270;
 
             // ── Branch lines ──
-            var grpPipe = new GroupBox { Text = "Branch lines", Location = new Point(M, y), Size = new Size(350, 234) };
+            var grpPipe = new GroupBox { Text = "Branch lines", Location = new Point(M, y), Size = new Size(350, 262) };
             int gy = 22;
             grpPipe.Controls.Add(new Label { Text = "Line type:", Location = new Point(10, gy + 3), AutoSize = true });
             _cmbPipeType = AddCombo(grpPipe, new Point(80, gy), 258,
@@ -194,7 +196,29 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             gy += 27;
             grpPipe.Controls.Add(new Label { Text = "End offset:", Location = new Point(10, gy + 3), AutoSize = true });
             AddFtIn(grpPipe, 90, gy, "EndFt", "EndIn", "0", "0", out _txtEndFt, out _txtEndIn);
-            grpPipe.Controls.Add(new Label { Text = "1st corner → last head", Location = new Point(222, gy + 3), AutoSize = true });
+            grpPipe.Controls.Add(new Label { Text = "1st corner → end head", Location = new Point(222, gy + 3), AutoSize = true });
+            var eotip = new ToolTip();
+            eotip.SetToolTip(_txtEndFt,
+                "Holds the END head (nearest the first-picked corner) that far off the corner, and\n" +
+                "tiles the rest away from it — so you can align the heads to a wall or a beam line.\n" +
+                " • Fill area: that corner is the capped/dead end; the cap runs one cap-length past it.\n" +
+                " • Central main / two mains: the first head sits this far off the corner (or the primary main).\n" +
+                "0 = original behavior (heads one full spacing in from the edge).");
+            gy += 27;
+            _chkSlopeHeads = new CheckBox
+            {
+                Text = "Space heads along the slope",
+                Location = new Point(10, gy),
+                Size = new Size(320, 20),
+                Checked = DialogMemory.GetBool(MemKey, "SlopeHeads", false)
+            };
+            var shtip = new ToolTip();
+            shtip.SetToolTip(_chkSlopeHeads,
+                "For sloped ceilings that follow the roof. When ON, the head spacing you enter is measured\n" +
+                "ALONG the sloped pipe (like beams that are 4 ft o.c. up the roof), so the PLAN spacing comes\n" +
+                "out a bit tighter (gap × cos θ) and the heads track the sloped framing without drifting.\n" +
+                "When OFF (default), the spacing is the plan/horizontal distance. No effect on a flat branch.");
+            grpPipe.Controls.Add(_chkSlopeHeads);
             Controls.Add(grpPipe);
 
             // ── Main(s) — enabled in Area + central main (3-pt) and Two mains (4-pt) ──
@@ -742,6 +766,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             Tailback = _chkTailback.Checked;
             SideOutlet = _cmbTieIn.SelectedIndex == 2;
             ParallelMain = _cmbTieIn.SelectedIndex == 1;
+            SlopeSpaceHeads = _chkSlopeHeads.Checked;
             OutletFittingId = FittingIdAt(_cmbOutlet);
             RiserTeeFittingId = FittingIdAt(_cmbRiserTee);
 
@@ -769,6 +794,7 @@ namespace SgRevitAddin.Commands.SprinklerLayout
             DialogMemory.Set(MemKey, "OffIn", _txtOffIn.Text);
             DialogMemory.Set(MemKey, "EndFt", _txtEndFt.Text);
             DialogMemory.Set(MemKey, "EndIn", _txtEndIn.Text);
+            DialogMemory.SetBool(MemKey, "SlopeHeads", SlopeSpaceHeads);
             DialogMemory.SetDouble(MemKey, "LineSize", LineSizeIn);
             DialogMemory.SetDouble(MemKey, "SprigSize", SprigSizeIn);
             DialogMemory.SetBool(MemKey, "UseSprigs", UseSprigs);
